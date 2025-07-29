@@ -1,0 +1,38 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - fabricx.kfsoft.tech
+  resources:
+  - committers
+  - endorsers
+  - orderergroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fabricx.kfsoft.tech
+  resources:
+  - committers/finalizers
+  - endorsers/finalizers
+  - orderergroups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - fabricx.kfsoft.tech
+  resources:
+  - committers/status
+  - endorsers/status
+  - orderergroups/status
+  verbs:
+  - get
+  - patch
+  - update
