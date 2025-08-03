@@ -23,6 +23,7 @@ rules:
   - apps
   resources:
   - deployments
+  - statefulsets
   verbs:
   - create
   - delete
@@ -37,6 +38,7 @@ rules:
   - cas
   - committers
   - endorsers
+  - geneses
   - orderergroups
   verbs:
   - create
@@ -52,6 +54,7 @@ rules:
   - cas/finalizers
   - committers/finalizers
   - endorsers/finalizers
+  - geneses/finalizers
   - orderergroups/finalizers
   verbs:
   - update
@@ -61,7 +64,28 @@ rules:
   - cas/status
   - committers/status
   - endorsers/status
+  - geneses/status
   - orderergroups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses/status
   verbs:
   - get
   - patch

@@ -1,20 +1,20 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: CA
 metadata:
-  name: test-ca2
+  name: test-ca-ingress
+  namespace: default
 spec:
-  # Ingress configuration for external access (enabled by default)
+  # Ingress configuration for external access
   ingress:
-    enabled: false  # Set to false to disable ingress
     istio:
       hosts:
-        - 'ca.org1.localho.st'
-        - 'ca.org1.example.com'
+        - 'ca-test.localho.st'
+        - 'ca-test.example.com'
       port: 443
       ingressGateway: 'istio-ingressgateway'
       tls:
         enabled: true
-        secretName: 'ca-tls-secret'
+        secretName: 'ca-test-tls-secret'
   
   # TLS configuration with domain names
   tls:
@@ -26,8 +26,8 @@ spec:
       ST: North Carolina
     # Domain names for TLS certificate generation
     domains:
-      - 'ca.org1.localho.st'
-      - 'ca.org1.example.com'
+      - 'ca-test.localho.st'
+      - 'ca-test.example.com'
       - 'localhost'
       - 'test-ca2.default'
       - 'test-ca2'
@@ -49,8 +49,8 @@ spec:
       cn: ca
       hosts:
       - localhost
-      - ca.org1.localho.st
-      - ca.org1.example.com
+      - ca-test.localho.st
+      - ca-test.example.com
       names:
       - C: US
         L: Raleigh
@@ -106,8 +106,8 @@ spec:
       cn: tlsca
       hosts:
       - localhost
-      - ca.org1.localho.st
-      - ca.org1.example.com
+      - ca-test.localho.st
+      - ca-test.example.com
       names:
       - C: US
         L: Raleigh
@@ -134,6 +134,4 @@ spec:
       maxenrollments: -1
   vault:
     vault: {}
-  version: 1.5.15
-status: {}
-
+  version: 1.5.15 

@@ -20,6 +20,9 @@ spec:
     - jsonPath: .status.status
       name: State
       type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -1111,56 +1114,6 @@ spec:
                       maxenrollments:
                         type: integer
                     type: object
-                  signing:
-                    description: FabricCASigning represents signing configuration
-                    properties:
-                      default:
-                        description: FabricCASigningDefault represents default signing
-                          configuration
-                        properties:
-                          expiry:
-                            type: string
-                          usage:
-                            items:
-                              type: string
-                            type: array
-                        type: object
-                      profiles:
-                        description: FabricCASigningProfiles represents signing profiles
-                        properties:
-                          ca:
-                            description: FabricCASigningSignProfile represents a signing
-                              profile
-                            properties:
-                              caconstraint:
-                                description: FabricCASigningSignProfileConstraint
-                                  represents CA constraint
-                                properties:
-                                  isca:
-                                    type: boolean
-                                  maxpathlen:
-                                    type: integer
-                                type: object
-                              expiry:
-                                type: string
-                              usage:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                          tls:
-                            description: FabricCASigningTLSProfile represents TLS
-                              signing profile
-                            properties:
-                              expiry:
-                                type: string
-                              usage:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                        type: object
-                    type: object
                 required:
                 - name
                 type: object
@@ -1336,6 +1289,43 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
+              ingress:
+                description: Ingress configuration
+                properties:
+                  enabled:
+                    description: Enabled flag to enable/disable ingress
+                    type: boolean
+                  istio:
+                    description: Istio-specific configuration
+                    properties:
+                      hosts:
+                        description: Hosts for this CA
+                        items:
+                          type: string
+                        type: array
+                      ingressGateway:
+                        description: Ingress gateway name
+                        type: string
+                      port:
+                        description: Port number
+                        format: int32
+                        type: integer
+                      tls:
+                        description: TLS configuration
+                        properties:
+                          enabled:
+                            description: TLS enabled
+                            type: boolean
+                          secretName:
+                            description: Secret name containing TLS certificate
+                            type: string
+                        type: object
+                    required:
+                    - hosts
+                    - ingressGateway
+                    - port
+                    type: object
+                type: object
               metrics:
                 description: Metrics configuration
                 properties:
@@ -1566,6 +1556,11 @@ spec:
               tls:
                 description: TLS configuration
                 properties:
+                  domains:
+                    description: Domain names for TLS certificate generation
+                    items:
+                      type: string
+                    type: array
                   subject:
                     description: FabricCANames represents certificate subject names
                     properties:
@@ -1731,56 +1726,6 @@ spec:
                         type: array
                       maxenrollments:
                         type: integer
-                    type: object
-                  signing:
-                    description: FabricCASigning represents signing configuration
-                    properties:
-                      default:
-                        description: FabricCASigningDefault represents default signing
-                          configuration
-                        properties:
-                          expiry:
-                            type: string
-                          usage:
-                            items:
-                              type: string
-                            type: array
-                        type: object
-                      profiles:
-                        description: FabricCASigningProfiles represents signing profiles
-                        properties:
-                          ca:
-                            description: FabricCASigningSignProfile represents a signing
-                              profile
-                            properties:
-                              caconstraint:
-                                description: FabricCASigningSignProfileConstraint
-                                  represents CA constraint
-                                properties:
-                                  isca:
-                                    type: boolean
-                                  maxpathlen:
-                                    type: integer
-                                type: object
-                              expiry:
-                                type: string
-                              usage:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                          tls:
-                            description: FabricCASigningTLSProfile represents TLS
-                              signing profile
-                            properties:
-                              expiry:
-                                type: string
-                              usage:
-                                items:
-                                  type: string
-                                type: array
-                            type: object
-                        type: object
                     type: object
                 required:
                 - name

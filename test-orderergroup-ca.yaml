@@ -1,10 +1,11 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: OrdererGroup
 metadata:
+  name: test-orderergroup
+  namespace: default
   labels:
     app.kubernetes.io/name: fabric-x-operator
     app.kubernetes.io/managed-by: kustomize
-  name: orderergroup-sample
 spec:
   bootstrapMode: 'configure' # can be "configure" or "deploy"
   
@@ -68,21 +69,21 @@ spec:
   # Global enrollment configuration (inherited by components)
   enrollment:
     sign:
-      cahost: 'ca.org1.localho.st'
+      cahost: 'test-ca2'
       caport: 7054
       catls:
         secretRef:
-          name: 'org1-ca'
+          name: 'test-ca2'
           key: 'ca-cert.pem'
           namespace: 'default'
       enrollid: 'admin'
       enrollsecret: 'adminpw'
     tls:
-      cahost: 'ca.org1.localho.st'
+      cahost: 'test-ca2'
       caport: 7054
       catls:
         secretRef:
-          name: 'org1-ca'
+          name: 'test-ca2'
           key: 'ca-cert.pem'
           namespace: 'default'
       enrollid: 'admin'
@@ -96,11 +97,11 @@ spec:
       ingress:
         istio:
           hosts:
-            - 'consenter-org1.localho.st'
+            - 'consenter-test-orderergroup.default.svc.cluster.local'
           port: 443
           ingressGateway: 'istio-ingressgateway'
       endpoints:
-        - 'consenter-org1.localho.st:7050'
+        - 'consenter-test-orderergroup.default.svc.cluster.local:7050'
       env:
         - name: CONSENTER_TYPE
           value: "raft"
@@ -108,11 +109,11 @@ spec:
           value: "500"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: 'test-ca2'
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
+            name: 'test-ca2'
             key: 'ca-cert.pem'
             namespace: 'default'
         enrollid: 'admin'
@@ -146,7 +147,7 @@ spec:
       ingress:
         istio:
           hosts:
-            - 'batcher-org1.localho.st'
+            - 'batcher-test-orderergroup.default.svc.cluster.local'
           port: 443
           ingressGateway: 'istio-ingressgateway'
       env:
@@ -156,11 +157,11 @@ spec:
           value: "2097152"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: 'test-ca2'
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
+            name: 'test-ca2'
             key: 'ca-cert.pem'
             namespace: 'default'
         enrollid: 'admin'
@@ -181,7 +182,7 @@ spec:
       ingress:
         istio:
           hosts:
-            - 'assembler-org1.localho.st'
+            - 'assembler-test-orderergroup.default.svc.cluster.local'
           port: 443
           ingressGateway: 'istio-ingressgateway'
       env:
@@ -189,11 +190,11 @@ spec:
           value: "500"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: 'test-ca2'
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
+            name: 'test-ca2'
             key: 'ca-cert.pem'
             namespace: 'default'
         enrollid: 'admin'
@@ -215,7 +216,7 @@ spec:
       ingress:
         istio:
           hosts:
-            - 'router-org1.localho.st'
+            - 'router-test-orderergroup.default.svc.cluster.local'
           port: 443
           ingressGateway: 'istio-ingressgateway'
       env:
@@ -223,11 +224,11 @@ spec:
           value: "1000"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: 'test-ca2'
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
+            name: 'test-ca2'
             key: 'ca-cert.pem'
             namespace: 'default'
         enrollid: 'admin'
@@ -242,4 +243,4 @@ spec:
           volumeSource:
             emptyDir:
               medium: "Memory"
-              sizeLimit: "1Gi"
+              sizeLimit: "1Gi" 

@@ -1,0 +1,169 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Genesis
+metadata:
+  name: shared-genesis
+  namespace: fabric-network
+spec:
+  # Config template reference
+  configTemplate:
+    configMapName: "fabricx-config-template"
+    key: "configtx.yaml"
+  
+  # Internal organizations (using Fabric CA)
+  internalOrgs:
+    - name: "Org1"
+      mspId: "Org1MSP"
+      caReference:
+        name: "org1-ca"
+        namespace: "fabric-network"
+      adminIdentity: "admin"
+      ordererIdentity: "orderer"
+    
+    - name: "Org2"
+      mspId: "Org2MSP"
+      caReference:
+        name: "org2-ca"
+        namespace: "fabric-network"
+      adminIdentity: "admin"
+  
+  # External organizations (with provided certificates)
+  externalOrgs:
+    - name: "ExternalOrg1"
+      mspId: "ExternalOrg1MSP"
+      signCert: "<BASE64_ENCODED_SIGNING_CERT>"
+      tlsCert: "<BASE64_ENCODED_TLS_CERT>"
+      adminCert: "<BASE64_ENCODED_ADMIN_CERT>"
+      ordererCert: "<BASE64_ENCODED_ORDERER_CERT>"
+  
+  # Specific consenters for consensus
+  consenters:
+    - id: 1
+      host: "orderer1.org1.example.com"
+      port: 7050
+      mspId: "Org1MSP"
+      clientTlsCert: "<BASE64_ENCODED_CLIENT_TLS_CERT>"
+      serverTlsCert: "<BASE64_ENCODED_SERVER_TLS_CERT>"
+      identity: "<BASE64_ENCODED_IDENTITY>"
+    
+    - id: 2
+      host: "orderer2.org1.example.com"
+      port: 7050
+      mspId: "Org1MSP"
+      clientTlsCert: "<BASE64_ENCODED_CLIENT_TLS_CERT>"
+      serverTlsCert: "<BASE64_ENCODED_SERVER_TLS_CERT>"
+      identity: "<BASE64_ENCODED_IDENTITY>"
+    
+    - id: 3
+      host: "orderer1.externalorg1.example.com"
+      port: 7050
+      mspId: "ExternalOrg1MSP"
+      clientTlsCert: "<BASE64_ENCODED_CLIENT_TLS_CERT>"
+      serverTlsCert: "<BASE64_ENCODED_SERVER_TLS_CERT>"
+      identity: "<BASE64_ENCODED_IDENTITY>"
+  
+  # Shared configuration
+  sharedConfig:
+    # Internal parties (reference orderer groups)
+    internalParties:
+      - partyId: 1
+        ordererGroupRef:
+          name: "orderer-group-org1"
+          namespace: "fabric-network"
+      
+      - partyId: 2
+        ordererGroupRef:
+          name: "orderer-group-org2"
+          namespace: "fabric-network"
+    
+    # External parties (with explicit configuration)
+    externalParties:
+      - partyId: 3
+        caCerts:
+          - "<BASE64_ENCODED_CA_CERT>"
+        tlsCaCerts:
+          - "<BASE64_ENCODED_TLS_CA_CERT>"
+        routerConfig:
+          tlsCert: "<BASE64_ENCODED_ROUTER_TLS_CERT>"
+          host: "localhost"
+          port: 7050
+        batchersConfig:
+          - shardId: 1
+            signCert: "<BASE64_ENCODED_BATCHER_SIGN_CERT>"
+            tlsCert: "<BASE64_ENCODED_BATCHER_TLS_CERT>"
+            host: "localhost"
+            port: 7051
+        consenterConfig:
+          signCert: "<BASE64_ENCODED_CONSENTER_SIGN_CERT>"
+          tlsCert: "<BASE64_ENCODED_CONSENTER_TLS_CERT>"
+          host: "localhost"
+          port: 7052
+        assemblerConfig:
+          tlsCert: "<BASE64_ENCODED_ASSEMBLER_TLS_CERT>"
+          host: "localhost"
+          port: 7053
+      
+      - partyId: 4
+        caCerts:
+          - "<BASE64_ENCODED_CA_CERT>"
+        tlsCaCerts:
+          - "<BASE64_ENCODED_TLS_CA_CERT>"
+        routerConfig:
+          tlsCert: "<BASE64_ENCODED_ROUTER_TLS_CERT>"
+          host: "localhost"
+          port: 7150
+        batchersConfig:
+          - shardId: 1
+            signCert: "<BASE64_ENCODED_BATCHER_SIGN_CERT>"
+            tlsCert: "<BASE64_ENCODED_BATCHER_TLS_CERT>"
+            host: "localhost"
+            port: 7151
+        consenterConfig:
+          signCert: "<BASE64_ENCODED_CONSENTER_SIGN_CERT>"
+          tlsCert: "<BASE64_ENCODED_CONSENTER_TLS_CERT>"
+          host: "localhost"
+          port: 7152
+        assemblerConfig:
+          tlsCert: "<BASE64_ENCODED_ASSEMBLER_TLS_CERT>"
+          host: "localhost"
+          port: 7153
+    
+    # Consensus configuration
+    consensus:
+      smartBFT:
+        requestBatchMaxCount: 100
+        requestBatchMaxBytes: 10485760
+        requestBatchMaxInterval: "500ms"
+        incomingMessageBufferSize: 200
+        requestPoolSize: 400
+        requestForwardTimeout: "10s"
+        requestComplainTimeout: "20s"
+        requestAutoRemoveTimeout: "3m0s"
+        viewChangeResendInterval: "5s"
+        viewChangeTimeout: "20s"
+        leaderHeartbeatTimeout: "1m0s"
+        leaderHeartbeatCount: 10
+        numOfTicksBehindBeforeSyncing: 10
+        collectTimeout: "1s"
+        syncOnStart: false
+        speedUpViewChange: false
+        leaderRotation: false
+        decisionsPerLeader: 0
+        requestMaxBytes: 10240
+        requestPoolSubmitTimeout: "5s"
+    
+    # Batching configuration
+    batching:
+      batchTimeouts:
+        batchCreationTimeout: "500ms"
+        firstStrikeThreshold: "10s"
+        secondStrikeThreshold: "10s"
+        autoRemoveTimeout: "10s"
+      batchSize:
+        maxMessageCount: 10000
+        absoluteMaxBytes: 10485760
+      requestMaxBytes: 1048576
+  
+  # Output configuration
+  output:
+    secretName: "fabricx-shared-genesis"
+    blockKey: "genesis.block"

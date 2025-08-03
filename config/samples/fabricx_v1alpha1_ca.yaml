@@ -6,4 +6,240 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: ca-sample
 spec:
-  # TODO(user): Add fields here
+  # Basic configuration
+  image: "hyperledger/fabric-ca:1.4.9"
+  version: "1.4.9"
+  debug: true
+  replicas: 1
+  
+  # Database configuration
+  db:
+    type: "sqlite3"
+    datasource: "/var/hyperledger/fabric-ca/fabric-ca-server.db"
+  
+  # Storage configuration
+  storage:
+    storageClass: ""
+    accessMode: "ReadWriteOnce"
+    size: "1Gi"
+  
+  # Service configuration
+  service:
+    type: "ClusterIP"
+  
+  # Metrics configuration
+  metrics:
+    provider: "prometheus"
+    statsd:
+      network: "udp"
+      address: "127.0.0.1:8125"
+      writeInterval: "10s"
+      prefix: "fabric-ca"
+  
+  # TLS configuration
+  tls:
+    subject:
+      C: "US"
+      ST: "North Carolina"
+      L: "Raleigh"
+      O: "Hyperledger"
+      OU: "Fabric"
+    domains:
+      - "ca.example.com"
+      - "localhost"
+  
+  # CA configuration
+  ca:
+    name: "ca"
+    crl:
+      expiry: "24h"
+    registry:
+      maxenrollments: -1
+      identities:
+        - name: "admin"
+          pass: "adminpw"
+          type: "client"
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Registrar.DelegateRoles: "*"
+            hf.Registrar.Attributes: "*"
+            hf.Revoker: true
+            hf.IntermediateCA: true
+            hf.GenCRL: true
+            hf.AffiliationMgr: true
+        - name: "admin2"
+          pass: "adminpw2"
+          type: "client"
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Registrar.DelegateRoles: "*"
+            hf.Registrar.Attributes: "*"
+            hf.Revoker: true
+            hf.IntermediateCA: true
+            hf.GenCRL: true
+            hf.AffiliationMgr: true
+    signing:
+      default:
+        expiry: "8760h"
+      profiles:
+        ca:
+          usage:
+            - "digital signature"
+            - "key encipherment"
+            - "cert sign"
+            - "crl sign"
+          expiry: "43800h"
+          caconstraint:
+            isca: true
+            maxpathlen: 0
+        tls:
+          usage:
+            - "signing"
+            - "key encipherment"
+            - "server auth"
+            - "client auth"
+          expiry: "8760h"
+    csr:
+      cn: "fabric-ca-server"
+      hosts:
+        - "localhost"
+        - "ca.example.com"
+      names:
+        - C: "US"
+          ST: "North Carolina"
+          L: "Raleigh"
+          O: "Hyperledger"
+          OU: "Fabric"
+      ca:
+        expiry: "131400h"
+        pathlength: 0
+    bccsp:
+      default: "SW"
+      sw:
+        hash: "SHA2"
+        security: 256
+    intermediate:
+      parentserver:
+        url: ""
+        caname: ""
+    cfg:
+      identities:
+        allowremove: false
+      affiliations:
+        allowremove: false
+    affiliations:
+      - name: "org1"
+        departments:
+          - "department1"
+          - "department2"
+      - name: "org2"
+        departments:
+          - "department1"
+  
+  # TLS CA configuration
+  tlsca:
+    name: "tlsca"
+    crl:
+      expiry: "24h"
+    registry:
+      maxenrollments: -1
+      identities:
+        - name: "admin"
+          pass: "adminpw"
+          type: "client"
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Registrar.DelegateRoles: "*"
+            hf.Registrar.Attributes: "*"
+            hf.Revoker: true
+            hf.IntermediateCA: true
+            hf.GenCRL: true
+            hf.AffiliationMgr: true
+    signing:
+      default:
+        expiry: "8760h"
+      profiles:
+        ca:
+          usage:
+            - "digital signature"
+            - "key encipherment"
+            - "cert sign"
+            - "crl sign"
+          expiry: "43800h"
+          caconstraint:
+            isca: true
+            maxpathlen: 0
+        tls:
+          usage:
+            - "signing"
+            - "key encipherment"
+            - "server auth"
+            - "client auth"
+          expiry: "8760h"
+    csr:
+      cn: "fabric-tlsca-server"
+      hosts:
+        - "localhost"
+        - "tlsca.example.com"
+      names:
+        - C: "US"
+          ST: "North Carolina"
+          L: "Raleigh"
+          O: "Hyperledger"
+          OU: "Fabric"
+      ca:
+        expiry: "131400h"
+        pathlength: 0
+    bccsp:
+      default: "SW"
+      sw:
+        hash: "SHA2"
+        security: 256
+    intermediate:
+      parentserver:
+        url: ""
+        caname: ""
+    cfg:
+      identities:
+        allowremove: false
+      affiliations:
+        allowremove: false
+    affiliations:
+      - name: "org1"
+        departments:
+          - "department1"
+          - "department2"
+      - name: "org2"
+        departments:
+          - "department1"
+  
+  # Ingress configuration (optional)
+  ingress:
+    enabled: true
+    istio:
+      hosts:
+        - "ca.example.com"
+      port: 7054
+      ingressGateway: "ingressgateway"
+      tls:
+        enabled: true
+        secretName: "ca-tls-secret"
+  
+  # Resources configuration
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  # Environment variables
+  env:
+    - name: "FABRIC_CA_HOME"
+      value: "/var/hyperledger/fabric-ca"
+    - name: "GODEBUG"
+      value: "netdns=go"

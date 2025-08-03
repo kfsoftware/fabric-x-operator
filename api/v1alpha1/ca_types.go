@@ -129,7 +129,6 @@ type FabricCASigningTLSProfile struct {
 // FabricCAItemConf represents CA item configuration
 type FabricCAItemConf struct {
 	Name         string                   `json:"name"`
-	Signing      *FabricCASigning         `json:"signing,omitempty"`
 	CFG          FabricCAItemCFG          `json:"cfg,omitempty"`
 	CSR          FabricCACSR              `json:"csr,omitempty"`
 	CRL          FabricCACRL              `json:"crl,omitempty"`
@@ -193,6 +192,42 @@ type FabricCAItemBCCSPSW struct {
 // FabricCATLS represents TLS configuration
 type FabricCATLS struct {
 	Subject FabricCANames `json:"subject,omitempty"`
+
+	// Domain names for TLS certificate generation
+	Domains []string `json:"domains,omitempty"`
+}
+
+// FabricCAIngress represents ingress configuration
+type FabricCAIngress struct {
+	// Enabled flag to enable/disable ingress
+	Enabled bool `json:"enabled,omitempty"`
+
+	// Istio-specific configuration
+	Istio *FabricCAIstioConfig `json:"istio,omitempty"`
+}
+
+// FabricCAIstioConfig defines Istio ingress configuration
+type FabricCAIstioConfig struct {
+	// Hosts for this CA
+	Hosts []string `json:"hosts"`
+
+	// Port number
+	Port int32 `json:"port"`
+
+	// Ingress gateway name
+	IngressGateway string `json:"ingressGateway"`
+
+	// TLS configuration
+	TLS *FabricCATLSConfig `json:"tls,omitempty"`
+}
+
+// FabricCATLSConfig defines TLS settings
+type FabricCATLSConfig struct {
+	// Secret name containing TLS certificate
+	SecretName string `json:"secretName,omitempty"`
+
+	// TLS enabled
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 // FabricCADatabase represents database configuration
@@ -268,6 +303,9 @@ type CASpec struct {
 
 	// Service configuration
 	Service FabricCASpecService `json:"service,omitempty"`
+
+	// Ingress configuration
+	Ingress *FabricCAIngress `json:"ingress,omitempty"`
 
 	// Image
 	Image string `json:"image,omitempty"`
@@ -362,6 +400,7 @@ type CAStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ca,singular=ca
 // +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // CA is the Schema for the cas API

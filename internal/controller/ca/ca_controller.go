@@ -18,16 +18,19 @@ package ca
 
 import (
 	"context"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
 	"net"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,6 +46,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 )
@@ -61,6 +65,8 @@ type CAReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
 
 const (
 	caFinalizer = "finalizer.ca.fabricx.kfsoft.tech"
@@ -71,6 +77,21 @@ const (
 func (r *CAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	log.Info("Reconciling CA", "namespace", req.Namespace, "name", req.Name)
+
+	// Add panic recovery
+	defer func() {
+		if panicErr := recover(); panicErr != nil {
+			log.Error(fmt.Errorf("panic recovered: %v", panicErr), "Panic in CA reconciliation",
+				"namespace", req.Namespace, "name", req.Name)
+
+			// Try to update the CA status to failed
+			ca := &fabricxv1alpha1.CA{}
+			if err := r.Get(ctx, req.NamespacedName, ca); err == nil {
+				panicMsg := fmt.Sprintf("Panic in CA reconciliation: %v", panicErr)
+				r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, panicMsg)
+			}
+		}
+	}()
 
 	// Fetch the CA instance
 	ca := &fabricxv1alpha1.CA{}
@@ -84,7 +105,12 @@ func (r *CAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		}
 		// Error reading the object - requeue the request.
 		log.Error(err, "Failed to get CA.")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("failed to get CA: %w", err)
+	}
+
+	// Set initial status if not set
+	if ca.Status.Status == "" {
+		r.updateCAStatus(ctx, ca, fabricxv1alpha1.PendingStatus, "Initializing CA")
 	}
 
 	// Check if the CA instance is marked to be deleted
@@ -96,30 +122,41 @@ func (r *CAReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	if !controllerutil.ContainsFinalizer(ca, caFinalizer) {
 		controllerutil.AddFinalizer(ca, caFinalizer)
 		if err := r.Update(ctx, ca); err != nil {
-			return ctrl.Result{}, err
+			errorMsg := fmt.Sprintf("Failed to add finalizer: %v", err)
+			log.Error(err, "Failed to add finalizer")
+			r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, errorMsg)
+			return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
 		}
 	}
 
-	// Set default values if not specified
+	// Set defaults
 	r.setDefaults(ca)
 
-	// Reconcile the CA resources
+	// Reconcile the CA
 	if err := r.reconcileCA(ctx, ca); err != nil {
+		errorMsg := fmt.Sprintf("Failed to reconcile CA: %v", err)
 		log.Error(err, "Failed to reconcile CA")
-		return ctrl.Result{}, err
+		r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, errorMsg)
+		return ctrl.Result{}, fmt.Errorf("failed to reconcile CA: %w", err)
 	}
 
-	// Update status
-	if err := r.updateStatus(ctx, ca); err != nil {
-		log.Error(err, "Failed to update CA status")
-		return ctrl.Result{}, err
-	}
+	// Update status to success
+	r.updateCAStatus(ctx, ca, fabricxv1alpha1.RunningStatus, "CA reconciled successfully")
 
-	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+	return ctrl.Result{}, nil
 }
 
 // setDefaults sets default values for the CA spec
 func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
+	// Defensive nil checks for nested structs to avoid panics
+	if ca == nil {
+		return
+	}
+	// Top-level
+	if ca.Spec.Replicas == nil {
+		replicas := int32(1)
+		ca.Spec.Replicas = &replicas
+	}
 	if ca.Spec.Image == "" {
 		ca.Spec.Image = "hyperledger/fabric-ca:1.4.3"
 	}
@@ -128,10 +165,6 @@ func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
 	}
 	if ca.Spec.CredentialStore == "" {
 		ca.Spec.CredentialStore = fabricxv1alpha1.CredentialStoreKubernetes
-	}
-	if ca.Spec.Replicas == nil {
-		replicas := int32(1)
-		ca.Spec.Replicas = &replicas
 	}
 	if ca.Spec.Service.ServiceType == "" {
 		ca.Spec.Service.ServiceType = corev1.ServiceTypeClusterIP
@@ -142,62 +175,236 @@ func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
 	if ca.Spec.Storage.Size == "" {
 		ca.Spec.Storage.Size = "1Gi"
 	}
+	if ca.Spec.CLRSizeLimit == 0 {
+		ca.Spec.CLRSizeLimit = 512000
+	}
+	if ca.Spec.Database.Type == "" {
+		ca.Spec.Database.Type = "sqlite3"
+	}
+	if ca.Spec.Database.Datasource == "" {
+		ca.Spec.Database.Datasource = "/var/hyperledger/fabric-ca/fabric-ca-server.db"
+	}
+	if ca.Spec.Metrics.Provider == "" {
+		ca.Spec.Metrics.Provider = "prometheus"
+	}
+	if ca.Spec.Metrics.Statsd.Network == "" {
+		ca.Spec.Metrics.Statsd.Network = "udp"
+	}
+	if ca.Spec.Metrics.Statsd.Address == "" {
+		ca.Spec.Metrics.Statsd.Address = "127.0.0.1:8125"
+	}
+	if ca.Spec.Metrics.Statsd.WriteInterval == "" {
+		ca.Spec.Metrics.Statsd.WriteInterval = "10s"
+	}
+	if ca.Spec.Metrics.Statsd.Prefix == "" {
+		ca.Spec.Metrics.Statsd.Prefix = "fabric-ca"
+	}
+
+	// Defensive nil checks for CA
+	if ca.Spec.CA.Name == "" {
+		ca.Spec.CA.Name = "ca"
+	}
+	if ca.Spec.CA.CRL.Expiry == "" {
+		ca.Spec.CA.CRL.Expiry = "24h"
+	}
+	if ca.Spec.CA.Registry.MaxEnrollments == 0 {
+		ca.Spec.CA.Registry.MaxEnrollments = -1
+	}
+	if ca.Spec.CA.CSR.CN == "" {
+		ca.Spec.CA.CSR.CN = "fabric-ca-server"
+	}
+	if ca.Spec.CA.CSR.Names == nil {
+		ca.Spec.CA.CSR.Names = []fabricxv1alpha1.FabricCANames{}
+	}
+	if len(ca.Spec.CA.CSR.Names) == 0 {
+		ca.Spec.CA.CSR.Names = []fabricxv1alpha1.FabricCANames{
+			{
+				C:  "US",
+				ST: "North Carolina",
+				L:  "",
+				O:  "Hyperledger",
+				OU: "Fabric",
+			},
+		}
+	}
+	if ca.Spec.CA.CSR.CA.Expiry == "" {
+		ca.Spec.CA.CSR.CA.Expiry = "131400h"
+	}
+	if ca.Spec.CA.BCCSP.Default == "" {
+		ca.Spec.CA.BCCSP.Default = "SW"
+	}
+	if ca.Spec.CA.BCCSP.SW.Hash == "" {
+		ca.Spec.CA.BCCSP.SW.Hash = "SHA2"
+	}
+	if ca.Spec.CA.BCCSP.SW.Security == 0 {
+		ca.Spec.CA.BCCSP.SW.Security = 256
+	}
+
+	// Defensive nil checks for TLSCA
+	if ca.Spec.TLSCA.Name == "" {
+		ca.Spec.TLSCA.Name = "tlsca"
+	}
+	if ca.Spec.TLSCA.CRL.Expiry == "" {
+		ca.Spec.TLSCA.CRL.Expiry = "24h"
+	}
+	if ca.Spec.TLSCA.Registry.MaxEnrollments == 0 {
+		ca.Spec.TLSCA.Registry.MaxEnrollments = -1
+	}
+	if ca.Spec.TLSCA.CSR.CN == "" {
+		ca.Spec.TLSCA.CSR.CN = "fabric-tlsca-server"
+	}
+	if ca.Spec.TLSCA.CSR.Names == nil {
+		ca.Spec.TLSCA.CSR.Names = []fabricxv1alpha1.FabricCANames{}
+	}
+	if len(ca.Spec.TLSCA.CSR.Names) == 0 {
+		ca.Spec.TLSCA.CSR.Names = []fabricxv1alpha1.FabricCANames{
+			{
+				C:  "US",
+				ST: "North Carolina",
+				L:  "",
+				O:  "Hyperledger",
+				OU: "Fabric",
+			},
+		}
+	}
+	if ca.Spec.TLSCA.CSR.CA.Expiry == "" {
+		ca.Spec.TLSCA.CSR.CA.Expiry = "131400h"
+	}
+	if ca.Spec.TLSCA.BCCSP.Default == "" {
+		ca.Spec.TLSCA.BCCSP.Default = "SW"
+	}
+	if ca.Spec.TLSCA.BCCSP.SW.Hash == "" {
+		ca.Spec.TLSCA.BCCSP.SW.Hash = "SHA2"
+	}
+	if ca.Spec.TLSCA.BCCSP.SW.Security == 0 {
+		ca.Spec.TLSCA.BCCSP.SW.Security = 256
+	}
 }
 
 // handleDeletion handles the deletion of CA resources
 func (r *CAReconciler) handleDeletion(ctx context.Context, ca *fabricxv1alpha1.CA) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	log.Info("Handling CA deletion")
+
+	// Add panic recovery
+	defer func() {
+		if panicErr := recover(); panicErr != nil {
+			log.Error(fmt.Errorf("panic recovered: %v", panicErr), "Panic in CA deletion",
+				"ca", ca.Name, "namespace", ca.Namespace)
+
+			// Update the CA status to failed
+			panicMsg := fmt.Sprintf("Panic in CA deletion: %v", panicErr)
+			r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, panicMsg)
+		}
+	}()
+
+	log.Info("Handling CA deletion", "ca", ca.Name, "namespace", ca.Namespace)
+
+	// Set status to indicate deletion
+	r.updateCAStatus(ctx, ca, fabricxv1alpha1.PendingStatus, "Deleting CA resources")
 
 	if controllerutil.ContainsFinalizer(ca, caFinalizer) {
 		// Delete all resources
 		if err := r.deleteResources(ctx, ca); err != nil {
+			errorMsg := fmt.Sprintf("Failed to delete CA resources: %v", err)
 			log.Error(err, "Failed to delete CA resources")
-			return ctrl.Result{}, err
+			r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, errorMsg)
+			return ctrl.Result{}, fmt.Errorf("failed to delete CA resources: %w", err)
 		}
 
 		// Remove finalizer
 		controllerutil.RemoveFinalizer(ca, caFinalizer)
 		if err := r.Update(ctx, ca); err != nil {
-			return ctrl.Result{}, err
+			errorMsg := fmt.Sprintf("Failed to remove finalizer: %v", err)
+			log.Error(err, "Failed to remove finalizer")
+			r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, errorMsg)
+			return ctrl.Result{}, fmt.Errorf("failed to remove finalizer: %w", err)
 		}
 	}
 
+	log.Info("CA deletion completed successfully", "ca", ca.Name)
 	return ctrl.Result{}, nil
 }
 
 // reconcileCA reconciles all CA resources
 func (r *CAReconciler) reconcileCA(ctx context.Context, ca *fabricxv1alpha1.CA) error {
-	// Reconcile ConfigMaps
+	log := logf.FromContext(ctx)
+
+	// Add panic recovery
+	defer func() {
+		if panicErr := recover(); panicErr != nil {
+			log.Error(fmt.Errorf("panic recovered: %v", panicErr), "Panic in CA reconciliation",
+				"ca", ca.Name, "namespace", ca.Namespace)
+
+			// Update the CA status to failed
+			panicMsg := fmt.Sprintf("Panic in CA reconciliation: %v", panicErr)
+			r.updateCAStatus(ctx, ca, fabricxv1alpha1.FailedStatus, panicMsg)
+		}
+	}()
+
+	var reconciliationErrors []string
+
+	// Reconcile ConfigMaps first (deployment needs config)
 	if err := r.reconcileConfigMaps(ctx, ca); err != nil {
-		return err
+		errorMsg := fmt.Sprintf("ConfigMaps reconciliation failed: %v", err)
+		log.Error(err, "Failed to reconcile ConfigMaps")
+		reconciliationErrors = append(reconciliationErrors, errorMsg)
 	}
 
-	// Reconcile Secrets
+	// Reconcile Secrets (deployment needs TLS and MSP secrets)
 	if err := r.reconcileSecrets(ctx, ca); err != nil {
-		return err
+		errorMsg := fmt.Sprintf("Secrets reconciliation failed: %v", err)
+		log.Error(err, "Failed to reconcile Secrets")
+		reconciliationErrors = append(reconciliationErrors, errorMsg)
 	}
 
-	// Reconcile PVC
+	// Reconcile PVC (deployment needs persistent storage)
 	if err := r.reconcilePVC(ctx, ca); err != nil {
-		return err
+		errorMsg := fmt.Sprintf("PVC reconciliation failed: %v", err)
+		log.Error(err, "Failed to reconcile PVC")
+		reconciliationErrors = append(reconciliationErrors, errorMsg)
 	}
 
-	// Reconcile Deployment
-	if err := r.reconcileDeployment(ctx, ca); err != nil {
-		return err
-	}
-
-	// Reconcile Service
+	// Reconcile Service (deployment can reference service)
 	if err := r.reconcileService(ctx, ca); err != nil {
-		return err
+		errorMsg := fmt.Sprintf("Service reconciliation failed: %v", err)
+		log.Error(err, "Failed to reconcile Service")
+		reconciliationErrors = append(reconciliationErrors, errorMsg)
 	}
+
+	// Reconcile Ingress (if enabled)
+	if ca.Spec.Ingress != nil && ca.Spec.Ingress.Enabled {
+		if err := r.reconcileIngress(ctx, ca); err != nil {
+			errorMsg := fmt.Sprintf("Ingress reconciliation failed: %v", err)
+			log.Error(err, "Failed to reconcile Ingress")
+			reconciliationErrors = append(reconciliationErrors, errorMsg)
+		}
+	}
+
+	// Reconcile Deployment last (depends on all other resources)
+	if err := r.reconcileDeployment(ctx, ca); err != nil {
+		errorMsg := fmt.Sprintf("Deployment reconciliation failed: %v", err)
+		log.Error(err, "Failed to reconcile Deployment")
+		reconciliationErrors = append(reconciliationErrors, errorMsg)
+	}
+
+	// If there were any errors, update the status to Failed
+	if len(reconciliationErrors) > 0 {
+		combinedErrorMsg := strings.Join(reconciliationErrors, "; ")
+		log.Error(fmt.Errorf("%s", combinedErrorMsg), "CA reconciliation failed")
+		return fmt.Errorf("reconciliation failed")
+	}
+
+	// Clear any previous error status
+	ca.Status.Status = fabricxv1alpha1.PendingStatus
+	ca.Status.Message = ""
 
 	return nil
 }
 
 // reconcileConfigMaps reconciles CA ConfigMaps
 func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
 	// Main CA config
 	caConfig := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -206,10 +413,11 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 		},
 	}
 	caConfigTemplate := r.getConfigMapTemplate(ca, fmt.Sprintf("%s-config", ca.Name), map[string]string{
-		"ca.yaml": r.generateCAConfig(ca),
+		"ca.yaml": r.generateCAConfig(ctx, ca),
 	})
-	if err := r.updateResourceWithTemplate(ctx, ca, caConfig, caConfigTemplate); err != nil {
-		return err
+	if err := r.updateConfigMap(ctx, ca, caConfig, caConfigTemplate); err != nil {
+		log.Error(err, "Failed to update CA ConfigMap", "name", caConfig.Name)
+		return fmt.Errorf("failed to update CA ConfigMap %s: %w", caConfig.Name, err)
 	}
 
 	// TLS CA config
@@ -220,10 +428,11 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 		},
 	}
 	tlsConfigTemplate := r.getConfigMapTemplate(ca, fmt.Sprintf("%s-config-tls", ca.Name), map[string]string{
-		"fabric-ca-server-config.yaml": r.generateTLSCAConfig(ca),
+		"fabric-ca-server-config.yaml": r.generateTLSCAConfig(ctx, ca),
 	})
-	if err := r.updateResourceWithTemplate(ctx, ca, tlsConfig, tlsConfigTemplate); err != nil {
-		return err
+	if err := r.updateConfigMap(ctx, ca, tlsConfig, tlsConfigTemplate); err != nil {
+		log.Error(err, "Failed to update TLS CA ConfigMap", "name", tlsConfig.Name)
+		return fmt.Errorf("failed to update TLS CA ConfigMap %s: %w", tlsConfig.Name, err)
 	}
 
 	// Environment config
@@ -238,15 +447,19 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 		"FABRIC_CA_HOME": "/var/hyperledger/fabric-ca",
 		"SERVICE_DNS":    "0.0.0.0",
 	})
-	if err := r.updateResourceWithTemplate(ctx, ca, envConfig, envConfigTemplate); err != nil {
-		return err
+	if err := r.updateConfigMap(ctx, ca, envConfig, envConfigTemplate); err != nil {
+		log.Error(err, "Failed to update environment ConfigMap", "name", envConfig.Name)
+		return fmt.Errorf("failed to update environment ConfigMap %s: %w", envConfig.Name, err)
 	}
 
+	log.Info("ConfigMaps reconciled successfully", "ca", ca.Name)
 	return nil
 }
 
 // reconcileSecrets reconciles CA Secrets
 func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
 	// Check if we need to regenerate certificates
 	shouldRegenerate := r.shouldRegenerateCertificates(ctx, ca)
 
@@ -254,29 +467,39 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 	var err error
 
 	if shouldRegenerate {
+		log.Info("Regenerating certificates", "ca", ca.Name)
+
 		// Generate TLS certificates
 		tlsCert, tlsKey, err = r.generateTLSCertificate(ca)
 		if err != nil {
-			return err
+			log.Error(err, "Failed to generate TLS certificate", "ca", ca.Name)
+			return fmt.Errorf("failed to generate TLS certificate: %w", err)
 		}
 
 		// Generate CA certificates
 		caCert, caKey, err = r.generateCACertificate(ca)
 		if err != nil {
-			return err
+			log.Error(err, "Failed to generate CA certificate", "ca", ca.Name)
+			return fmt.Errorf("failed to generate CA certificate: %w", err)
 		}
 	} else {
+		log.Info("Using existing certificates", "ca", ca.Name)
+
 		// Use existing certificates if available
 		tlsCert, tlsKey, caCert, caKey, err = r.getExistingCertificates(ctx, ca)
 		if err != nil {
+			log.Error(err, "Failed to get existing certificates, regenerating", "ca", ca.Name)
+
 			// If we can't get existing certificates, regenerate them
 			tlsCert, tlsKey, err = r.generateTLSCertificate(ca)
 			if err != nil {
-				return err
+				log.Error(err, "Failed to generate TLS certificate", "ca", ca.Name)
+				return fmt.Errorf("failed to generate TLS certificate: %w", err)
 			}
 			caCert, caKey, err = r.generateCACertificate(ca)
 			if err != nil {
-				return err
+				log.Error(err, "Failed to generate CA certificate", "ca", ca.Name)
+				return fmt.Errorf("failed to generate CA certificate: %w", err)
 			}
 		}
 	}
@@ -292,8 +515,9 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 		"tls.crt": tlsCert,
 		"tls.key": tlsKey,
 	})
-	if err := r.updateResourceWithTemplate(ctx, ca, tlsSecret, tlsSecretTemplate); err != nil {
-		return err
+	if err := r.updateSecret(ctx, ca, tlsSecret, tlsSecretTemplate); err != nil {
+		log.Error(err, "Failed to update TLS crypto secret", "name", tlsSecret.Name)
+		return fmt.Errorf("failed to update TLS crypto secret %s: %w", tlsSecret.Name, err)
 	}
 
 	// MSP crypto material secret
@@ -307,10 +531,12 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 		"certfile": caCert,
 		"keyfile":  caKey,
 	})
-	if err := r.updateResourceWithTemplate(ctx, ca, mspSecret, mspSecretTemplate); err != nil {
-		return err
+	if err := r.updateSecret(ctx, ca, mspSecret, mspSecretTemplate); err != nil {
+		log.Error(err, "Failed to update MSP crypto secret", "name", mspSecret.Name)
+		return fmt.Errorf("failed to update MSP crypto secret %s: %w", mspSecret.Name, err)
 	}
 
+	log.Info("Secrets reconciled successfully", "ca", ca.Name)
 	return nil
 }
 
@@ -342,7 +568,7 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 		Namespace: ca.Namespace,
 	}, tlsSecret)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("failed to get TLS secret %s: %w", fmt.Sprintf("%s-tls-crypto", ca.Name), err)
 	}
 
 	// Get MSP certificates
@@ -352,7 +578,7 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 		Namespace: ca.Namespace,
 	}, mspSecret)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, fmt.Errorf("failed to get MSP secret %s: %w", fmt.Sprintf("%s-msp-crypto", ca.Name), err)
 	}
 
 	tlsCert := tlsSecret.Data["tls.crt"]
@@ -360,8 +586,17 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 	caCert := mspSecret.Data["certfile"]
 	caKey := mspSecret.Data["keyfile"]
 
-	if tlsCert == nil || tlsKey == nil || caCert == nil || caKey == nil {
-		return nil, nil, nil, nil, fmt.Errorf("missing certificate data")
+	if tlsCert == nil {
+		return nil, nil, nil, nil, fmt.Errorf("TLS certificate not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
+	}
+	if tlsKey == nil {
+		return nil, nil, nil, nil, fmt.Errorf("TLS private key not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
+	}
+	if caCert == nil {
+		return nil, nil, nil, nil, fmt.Errorf("CA certificate not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
+	}
+	if caKey == nil {
+		return nil, nil, nil, nil, fmt.Errorf("CA private key not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
 	}
 
 	return tlsCert, tlsKey, caCert, caKey, nil
@@ -369,6 +604,8 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 
 // reconcilePVC reconciles the PersistentVolumeClaim
 func (r *CAReconciler) reconcilePVC(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
 	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ca.Name,
@@ -376,31 +613,45 @@ func (r *CAReconciler) reconcilePVC(ctx context.Context, ca *fabricxv1alpha1.CA)
 		},
 	}
 	template := r.getPVCTemplate(ca)
-	if err := r.updateResourceWithTemplate(ctx, ca, pvc, template); err != nil {
-		return err
+
+	// Log the template size for debugging
+	if len(template.Spec.Resources.Requests) > 0 {
+		log.Info("PVC template size", "size", template.Spec.Resources.Requests[corev1.ResourceStorage])
 	}
 
+	if err := r.updatePVC(ctx, ca, pvc, template); err != nil {
+		log.Error(err, "Failed to update PVC", "name", pvc.Name)
+		return fmt.Errorf("failed to update PVC %s: %w", pvc.Name, err)
+	}
+
+	log.Info("PVC reconciled successfully", "ca", ca.Name)
 	return nil
 }
 
 // reconcileDeployment reconciles the CA Deployment
 func (r *CAReconciler) reconcileDeployment(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ca.Name,
 			Namespace: ca.Namespace,
 		},
 	}
-	template := r.getDeploymentTemplate(ca)
-	if err := r.updateResourceWithTemplate(ctx, ca, deployment, template); err != nil {
-		return err
+	template := r.GetDeploymentTemplate(ctx, ca)
+	if err := r.updateDeployment(ctx, ca, deployment, template); err != nil {
+		log.Error(err, "Failed to update Deployment", "name", deployment.Name)
+		return fmt.Errorf("failed to update Deployment %s: %w", deployment.Name, err)
 	}
 
+	log.Info("Deployment reconciled successfully", "ca", ca.Name)
 	return nil
 }
 
 // reconcileService reconciles the CA Service
 func (r *CAReconciler) reconcileService(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ca.Name,
@@ -408,18 +659,82 @@ func (r *CAReconciler) reconcileService(ctx context.Context, ca *fabricxv1alpha1
 		},
 	}
 	template := r.getServiceTemplate(ca)
-	if err := r.updateResourceWithTemplate(ctx, ca, service, template); err != nil {
-		return err
+	if err := r.updateService(ctx, ca, service, template); err != nil {
+		log.Error(err, "Failed to update Service", "name", service.Name)
+		return fmt.Errorf("failed to update Service %s: %w", service.Name, err)
 	}
 
+	log.Info("Service reconciled successfully", "ca", ca.Name)
 	return nil
 }
 
-// generateCAConfig generates the CA configuration
-func (r *CAReconciler) generateCAConfig(ca *fabricxv1alpha1.CA) string {
-	// This is a simplified version. In a real implementation, you would generate
-	// the full CA configuration based on the spec
-	return fmt.Sprintf(`version: "1.4.9"
+// reconcileIngress reconciles the CA Ingress
+func (r *CAReconciler) reconcileIngress(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+	}
+	template := r.getIngressTemplate(ca)
+	if err := r.updateIngress(ctx, ca, ingress, template); err != nil {
+		log.Error(err, "Failed to update Ingress", "name", ingress.Name)
+		return fmt.Errorf("failed to update Ingress %s: %w", ingress.Name, err)
+	}
+
+	log.Info("Ingress reconciled successfully", "ca", ca.Name)
+	return nil
+}
+
+// generateCAConfig generates the CA configuration using Go templates
+func (r *CAReconciler) generateCAConfig(ctx context.Context, ca *fabricxv1alpha1.CA) string {
+	// Ensure defaults are set before generating config
+	r.setDefaults(ca)
+
+	// Prepare data for template
+	data := ConfigData{
+		Debug:        ca.Spec.Debug,
+		CLRSizeLimit: ca.Spec.CLRSizeLimit,
+		Database: struct {
+			Type       string
+			Datasource string
+		}{
+			Type:       ca.Spec.Database.Type,
+			Datasource: ca.Spec.Database.Datasource,
+		},
+		Metrics: struct {
+			Provider string
+			Statsd   struct {
+				Network       string
+				Address       string
+				WriteInterval string
+				Prefix        string
+			}
+		}{
+			Provider: ca.Spec.Metrics.Provider,
+			Statsd: struct {
+				Network       string
+				Address       string
+				WriteInterval string
+				Prefix        string
+			}{
+				Network:       ca.Spec.Metrics.Statsd.Network,
+				Address:       ca.Spec.Metrics.Statsd.Address,
+				WriteInterval: ca.Spec.Metrics.Statsd.WriteInterval,
+				Prefix:        ca.Spec.Metrics.Statsd.Prefix,
+			},
+		},
+		CA:    ca.Spec.CA,
+		TLSCA: ca.Spec.TLSCA,
+	}
+
+	config, err := GenerateConfigFromTemplate(CAConfigTemplate, data)
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "Failed to generate CA configuration")
+		// Fallback to a simple configuration if template fails
+		return fmt.Sprintf(`version: "1.4.9"
 port: 7054
 debug: %t
 tls:
@@ -434,13 +749,59 @@ ca:
   certfile: /var/hyperledger/fabric-ca/msp-secret/certfile
 db:
   type: %s
-  datasource: %s
-`, ca.Spec.Debug, ca.Spec.CA.Name, ca.Spec.Database.Type, ca.Spec.Database.Datasource)
+  datasource: %s`, ca.Spec.Debug, ca.Spec.CA.Name, ca.Spec.Database.Type, ca.Spec.Database.Datasource)
+	}
+
+	return config
 }
 
-// generateTLSCAConfig generates the TLS CA configuration
-func (r *CAReconciler) generateTLSCAConfig(ca *fabricxv1alpha1.CA) string {
-	return fmt.Sprintf(`tls:
+// generateTLSCAConfig generates the TLS CA configuration using Go templates
+func (r *CAReconciler) generateTLSCAConfig(ctx context.Context, ca *fabricxv1alpha1.CA) string {
+	// Ensure defaults are set before generating config
+	r.setDefaults(ca)
+
+	// Prepare data for template
+	data := ConfigData{
+		Debug:        ca.Spec.Debug,
+		CLRSizeLimit: ca.Spec.CLRSizeLimit,
+		Database: struct {
+			Type       string
+			Datasource string
+		}{
+			Type:       ca.Spec.Database.Type,
+			Datasource: ca.Spec.Database.Datasource,
+		},
+		Metrics: struct {
+			Provider string
+			Statsd   struct {
+				Network       string
+				Address       string
+				WriteInterval string
+				Prefix        string
+			}
+		}{
+			Provider: ca.Spec.Metrics.Provider,
+			Statsd: struct {
+				Network       string
+				Address       string
+				WriteInterval string
+				Prefix        string
+			}{
+				Network:       ca.Spec.Metrics.Statsd.Network,
+				Address:       ca.Spec.Metrics.Statsd.Address,
+				WriteInterval: ca.Spec.Metrics.Statsd.WriteInterval,
+				Prefix:        ca.Spec.Metrics.Statsd.Prefix,
+			},
+		},
+		CA:    ca.Spec.CA,
+		TLSCA: ca.Spec.TLSCA,
+	}
+
+	config, err := GenerateConfigFromTemplate(TLSConfigTemplate, data)
+	if err != nil {
+		logf.FromContext(ctx).Error(err, "Failed to generate TLS CA configuration")
+		// Fallback to a simple configuration if template fails
+		return fmt.Sprintf(`tls:
   certfile: /var/hyperledger/fabric-ca/msp-tls-secret/certfile
   keyfile: /var/hyperledger/fabric-ca/msp-tls-secret/keyfile
   clientauth:
@@ -452,8 +813,10 @@ ca:
   certfile: /var/hyperledger/fabric-ca/msp-tls-secret/certfile
 db:
   type: %s
-  datasource: %s
-`, ca.Spec.TLSCA.Name, ca.Spec.Database.Type, ca.Spec.Database.Datasource)
+  datasource: %s`, ca.Spec.TLSCA.Name, ca.Spec.Database.Type, ca.Spec.Database.Datasource)
+	}
+
+	return config
 }
 
 // generateTLSCertificate generates TLS certificate and key
@@ -461,19 +824,26 @@ func (r *CAReconciler) generateTLSCertificate(ca *fabricxv1alpha1.CA) ([]byte, [
 	// Generate private key
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to generate ECDSA private key: %w", err)
 	}
 
 	// Create certificate template
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to generate serial number: %w", err)
 	}
 
 	// Get IP addresses and DNS names
 	ips := []net.IP{net.ParseIP("127.0.0.1")}
 	dnsNames := []string{}
+
+	// Add domains from TLS configuration
+	if ca.Spec.TLS.Domains != nil {
+		dnsNames = append(dnsNames, ca.Spec.TLS.Domains...)
+	}
+
+	// Add hosts from spec
 	for _, host := range ca.Spec.Hosts {
 		if ip := net.ParseIP(host); ip != nil {
 			ips = append(ips, ip)
@@ -504,7 +874,7 @@ func (r *CAReconciler) generateTLSCertificate(ca *fabricxv1alpha1.CA) ([]byte, [
 	// Create certificate
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
 
 	// Encode certificate
@@ -516,7 +886,7 @@ func (r *CAReconciler) generateTLSCertificate(ca *fabricxv1alpha1.CA) ([]byte, [
 	// Encode private key
 	keyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to marshal private key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
@@ -531,14 +901,18 @@ func (r *CAReconciler) generateCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []
 	// Generate private key
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to generate ECDSA private key: %w", err)
 	}
 
 	// Create certificate template
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	if len(ca.Spec.CA.CSR.Names) == 0 {
+		return nil, nil, fmt.Errorf("no certificate names specified in CA CSR configuration")
 	}
 
 	template := &x509.Certificate{
@@ -562,7 +936,7 @@ func (r *CAReconciler) generateCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []
 	// Create certificate
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create CA certificate: %w", err)
 	}
 
 	// Encode certificate
@@ -574,7 +948,7 @@ func (r *CAReconciler) generateCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []
 	// Encode private key
 	keyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to marshal private key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "PRIVATE KEY",
@@ -586,27 +960,125 @@ func (r *CAReconciler) generateCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []
 
 // computeSKI computes the Subject Key Identifier
 func (r *CAReconciler) computeSKI(privKey *ecdsa.PrivateKey) []byte {
-	raw := elliptic.Marshal(privKey.Curve, privKey.PublicKey.X, privKey.PublicKey.Y)
-	hash := sha256.Sum256(raw)
+	// Convert ECDSA public key to ECDH format for modern marshaling
+	ecdhKey, err := ecdh.P256().NewPublicKey(elliptic.MarshalCompressed(privKey.Curve, privKey.X, privKey.Y))
+	if err != nil {
+		// Use compressed marshaling as fallback
+		raw := elliptic.MarshalCompressed(privKey.Curve, privKey.X, privKey.Y)
+		hash := sha256.Sum256(raw)
+		return hash[:]
+	}
+
+	hash := sha256.Sum256(ecdhKey.Bytes())
 	return hash[:]
 }
 
-// updateStatus updates the CA status
+// ComputeConfigMapHash computes a hash of the ConfigMap data for triggering pod restarts
+func (r *CAReconciler) ComputeConfigMapHash(ctx context.Context, ca *fabricxv1alpha1.CA) (string, error) {
+	// Get the main CA ConfigMap
+	caConfigMap := &corev1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-config", ca.Name),
+		Namespace: ca.Namespace,
+	}, caConfigMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to get CA ConfigMap: %w", err)
+	}
+
+	// Get the TLS CA ConfigMap
+	tlsConfigMap := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-config-tls", ca.Name),
+		Namespace: ca.Namespace,
+	}, tlsConfigMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to get TLS ConfigMap: %w", err)
+	}
+
+	// Create a combined data structure for hashing
+	configData := struct {
+		CAConfig  map[string]string `json:"caConfig"`
+		TLSConfig map[string]string `json:"tlsConfig"`
+	}{
+		CAConfig:  caConfigMap.Data,
+		TLSConfig: tlsConfigMap.Data,
+	}
+
+	// Marshal to JSON for consistent hashing
+	jsonData, err := json.Marshal(configData)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config data: %w", err)
+	}
+
+	// Compute SHA256 hash
+	hash := sha256.Sum256(jsonData)
+	return fmt.Sprintf("%x", hash), nil
+}
+
+// updateCAStatus updates the CA status with the given status and message
+func (r *CAReconciler) updateCAStatus(ctx context.Context, ca *fabricxv1alpha1.CA, status fabricxv1alpha1.DeploymentStatus, message string) {
+	log := logf.FromContext(ctx)
+
+	log.Info("Updating CA status",
+		"name", ca.Name,
+		"namespace", ca.Namespace,
+		"status", status,
+		"message", message)
+
+	// Update the status
+	ca.Status.Status = status
+	ca.Status.Message = message
+
+	// Update the timestamp
+	now := metav1.Now()
+	ca.Status.Conditions = []metav1.Condition{
+		{
+			Type:               "Ready",
+			Status:             metav1.ConditionTrue,
+			LastTransitionTime: now,
+			Reason:             "Reconciled",
+			Message:            message,
+		},
+	}
+
+	// Apply the status update
+	if err := r.Status().Update(ctx, ca); err != nil {
+		log.Error(err, "Failed to update CA status")
+	} else {
+		log.Info("CA status updated successfully",
+			"name", ca.Name,
+			"namespace", ca.Namespace,
+			"status", status,
+			"message", message)
+	}
+}
+
+// updateStatus updates the CA status (legacy method)
 func (r *CAReconciler) updateStatus(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	// If status is already set to Failed, preserve it
+	if ca.Status.Status == fabricxv1alpha1.FailedStatus {
+		return r.Status().Update(ctx, ca)
+	}
+
 	// Get deployment status
 	deployment := &appsv1.Deployment{}
 	err := r.Get(ctx, types.NamespacedName{Name: ca.Name, Namespace: ca.Namespace}, deployment)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			ca.Status.Status = fabricxv1alpha1.PendingStatus
+			ca.Status.Message = "Deployment not found"
 		} else {
+			ca.Status.Status = fabricxv1alpha1.FailedStatus
+			ca.Status.Message = fmt.Sprintf("Failed to get deployment: %v", err)
 			return err
 		}
 	} else {
 		if deployment.Status.ReadyReplicas > 0 {
 			ca.Status.Status = fabricxv1alpha1.RunningStatus
+			ca.Status.Message = "CA is running successfully"
 		} else {
 			ca.Status.Status = fabricxv1alpha1.PendingStatus
+			ca.Status.Message = "Deployment is not ready"
 		}
 	}
 
@@ -622,6 +1094,9 @@ func (r *CAReconciler) updateStatus(ctx context.Context, ca *fabricxv1alpha1.CA)
 
 // deleteResources deletes all CA resources
 func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+	var deletionErrors []string
+
 	// Delete deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -630,7 +1105,9 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 		},
 	}
 	if err := r.Delete(ctx, deployment); err != nil && !errors.IsNotFound(err) {
-		return err
+		errorMsg := fmt.Sprintf("Failed to delete Deployment %s: %v", ca.Name, err)
+		log.Error(err, "Failed to delete Deployment", "name", ca.Name)
+		deletionErrors = append(deletionErrors, errorMsg)
 	}
 
 	// Delete service
@@ -641,7 +1118,22 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 		},
 	}
 	if err := r.Delete(ctx, service); err != nil && !errors.IsNotFound(err) {
-		return err
+		errorMsg := fmt.Sprintf("Failed to delete Service %s: %v", ca.Name, err)
+		log.Error(err, "Failed to delete Service", "name", ca.Name)
+		deletionErrors = append(deletionErrors, errorMsg)
+	}
+
+	// Delete ingress (if exists)
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+	}
+	if err := r.Delete(ctx, ingress); err != nil && !errors.IsNotFound(err) {
+		errorMsg := fmt.Sprintf("Failed to delete Ingress %s: %v", ca.Name, err)
+		log.Error(err, "Failed to delete Ingress", "name", ca.Name)
+		deletionErrors = append(deletionErrors, errorMsg)
 	}
 
 	// Delete PVC
@@ -652,7 +1144,9 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 		},
 	}
 	if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
-		return err
+		errorMsg := fmt.Sprintf("Failed to delete PVC %s: %v", ca.Name, err)
+		log.Error(err, "Failed to delete PVC", "name", ca.Name)
+		deletionErrors = append(deletionErrors, errorMsg)
 	}
 
 	// Delete ConfigMaps
@@ -669,7 +1163,9 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 			},
 		}
 		if err := r.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
-			return err
+			errorMsg := fmt.Sprintf("Failed to delete ConfigMap %s: %v", name, err)
+			log.Error(err, "Failed to delete ConfigMap", "name", name)
+			deletionErrors = append(deletionErrors, errorMsg)
 		}
 	}
 
@@ -686,15 +1182,33 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 			},
 		}
 		if err := r.Delete(ctx, secret); err != nil && !errors.IsNotFound(err) {
-			return err
+			errorMsg := fmt.Sprintf("Failed to delete Secret %s: %v", name, err)
+			log.Error(err, "Failed to delete Secret", "name", name)
+			deletionErrors = append(deletionErrors, errorMsg)
 		}
 	}
 
+	// If there were any errors, return them
+	if len(deletionErrors) > 0 {
+		combinedErrorMsg := strings.Join(deletionErrors, "; ")
+		log.Error(fmt.Errorf("%s", combinedErrorMsg), "CA resource deletion failed", "ca", ca.Name)
+		return fmt.Errorf("failed to delete CA resources")
+	}
+
+	log.Info("All CA resources deleted successfully", "ca", ca.Name)
 	return nil
 }
 
-// getDeploymentTemplate returns a deployment template based on the CA spec
-func (r *CAReconciler) getDeploymentTemplate(ca *fabricxv1alpha1.CA) *appsv1.Deployment {
+// GetDeploymentTemplate returns a deployment template based on the CA spec
+func (r *CAReconciler) GetDeploymentTemplate(ctx context.Context, ca *fabricxv1alpha1.CA) *appsv1.Deployment {
+	// Compute ConfigMap hash for triggering pod restarts
+	configHash, err := r.ComputeConfigMapHash(ctx, ca)
+	if err != nil {
+		// Log the error but continue with deployment creation
+		logf.FromContext(ctx).Error(err, "Failed to compute ConfigMap hash, continuing without hash")
+		configHash = "unknown"
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ca.Name,
@@ -721,7 +1235,16 @@ func (r *CAReconciler) getDeploymentTemplate(ca *fabricxv1alpha1.CA) *appsv1.Dep
 						}
 						return labels
 					}(),
-					Annotations: ca.Spec.PodAnnotations,
+					Annotations: func() map[string]string {
+						annotations := make(map[string]string)
+						// Copy existing annotations
+						for k, v := range ca.Spec.PodAnnotations {
+							annotations[k] = v
+						}
+						// Add ConfigMap hash annotation
+						annotations["checksum/config"] = configHash
+						return annotations
+					}(),
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -979,161 +1502,378 @@ func (r *CAReconciler) getSecretTemplate(ca *fabricxv1alpha1.CA, name string, da
 	}
 }
 
-// updateResourceWithTemplate updates a resource with a template, preserving existing fields
-func (r *CAReconciler) updateResourceWithTemplate(ctx context.Context, ca *fabricxv1alpha1.CA, resource client.Object, template client.Object) error {
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
+// updateDeployment updates a deployment with template data
+func (r *CAReconciler) updateDeployment(ctx context.Context, ca *fabricxv1alpha1.CA, deployment *appsv1.Deployment, template *appsv1.Deployment) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
 		// Set controller reference
-		if err := controllerutil.SetControllerReference(ca, resource, r.Scheme); err != nil {
+		if err := controllerutil.SetControllerReference(ca, deployment, r.Scheme); err != nil {
 			return err
 		}
 
-		// Update the resource with template data
-		switch res := resource.(type) {
-		case *appsv1.Deployment:
-			if t, ok := template.(*appsv1.Deployment); ok {
-				res.Spec = t.Spec
-				if res.ObjectMeta.Labels == nil {
-					res.ObjectMeta.Labels = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Labels {
-					res.ObjectMeta.Labels[k] = v
-				}
-				if res.ObjectMeta.Annotations == nil {
-					res.ObjectMeta.Annotations = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Annotations {
-					res.ObjectMeta.Annotations[k] = v
-				}
-			}
-		case *corev1.Service:
-			if t, ok := template.(*corev1.Service); ok {
-				res.Spec = t.Spec
-				if res.ObjectMeta.Labels == nil {
-					res.ObjectMeta.Labels = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Labels {
-					res.ObjectMeta.Labels[k] = v
-				}
-				if res.ObjectMeta.Annotations == nil {
-					res.ObjectMeta.Annotations = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Annotations {
-					res.ObjectMeta.Annotations[k] = v
-				}
-			}
-		case *corev1.PersistentVolumeClaim:
-			if t, ok := template.(*corev1.PersistentVolumeClaim); ok {
-				// Handle PVC updates carefully - some fields are immutable
-				if res.Spec.StorageClassName != nil && t.Spec.StorageClassName != nil {
-					// Only update storage class if it's actually different
-					if *res.Spec.StorageClassName != *t.Spec.StorageClassName {
-						// Storage class cannot be changed after creation
-						// Log a warning but don't fail
-						logf.FromContext(ctx).Info("Storage class cannot be changed for existing PVC",
-							"pvc", res.Name, "old", *res.Spec.StorageClassName, "new", *t.Spec.StorageClassName)
-					}
-				}
+		// Update deployment spec
+		deployment.Spec = template.Spec
 
-				// Update size only if it's an increase
-				if len(res.Spec.Resources.Requests) > 0 && len(t.Spec.Resources.Requests) > 0 {
-					currentSize := res.Spec.Resources.Requests[corev1.ResourceStorage]
-					newSize := t.Spec.Resources.Requests[corev1.ResourceStorage]
-					if newSize.Cmp(currentSize) > 0 {
-						// Only increase size, never decrease
-						res.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
-					}
-				}
+		// Update metadata
+		if deployment.Labels == nil {
+			deployment.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			deployment.Labels[k] = v
+		}
+		if deployment.Annotations == nil {
+			deployment.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			deployment.Annotations[k] = v
+		}
 
-				// Update metadata
-				if res.ObjectMeta.Labels == nil {
-					res.ObjectMeta.Labels = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Labels {
-					res.ObjectMeta.Labels[k] = v
-				}
-				if res.ObjectMeta.Annotations == nil {
-					res.ObjectMeta.Annotations = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Annotations {
-					res.ObjectMeta.Annotations[k] = v
+		return nil
+	})
+
+	return err
+}
+
+// updateService updates a service with template data
+func (r *CAReconciler) updateService(ctx context.Context, ca *fabricxv1alpha1.CA, service *corev1.Service, template *corev1.Service) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, service, r.Scheme); err != nil {
+			return err
+		}
+
+		// Update service spec
+		service.Spec = template.Spec
+
+		// Update metadata
+		if service.Labels == nil {
+			service.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			service.Labels[k] = v
+		}
+		if service.Annotations == nil {
+			service.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			service.Annotations[k] = v
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// updatePVC updates a PVC with template data
+func (r *CAReconciler) updatePVC(ctx context.Context, ca *fabricxv1alpha1.CA, pvc *corev1.PersistentVolumeClaim, template *corev1.PersistentVolumeClaim) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, pvc, r.Scheme); err != nil {
+			return err
+		}
+
+		// For new PVCs, copy the entire spec from template
+		if len(pvc.Spec.AccessModes) == 0 {
+			// This is a new PVC, copy the entire spec
+			pvc.Spec = template.Spec
+			logf.FromContext(ctx).Info("Creating new PVC with template spec",
+				"pvc", pvc.Name, "accessModes", template.Spec.AccessModes, "size", template.Spec.Resources.Requests[corev1.ResourceStorage])
+		} else {
+			// This is an existing PVC, handle updates carefully - some fields are immutable
+			if pvc.Spec.StorageClassName != nil && template.Spec.StorageClassName != nil {
+				// Only update storage class if it's actually different
+				if *pvc.Spec.StorageClassName != *template.Spec.StorageClassName {
+					// Storage class cannot be changed after creation
+					// Log a warning but don't fail
+					logf.FromContext(ctx).Info("Storage class cannot be changed for existing PVC",
+						"pvc", pvc.Name, "old", *pvc.Spec.StorageClassName, "new", *template.Spec.StorageClassName)
 				}
 			}
-		case *corev1.ConfigMap:
-			if t, ok := template.(*corev1.ConfigMap); ok {
-				// Check if ConfigMap is immutable
-				if res.Immutable != nil && *res.Immutable {
-					// Cannot update immutable ConfigMap - need to delete and recreate
-					logf.FromContext(ctx).Info("ConfigMap is immutable, will delete and recreate", "configmap", res.Name)
-					if err := r.Client.Delete(ctx, res); err != nil {
-						return err
+
+			// Handle storage size updates
+			if len(template.Spec.Resources.Requests) > 0 {
+				newSize := template.Spec.Resources.Requests[corev1.ResourceStorage]
+
+				// If PVC doesn't have size set yet, set it
+				if len(pvc.Spec.Resources.Requests) == 0 {
+					pvc.Spec.Resources.Requests = corev1.ResourceList{
+						corev1.ResourceStorage: newSize,
 					}
-					// Create new ConfigMap with template data
-					newConfigMap := &corev1.ConfigMap{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      res.Name,
-							Namespace: res.Namespace,
+					logf.FromContext(ctx).Info("Setting initial PVC storage size",
+						"pvc", pvc.Name, "size", newSize)
+				} else {
+					// Check if we need to update the size
+					currentSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+					if newSize.Cmp(currentSize) != 0 {
+						// Size is different, check if it's an increase
+						if newSize.Cmp(currentSize) > 0 {
+							// Only increase size, never decrease
+							pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
+							logf.FromContext(ctx).Info("Increasing PVC storage size",
+								"pvc", pvc.Name, "old", currentSize, "new", newSize)
+						} else {
+							// Log warning for size decrease attempt
+							logf.FromContext(ctx).Info("Cannot decrease PVC storage size",
+								"pvc", pvc.Name, "current", currentSize, "requested", newSize)
+						}
+					} else {
+						logf.FromContext(ctx).Info("PVC storage size unchanged",
+							"pvc", pvc.Name, "size", currentSize)
+					}
+				}
+			}
+
+			// Update access modes if they're different
+			if !r.accessModesEqual(pvc.Spec.AccessModes, template.Spec.AccessModes) {
+				// Access modes cannot be changed after creation
+				logf.FromContext(ctx).Info("Access modes cannot be changed for existing PVC",
+					"pvc", pvc.Name, "current", pvc.Spec.AccessModes, "requested", template.Spec.AccessModes)
+			}
+		}
+
+		// Update metadata
+		if pvc.Labels == nil {
+			pvc.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			pvc.Labels[k] = v
+		}
+		if pvc.Annotations == nil {
+			pvc.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			pvc.Annotations[k] = v
+		}
+
+		return nil
+	})
+
+	// Handle PVC resize errors - treat them as failures
+	if err != nil {
+		// Check if it's a PVC resize error
+		if r.isPVCResizeError(err) {
+			logf.FromContext(ctx).Error(err, "PVC resize failed - this is a reconciliation error",
+				"pvc", pvc.Name, "error", err.Error())
+			// Return the error to mark the CA as failed
+			return fmt.Errorf("PVC resize failed: %v", err)
+		}
+	}
+
+	return err
+}
+
+// updateConfigMap updates a ConfigMap with template data
+func (r *CAReconciler) updateConfigMap(ctx context.Context, ca *fabricxv1alpha1.CA, configMap *corev1.ConfigMap, template *corev1.ConfigMap) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, configMap, r.Scheme); err != nil {
+			return err
+		}
+
+		// Check if ConfigMap is immutable
+		if configMap.Immutable != nil && *configMap.Immutable {
+			// Cannot update immutable ConfigMap - need to delete and recreate
+			logf.FromContext(ctx).Info("ConfigMap is immutable, will delete and recreate", "configmap", configMap.Name)
+			if err := r.Delete(ctx, configMap); err != nil {
+				return err
+			}
+			// Create new ConfigMap with template data
+			newConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      configMap.Name,
+					Namespace: configMap.Namespace,
+				},
+				Data: template.Data,
+			}
+			if err := controllerutil.SetControllerReference(ca, newConfigMap, r.Scheme); err != nil {
+				return err
+			}
+			return r.Create(ctx, newConfigMap)
+		}
+
+		// Normal update for mutable ConfigMap
+		configMap.Data = template.Data
+		if configMap.Labels == nil {
+			configMap.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			configMap.Labels[k] = v
+		}
+		if configMap.Annotations == nil {
+			configMap.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			configMap.Annotations[k] = v
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// updateSecret updates a Secret with template data
+func (r *CAReconciler) updateSecret(ctx context.Context, ca *fabricxv1alpha1.CA, secret *corev1.Secret, template *corev1.Secret) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, secret, r.Scheme); err != nil {
+			return err
+		}
+
+		// Check if Secret is immutable
+		if secret.Immutable != nil && *secret.Immutable {
+			// Cannot update immutable Secret - need to delete and recreate
+			logf.FromContext(ctx).Info("Secret is immutable, will delete and recreate", "secret", secret.Name)
+			if err := r.Delete(ctx, secret); err != nil {
+				return err
+			}
+			// Create new Secret with template data
+			newSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secret.Name,
+					Namespace: secret.Namespace,
+				},
+				Data: template.Data,
+			}
+			if err := controllerutil.SetControllerReference(ca, newSecret, r.Scheme); err != nil {
+				return err
+			}
+			return r.Create(ctx, newSecret)
+		}
+
+		// Normal update for mutable Secret
+		secret.Data = template.Data
+		if secret.Labels == nil {
+			secret.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			secret.Labels[k] = v
+		}
+		if secret.Annotations == nil {
+			secret.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			secret.Annotations[k] = v
+		}
+
+		return nil
+	})
+
+	return err
+}
+
+// accessModesEqual compares two access mode slices
+func (r *CAReconciler) accessModesEqual(a, b []corev1.PersistentVolumeAccessMode) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// isPVCResizeError checks if the error is related to PVC resize restrictions
+func (r *CAReconciler) isPVCResizeError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "only dynamically provisioned pvc can be resized") ||
+		strings.Contains(errMsg, "storageclass that provisions the pvc must support resize") ||
+		strings.Contains(errMsg, "forbidden") && strings.Contains(errMsg, "resize")
+}
+
+// getIngressTemplate returns an ingress template based on the CA spec
+func (r *CAReconciler) getIngressTemplate(ca *fabricxv1alpha1.CA) *networkingv1.Ingress {
+	if ca.Spec.Ingress == nil || !ca.Spec.Ingress.Enabled || ca.Spec.Ingress.Istio == nil {
+		return nil
+	}
+
+	istio := ca.Spec.Ingress.Istio
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+		Spec: networkingv1.IngressSpec{
+			Rules: []networkingv1.IngressRule{},
+		},
+	}
+
+	// Add rules for each host
+	for _, host := range istio.Hosts {
+		rule := networkingv1.IngressRule{
+			Host: host,
+			IngressRuleValue: networkingv1.IngressRuleValue{
+				HTTP: &networkingv1.HTTPIngressRuleValue{
+					Paths: []networkingv1.HTTPIngressPath{
+						{
+							Path:     "/",
+							PathType: &[]networkingv1.PathType{networkingv1.PathTypePrefix}[0],
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: ca.Name,
+									Port: networkingv1.ServiceBackendPort{
+										Number: int32(7054),
+									},
+								},
+							},
 						},
-						Data: t.Data,
-					}
-					if err := controllerutil.SetControllerReference(ca, newConfigMap, r.Scheme); err != nil {
-						return err
-					}
-					return r.Client.Create(ctx, newConfigMap)
-				}
+					},
+				},
+			},
+		}
+		ingress.Spec.Rules = append(ingress.Spec.Rules, rule)
+	}
 
-				// Normal update for mutable ConfigMap
-				res.Data = t.Data
-				if res.ObjectMeta.Labels == nil {
-					res.ObjectMeta.Labels = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Labels {
-					res.ObjectMeta.Labels[k] = v
-				}
-				if res.ObjectMeta.Annotations == nil {
-					res.ObjectMeta.Annotations = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Annotations {
-					res.ObjectMeta.Annotations[k] = v
-				}
-			}
-		case *corev1.Secret:
-			if t, ok := template.(*corev1.Secret); ok {
-				// Check if Secret is immutable
-				if res.Immutable != nil && *res.Immutable {
-					// Cannot update immutable Secret - need to delete and recreate
-					logf.FromContext(ctx).Info("Secret is immutable, will delete and recreate", "secret", res.Name)
-					if err := r.Client.Delete(ctx, res); err != nil {
-						return err
-					}
-					// Create new Secret with template data
-					newSecret := &corev1.Secret{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      res.Name,
-							Namespace: res.Namespace,
-						},
-						Data: t.Data,
-					}
-					if err := controllerutil.SetControllerReference(ca, newSecret, r.Scheme); err != nil {
-						return err
-					}
-					return r.Client.Create(ctx, newSecret)
-				}
+	// Add TLS configuration if enabled
+	if istio.TLS != nil && istio.TLS.Enabled {
+		ingress.Spec.TLS = []networkingv1.IngressTLS{
+			{
+				Hosts:      istio.Hosts,
+				SecretName: istio.TLS.SecretName,
+			},
+		}
+	}
 
-				// Normal update for mutable Secret
-				res.Data = t.Data
-				if res.ObjectMeta.Labels == nil {
-					res.ObjectMeta.Labels = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Labels {
-					res.ObjectMeta.Labels[k] = v
-				}
-				if res.ObjectMeta.Annotations == nil {
-					res.ObjectMeta.Annotations = make(map[string]string)
-				}
-				for k, v := range t.ObjectMeta.Annotations {
-					res.ObjectMeta.Annotations[k] = v
-				}
-			}
+	return ingress
+}
+
+// updateIngress updates an Ingress with template data
+func (r *CAReconciler) updateIngress(ctx context.Context, ca *fabricxv1alpha1.CA, ingress *networkingv1.Ingress, template *networkingv1.Ingress) error {
+	if template == nil {
+		// If template is nil, delete the ingress
+		if err := r.Delete(ctx, ingress); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, ingress, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, ingress, r.Scheme); err != nil {
+			return err
+		}
+
+		// Update ingress spec
+		ingress.Spec = template.Spec
+
+		// Update metadata
+		if ingress.Labels == nil {
+			ingress.Labels = make(map[string]string)
+		}
+		for k, v := range template.Labels {
+			ingress.Labels[k] = v
+		}
+		if ingress.Annotations == nil {
+			ingress.Annotations = make(map[string]string)
+		}
+		for k, v := range template.Annotations {
+			ingress.Annotations[k] = v
 		}
 
 		return nil
@@ -1151,6 +1891,7 @@ func (r *CAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Secret{}).
+		Owns(&networkingv1.Ingress{}).
 		Named("ca").
 		Complete(r)
 }

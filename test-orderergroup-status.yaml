@@ -1,0 +1,51 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererGroup
+metadata:
+  name: test-orderergroup-status
+  namespace: default
+spec:
+  bootstrapMode: 'configure'
+  
+  # Genesis block configuration
+  genesis:
+    secretName: 'fabricx-genesis'
+    secretKey: 'genesis.block'
+    secretNamespace: 'default'
+  
+  # Global enrollment configuration (this will fail because the CA secret doesn't exist)
+  enrollment:
+    sign:
+      cahost: 'test-ca2'
+      caport: 7054
+      catls:
+        secretRef:
+          name: 'test-ca2'
+          key: 'ca-cert.pem'
+          namespace: 'default'
+      enrollid: 'admin'
+      enrollsecret: 'adminpw'
+    tls:
+      cahost: 'test-ca2'
+      caport: 7054
+      catls:
+        secretRef:
+          name: 'test-ca2'
+          key: 'ca-cert.pem'
+          namespace: 'default'
+      enrollid: 'admin'
+      enrollsecret: 'adminpw'
+  
+  # Component-specific configurations
+  components:
+    consenter:
+      replicas: 1
+      certificates:
+        cahost: 'test-ca2'
+        caport: 7054
+        catls:
+          secretRef:
+            name: 'test-ca2'
+            key: 'ca-cert.pem'
+            namespace: 'default'
+        enrollid: 'admin'
+        enrollsecret: 'adminpw' 
