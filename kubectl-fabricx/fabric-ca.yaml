@@ -1,8 +1,7 @@
-apiVersion: fabric.hyperledger.org/v1alpha1
+apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: CA
 metadata:
   name: test-ca2
-  namespace: test-ns
 spec:
   ca:
     bccsp:
@@ -50,7 +49,7 @@ spec:
   db:
     datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
     type: sqlite3
-  image: hyperledger/fabric-ca:1.4.3
+  image: hyperledger/fabric-ca
   metrics:
     statsd: {}
   resources: {}
@@ -109,6 +108,6 @@ spec:
       maxenrollments: -1
   vault:
     vault: {}
-  version: 1.4.3
+  version: 1.5.15
 status: {}
 

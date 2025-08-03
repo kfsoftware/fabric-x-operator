@@ -205,13 +205,10 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, caConfig, func() error {
-		caConfig.Data = map[string]string{
-			"ca.yaml": r.generateCAConfig(ca),
-		}
-		return controllerutil.SetControllerReference(ca, caConfig, r.Scheme)
+	caConfigTemplate := r.getConfigMapTemplate(ca, fmt.Sprintf("%s-config", ca.Name), map[string]string{
+		"ca.yaml": r.generateCAConfig(ca),
 	})
-	if err != nil {
+	if err := r.updateResourceWithTemplate(ctx, ca, caConfig, caConfigTemplate); err != nil {
 		return err
 	}
 
@@ -222,13 +219,10 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, tlsConfig, func() error {
-		tlsConfig.Data = map[string]string{
-			"fabric-ca-server-config.yaml": r.generateTLSCAConfig(ca),
-		}
-		return controllerutil.SetControllerReference(ca, tlsConfig, r.Scheme)
+	tlsConfigTemplate := r.getConfigMapTemplate(ca, fmt.Sprintf("%s-config-tls", ca.Name), map[string]string{
+		"fabric-ca-server-config.yaml": r.generateTLSCAConfig(ca),
 	})
-	if err != nil {
+	if err := r.updateResourceWithTemplate(ctx, ca, tlsConfig, tlsConfigTemplate); err != nil {
 		return err
 	}
 
@@ -239,30 +233,52 @@ func (r *CAReconciler) reconcileConfigMaps(ctx context.Context, ca *fabricxv1alp
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, envConfig, func() error {
-		envConfig.Data = map[string]string{
-			"GODEBUG":        "netdns=go",
-			"FABRIC_CA_HOME": "/var/hyperledger/fabric-ca",
-			"SERVICE_DNS":    "0.0.0.0",
-		}
-		return controllerutil.SetControllerReference(ca, envConfig, r.Scheme)
+	envConfigTemplate := r.getConfigMapTemplate(ca, fmt.Sprintf("%s-env", ca.Name), map[string]string{
+		"GODEBUG":        "netdns=go",
+		"FABRIC_CA_HOME": "/var/hyperledger/fabric-ca",
+		"SERVICE_DNS":    "0.0.0.0",
 	})
+	if err := r.updateResourceWithTemplate(ctx, ca, envConfig, envConfigTemplate); err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 // reconcileSecrets reconciles CA Secrets
 func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1.CA) error {
-	// Generate TLS certificates
-	tlsCert, tlsKey, err := r.generateTLSCertificate(ca)
-	if err != nil {
-		return err
-	}
+	// Check if we need to regenerate certificates
+	shouldRegenerate := r.shouldRegenerateCertificates(ctx, ca)
 
-	// Generate CA certificates
-	caCert, caKey, err := r.generateCACertificate(ca)
-	if err != nil {
-		return err
+	var tlsCert, tlsKey, caCert, caKey []byte
+	var err error
+
+	if shouldRegenerate {
+		// Generate TLS certificates
+		tlsCert, tlsKey, err = r.generateTLSCertificate(ca)
+		if err != nil {
+			return err
+		}
+
+		// Generate CA certificates
+		caCert, caKey, err = r.generateCACertificate(ca)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Use existing certificates if available
+		tlsCert, tlsKey, caCert, caKey, err = r.getExistingCertificates(ctx, ca)
+		if err != nil {
+			// If we can't get existing certificates, regenerate them
+			tlsCert, tlsKey, err = r.generateTLSCertificate(ca)
+			if err != nil {
+				return err
+			}
+			caCert, caKey, err = r.generateCACertificate(ca)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	// TLS crypto material secret
@@ -272,14 +288,11 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, tlsSecret, func() error {
-		tlsSecret.Data = map[string][]byte{
-			"tls.crt": tlsCert,
-			"tls.key": tlsKey,
-		}
-		return controllerutil.SetControllerReference(ca, tlsSecret, r.Scheme)
+	tlsSecretTemplate := r.getSecretTemplate(ca, fmt.Sprintf("%s-tls-crypto", ca.Name), map[string][]byte{
+		"tls.crt": tlsCert,
+		"tls.key": tlsKey,
 	})
-	if err != nil {
+	if err := r.updateResourceWithTemplate(ctx, ca, tlsSecret, tlsSecretTemplate); err != nil {
 		return err
 	}
 
@@ -290,15 +303,68 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, mspSecret, func() error {
-		mspSecret.Data = map[string][]byte{
-			"certfile": caCert,
-			"keyfile":  caKey,
-		}
-		return controllerutil.SetControllerReference(ca, mspSecret, r.Scheme)
+	mspSecretTemplate := r.getSecretTemplate(ca, fmt.Sprintf("%s-msp-crypto", ca.Name), map[string][]byte{
+		"certfile": caCert,
+		"keyfile":  caKey,
 	})
+	if err := r.updateResourceWithTemplate(ctx, ca, mspSecret, mspSecretTemplate); err != nil {
+		return err
+	}
 
-	return err
+	return nil
+}
+
+// shouldRegenerateCertificates determines if certificates should be regenerated
+func (r *CAReconciler) shouldRegenerateCertificates(ctx context.Context, ca *fabricxv1alpha1.CA) bool {
+	// Check if certificates exist
+	tlsSecret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-tls-crypto", ca.Name),
+		Namespace: ca.Namespace,
+	}, tlsSecret)
+
+	if err != nil || tlsSecret.Data == nil {
+		// Certificates don't exist, need to generate
+		return true
+	}
+
+	// Check if CA spec has changed in a way that requires new certificates
+	// This is a simplified check - in a real implementation you might want to hash the relevant spec fields
+	return false
+}
+
+// getExistingCertificates retrieves existing certificates from secrets
+func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv1alpha1.CA) ([]byte, []byte, []byte, []byte, error) {
+	// Get TLS certificates
+	tlsSecret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-tls-crypto", ca.Name),
+		Namespace: ca.Namespace,
+	}, tlsSecret)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	// Get MSP certificates
+	mspSecret := &corev1.Secret{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-msp-crypto", ca.Name),
+		Namespace: ca.Namespace,
+	}, mspSecret)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	tlsCert := tlsSecret.Data["tls.crt"]
+	tlsKey := tlsSecret.Data["tls.key"]
+	caCert := mspSecret.Data["certfile"]
+	caKey := mspSecret.Data["keyfile"]
+
+	if tlsCert == nil || tlsKey == nil || caCert == nil || caKey == nil {
+		return nil, nil, nil, nil, fmt.Errorf("missing certificate data")
+	}
+
+	return tlsCert, tlsKey, caCert, caKey, nil
 }
 
 // reconcilePVC reconciles the PersistentVolumeClaim
@@ -309,24 +375,12 @@ func (r *CAReconciler) reconcilePVC(ctx context.Context, ca *fabricxv1alpha1.CA)
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, pvc, func() error {
-		pvc.Spec = corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.PersistentVolumeAccessMode(ca.Spec.Storage.AccessMode),
-			},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(ca.Spec.Storage.Size),
-				},
-			},
-		}
-		if ca.Spec.Storage.StorageClass != "" && ca.Spec.Storage.StorageClass != "-" {
-			pvc.Spec.StorageClassName = &ca.Spec.Storage.StorageClass
-		}
-		return controllerutil.SetControllerReference(ca, pvc, r.Scheme)
-	})
+	template := r.getPVCTemplate(ca)
+	if err := r.updateResourceWithTemplate(ctx, ca, pvc, template); err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 // reconcileDeployment reconciles the CA Deployment
@@ -337,203 +391,12 @@ func (r *CAReconciler) reconcileDeployment(ctx context.Context, ca *fabricxv1alp
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
-		deployment.Spec = appsv1.DeploymentSpec{
-			Replicas: ca.Spec.Replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app":     "ca",
-					"release": ca.Name,
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app":     "ca",
-						"release": ca.Name,
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "ca",
-							Image: fmt.Sprintf("%s:%s", ca.Spec.Image, ca.Spec.Version),
-							Command: []string{
-								"sh",
-								"-c",
-								`mkdir -p $FABRIC_CA_HOME
-cp /var/hyperledger/ca_config/ca.yaml $FABRIC_CA_HOME/fabric-ca-server-config.yaml
-cp /var/hyperledger/ca_config_tls/fabric-ca-server-config.yaml $FABRIC_CA_HOME/fabric-ca-server-config-tls.yaml
-echo ">\033[0;35m fabric-ca-server start \033[0m"
-fabric-ca-server start`,
-							},
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "ca-port",
-									ContainerPort: 7054,
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "operations-port",
-									ContainerPort: 9443,
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
-							LivenessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path:   "/cainfo",
-										Port:   intstr.FromInt(7054),
-										Scheme: corev1.URISchemeHTTPS,
-									},
-								},
-								PeriodSeconds:    10,
-								SuccessThreshold: 1,
-								FailureThreshold: 3,
-							},
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Path:   "/cainfo",
-										Port:   intstr.FromInt(7054),
-										Scheme: corev1.URISchemeHTTPS,
-									},
-								},
-								PeriodSeconds:    10,
-								SuccessThreshold: 1,
-								FailureThreshold: 3,
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "data",
-									MountPath: "/var/hyperledger",
-								},
-								{
-									Name:      "ca-config",
-									ReadOnly:  true,
-									MountPath: "/var/hyperledger/ca_config",
-								},
-								{
-									Name:      "ca-config-tls",
-									ReadOnly:  true,
-									MountPath: "/var/hyperledger/ca_config_tls",
-								},
-								{
-									Name:      "tls-secret",
-									ReadOnly:  true,
-									MountPath: "/var/hyperledger/tls/secret",
-								},
-								{
-									Name:      "msp-cryptomaterial",
-									ReadOnly:  true,
-									MountPath: "/var/hyperledger/fabric-ca/msp-secret",
-								},
-								{
-									Name:      "msp-tls-cryptomaterial",
-									ReadOnly:  true,
-									MountPath: "/var/hyperledger/fabric-ca/msp-tls-secret",
-								},
-							},
-							Resources: ca.Spec.Resources,
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: ca.Name,
-								},
-							},
-						},
-						{
-							Name: "ca-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-config", ca.Name),
-									},
-								},
-							},
-						},
-						{
-							Name: "ca-config-tls",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-config-tls", ca.Name),
-									},
-								},
-							},
-						},
-						{
-							Name: "tls-secret",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: fmt.Sprintf("%s-tls-crypto", ca.Name),
-								},
-							},
-						},
-						{
-							Name: "msp-cryptomaterial",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: fmt.Sprintf("%s-msp-crypto", ca.Name),
-								},
-							},
-						},
-						{
-							Name: "msp-tls-cryptomaterial",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: fmt.Sprintf("%s-msp-crypto", ca.Name),
-								},
-							},
-						},
-					},
-				},
-			},
-		}
+	template := r.getDeploymentTemplate(ca)
+	if err := r.updateResourceWithTemplate(ctx, ca, deployment, template); err != nil {
+		return err
+	}
 
-		// Add environment variables
-		if len(ca.Spec.Env) > 0 {
-			deployment.Spec.Template.Spec.Containers[0].Env = ca.Spec.Env
-		}
-
-		// Add image pull secrets
-		if len(ca.Spec.ImagePullSecrets) > 0 {
-			deployment.Spec.Template.Spec.ImagePullSecrets = ca.Spec.ImagePullSecrets
-		}
-
-		// Add node selector
-		if ca.Spec.NodeSelector != nil && len(ca.Spec.NodeSelector.NodeSelectorTerms) > 0 {
-			nodeSelector := make(map[string]string)
-			for _, term := range ca.Spec.NodeSelector.NodeSelectorTerms {
-				for _, req := range term.MatchExpressions {
-					if req.Operator == corev1.NodeSelectorOpIn && len(req.Values) > 0 {
-						nodeSelector[req.Key] = req.Values[0]
-					}
-				}
-			}
-			if len(nodeSelector) > 0 {
-				deployment.Spec.Template.Spec.NodeSelector = nodeSelector
-			}
-		}
-
-		// Add affinity
-		if ca.Spec.Affinity != nil {
-			deployment.Spec.Template.Spec.Affinity = ca.Spec.Affinity
-		}
-
-		// Add tolerations
-		if len(ca.Spec.Tolerations) > 0 {
-			deployment.Spec.Template.Spec.Tolerations = ca.Spec.Tolerations
-		}
-
-		return controllerutil.SetControllerReference(ca, deployment, r.Scheme)
-	})
-
-	return err
+	return nil
 }
 
 // reconcileService reconciles the CA Service
@@ -544,32 +407,12 @@ func (r *CAReconciler) reconcileService(ctx context.Context, ca *fabricxv1alpha1
 			Namespace: ca.Namespace,
 		},
 	}
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-		service.Spec = corev1.ServiceSpec{
-			Type: ca.Spec.Service.ServiceType,
-			Ports: []corev1.ServicePort{
-				{
-					Port:       7054,
-					TargetPort: intstr.FromInt(7054),
-					Protocol:   corev1.ProtocolTCP,
-					Name:       "https",
-				},
-				{
-					Port:       9443,
-					TargetPort: intstr.FromInt(9443),
-					Protocol:   corev1.ProtocolTCP,
-					Name:       "operations",
-				},
-			},
-			Selector: map[string]string{
-				"app":     "ca",
-				"release": ca.Name,
-			},
-		}
-		return controllerutil.SetControllerReference(ca, service, r.Scheme)
-	})
+	template := r.getServiceTemplate(ca)
+	if err := r.updateResourceWithTemplate(ctx, ca, service, template); err != nil {
+		return err
+	}
 
-	return err
+	return nil
 }
 
 // generateCAConfig generates the CA configuration
@@ -848,6 +691,455 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 	}
 
 	return nil
+}
+
+// getDeploymentTemplate returns a deployment template based on the CA spec
+func (r *CAReconciler) getDeploymentTemplate(ca *fabricxv1alpha1.CA) *appsv1.Deployment {
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ca.Spec.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":     "ca",
+					"release": ca.Name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: func() map[string]string {
+						labels := map[string]string{
+							"app":     "ca",
+							"release": ca.Name,
+						}
+						// Merge with custom pod labels if specified
+						for k, v := range ca.Spec.PodLabels {
+							labels[k] = v
+						}
+						return labels
+					}(),
+					Annotations: ca.Spec.PodAnnotations,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "ca",
+							Image: fmt.Sprintf("%s:%s", ca.Spec.Image, ca.Spec.Version),
+							Command: []string{
+								"sh",
+								"-c",
+								`mkdir -p $FABRIC_CA_HOME
+cp /var/hyperledger/ca_config/ca.yaml $FABRIC_CA_HOME/fabric-ca-server-config.yaml
+cp /var/hyperledger/ca_config_tls/fabric-ca-server-config.yaml $FABRIC_CA_HOME/fabric-ca-server-config-tls.yaml
+echo ">\033[0;35m fabric-ca-server start \033[0m"
+fabric-ca-server start`,
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "ca-port",
+									ContainerPort: 7054,
+									Protocol:      corev1.ProtocolTCP,
+								},
+								{
+									Name:          "operations-port",
+									ContainerPort: 9443,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path:   "/cainfo",
+										Port:   intstr.FromInt(7054),
+										Scheme: corev1.URISchemeHTTPS,
+									},
+								},
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									HTTPGet: &corev1.HTTPGetAction{
+										Path:   "/cainfo",
+										Port:   intstr.FromInt(7054),
+										Scheme: corev1.URISchemeHTTPS,
+									},
+								},
+								PeriodSeconds:    10,
+								SuccessThreshold: 1,
+								FailureThreshold: 3,
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "data",
+									MountPath: "/var/hyperledger",
+								},
+								{
+									Name:      "ca-config",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/ca_config",
+								},
+								{
+									Name:      "ca-config-tls",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/ca_config_tls",
+								},
+								{
+									Name:      "tls-secret",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/tls/secret",
+								},
+								{
+									Name:      "msp-cryptomaterial",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/fabric-ca/msp-secret",
+								},
+								{
+									Name:      "msp-tls-cryptomaterial",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/fabric-ca/msp-tls-secret",
+								},
+							},
+							Resources: ca.Spec.Resources,
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: ca.Name,
+								},
+							},
+						},
+						{
+							Name: "ca-config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: fmt.Sprintf("%s-config", ca.Name),
+									},
+								},
+							},
+						},
+						{
+							Name: "ca-config-tls",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: fmt.Sprintf("%s-config-tls", ca.Name),
+									},
+								},
+							},
+						},
+						{
+							Name: "tls-secret",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-tls-crypto", ca.Name),
+								},
+							},
+						},
+						{
+							Name: "msp-cryptomaterial",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-msp-crypto", ca.Name),
+								},
+							},
+						},
+						{
+							Name: "msp-tls-cryptomaterial",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-msp-crypto", ca.Name),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Set environment variables
+	deployment.Spec.Template.Spec.Containers[0].Env = ca.Spec.Env
+
+	// Set image pull secrets
+	deployment.Spec.Template.Spec.ImagePullSecrets = ca.Spec.ImagePullSecrets
+
+	// Set node selector
+	if ca.Spec.NodeSelector != nil && len(ca.Spec.NodeSelector.NodeSelectorTerms) > 0 {
+		nodeSelector := make(map[string]string)
+		for _, term := range ca.Spec.NodeSelector.NodeSelectorTerms {
+			for _, req := range term.MatchExpressions {
+				if req.Operator == corev1.NodeSelectorOpIn && len(req.Values) > 0 {
+					nodeSelector[req.Key] = req.Values[0]
+				}
+			}
+		}
+		deployment.Spec.Template.Spec.NodeSelector = nodeSelector
+	} else {
+		// Clear node selector if not specified
+		deployment.Spec.Template.Spec.NodeSelector = nil
+	}
+
+	// Set affinity
+	deployment.Spec.Template.Spec.Affinity = ca.Spec.Affinity
+
+	// Set tolerations
+	deployment.Spec.Template.Spec.Tolerations = ca.Spec.Tolerations
+
+	return deployment
+}
+
+// getServiceTemplate returns a service template based on the CA spec
+func (r *CAReconciler) getServiceTemplate(ca *fabricxv1alpha1.CA) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: ca.Spec.Service.ServiceType,
+			Ports: []corev1.ServicePort{
+				{
+					Port:       7054,
+					TargetPort: intstr.FromInt(7054),
+					Protocol:   corev1.ProtocolTCP,
+					Name:       "https",
+				},
+				{
+					Port:       9443,
+					TargetPort: intstr.FromInt(9443),
+					Protocol:   corev1.ProtocolTCP,
+					Name:       "operations",
+				},
+			},
+			Selector: map[string]string{
+				"app":     "ca",
+				"release": ca.Name,
+			},
+		},
+	}
+}
+
+// getPVCTemplate returns a PVC template based on the CA spec
+func (r *CAReconciler) getPVCTemplate(ca *fabricxv1alpha1.CA) *corev1.PersistentVolumeClaim {
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ca.Name,
+			Namespace: ca.Namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.PersistentVolumeAccessMode(ca.Spec.Storage.AccessMode),
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(ca.Spec.Storage.Size),
+				},
+			},
+		},
+	}
+
+	if ca.Spec.Storage.StorageClass != "" && ca.Spec.Storage.StorageClass != "-" {
+		pvc.Spec.StorageClassName = &ca.Spec.Storage.StorageClass
+	} else {
+		// Clear storage class if not specified or set to "-"
+		pvc.Spec.StorageClassName = nil
+	}
+
+	return pvc
+}
+
+// getConfigMapTemplate returns a configmap template based on the CA spec
+func (r *CAReconciler) getConfigMapTemplate(ca *fabricxv1alpha1.CA, name string, data map[string]string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ca.Namespace,
+		},
+		Data: data,
+	}
+}
+
+// getSecretTemplate returns a secret template based on the CA spec
+func (r *CAReconciler) getSecretTemplate(ca *fabricxv1alpha1.CA, name string, data map[string][]byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ca.Namespace,
+		},
+		Data: data,
+	}
+}
+
+// updateResourceWithTemplate updates a resource with a template, preserving existing fields
+func (r *CAReconciler) updateResourceWithTemplate(ctx context.Context, ca *fabricxv1alpha1.CA, resource client.Object, template client.Object) error {
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, resource, func() error {
+		// Set controller reference
+		if err := controllerutil.SetControllerReference(ca, resource, r.Scheme); err != nil {
+			return err
+		}
+
+		// Update the resource with template data
+		switch res := resource.(type) {
+		case *appsv1.Deployment:
+			if t, ok := template.(*appsv1.Deployment); ok {
+				res.Spec = t.Spec
+				if res.ObjectMeta.Labels == nil {
+					res.ObjectMeta.Labels = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Labels {
+					res.ObjectMeta.Labels[k] = v
+				}
+				if res.ObjectMeta.Annotations == nil {
+					res.ObjectMeta.Annotations = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Annotations {
+					res.ObjectMeta.Annotations[k] = v
+				}
+			}
+		case *corev1.Service:
+			if t, ok := template.(*corev1.Service); ok {
+				res.Spec = t.Spec
+				if res.ObjectMeta.Labels == nil {
+					res.ObjectMeta.Labels = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Labels {
+					res.ObjectMeta.Labels[k] = v
+				}
+				if res.ObjectMeta.Annotations == nil {
+					res.ObjectMeta.Annotations = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Annotations {
+					res.ObjectMeta.Annotations[k] = v
+				}
+			}
+		case *corev1.PersistentVolumeClaim:
+			if t, ok := template.(*corev1.PersistentVolumeClaim); ok {
+				// Handle PVC updates carefully - some fields are immutable
+				if res.Spec.StorageClassName != nil && t.Spec.StorageClassName != nil {
+					// Only update storage class if it's actually different
+					if *res.Spec.StorageClassName != *t.Spec.StorageClassName {
+						// Storage class cannot be changed after creation
+						// Log a warning but don't fail
+						logf.FromContext(ctx).Info("Storage class cannot be changed for existing PVC",
+							"pvc", res.Name, "old", *res.Spec.StorageClassName, "new", *t.Spec.StorageClassName)
+					}
+				}
+
+				// Update size only if it's an increase
+				if len(res.Spec.Resources.Requests) > 0 && len(t.Spec.Resources.Requests) > 0 {
+					currentSize := res.Spec.Resources.Requests[corev1.ResourceStorage]
+					newSize := t.Spec.Resources.Requests[corev1.ResourceStorage]
+					if newSize.Cmp(currentSize) > 0 {
+						// Only increase size, never decrease
+						res.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
+					}
+				}
+
+				// Update metadata
+				if res.ObjectMeta.Labels == nil {
+					res.ObjectMeta.Labels = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Labels {
+					res.ObjectMeta.Labels[k] = v
+				}
+				if res.ObjectMeta.Annotations == nil {
+					res.ObjectMeta.Annotations = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Annotations {
+					res.ObjectMeta.Annotations[k] = v
+				}
+			}
+		case *corev1.ConfigMap:
+			if t, ok := template.(*corev1.ConfigMap); ok {
+				// Check if ConfigMap is immutable
+				if res.Immutable != nil && *res.Immutable {
+					// Cannot update immutable ConfigMap - need to delete and recreate
+					logf.FromContext(ctx).Info("ConfigMap is immutable, will delete and recreate", "configmap", res.Name)
+					if err := r.Client.Delete(ctx, res); err != nil {
+						return err
+					}
+					// Create new ConfigMap with template data
+					newConfigMap := &corev1.ConfigMap{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      res.Name,
+							Namespace: res.Namespace,
+						},
+						Data: t.Data,
+					}
+					if err := controllerutil.SetControllerReference(ca, newConfigMap, r.Scheme); err != nil {
+						return err
+					}
+					return r.Client.Create(ctx, newConfigMap)
+				}
+
+				// Normal update for mutable ConfigMap
+				res.Data = t.Data
+				if res.ObjectMeta.Labels == nil {
+					res.ObjectMeta.Labels = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Labels {
+					res.ObjectMeta.Labels[k] = v
+				}
+				if res.ObjectMeta.Annotations == nil {
+					res.ObjectMeta.Annotations = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Annotations {
+					res.ObjectMeta.Annotations[k] = v
+				}
+			}
+		case *corev1.Secret:
+			if t, ok := template.(*corev1.Secret); ok {
+				// Check if Secret is immutable
+				if res.Immutable != nil && *res.Immutable {
+					// Cannot update immutable Secret - need to delete and recreate
+					logf.FromContext(ctx).Info("Secret is immutable, will delete and recreate", "secret", res.Name)
+					if err := r.Client.Delete(ctx, res); err != nil {
+						return err
+					}
+					// Create new Secret with template data
+					newSecret := &corev1.Secret{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      res.Name,
+							Namespace: res.Namespace,
+						},
+						Data: t.Data,
+					}
+					if err := controllerutil.SetControllerReference(ca, newSecret, r.Scheme); err != nil {
+						return err
+					}
+					return r.Client.Create(ctx, newSecret)
+				}
+
+				// Normal update for mutable Secret
+				res.Data = t.Data
+				if res.ObjectMeta.Labels == nil {
+					res.ObjectMeta.Labels = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Labels {
+					res.ObjectMeta.Labels[k] = v
+				}
+				if res.ObjectMeta.Annotations == nil {
+					res.ObjectMeta.Annotations = make(map[string]string)
+				}
+				for k, v := range t.ObjectMeta.Annotations {
+					res.ObjectMeta.Annotations[k] = v
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return err
 }
 
 // SetupWithManager sets up the controller with the Manager.
