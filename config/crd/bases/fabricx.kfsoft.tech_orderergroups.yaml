@@ -446,6 +446,7 @@ spec:
                     type: integer
                   resources:
                     description: Resources configuration
+                    nullable: true
                     properties:
                       claims:
                         description: |-
@@ -698,8 +699,6 @@ spec:
                       - volumeSource
                       type: object
                     type: array
-                required:
-                - resources
                 type: object
               components:
                 description: Component-specific configurations
@@ -1220,6 +1219,7 @@ spec:
                         type: integer
                       resources:
                         description: Resources configuration
+                        nullable: true
                         properties:
                           claims:
                             description: |-
@@ -1474,8 +1474,6 @@ spec:
                           - volumeSource
                           type: object
                         type: array
-                    required:
-                    - resources
                     type: object
                   batcher:
                     description: Batcher configuration
@@ -1993,6 +1991,7 @@ spec:
                         type: integer
                       resources:
                         description: Resources configuration
+                        nullable: true
                         properties:
                           claims:
                             description: |-
@@ -2247,8 +2246,6 @@ spec:
                           - volumeSource
                           type: object
                         type: array
-                    required:
-                    - resources
                     type: object
                   consenter:
                     description: Consenter configuration
@@ -2766,6 +2763,7 @@ spec:
                         type: integer
                       resources:
                         description: Resources configuration
+                        nullable: true
                         properties:
                           claims:
                             description: |-
@@ -3020,8 +3018,6 @@ spec:
                           - volumeSource
                           type: object
                         type: array
-                    required:
-                    - resources
                     type: object
                   router:
                     description: Router configuration
@@ -3539,6 +3535,7 @@ spec:
                         type: integer
                       resources:
                         description: Resources configuration
+                        nullable: true
                         properties:
                           claims:
                             description: |-
@@ -3793,8 +3790,6 @@ spec:
                           - volumeSource
                           type: object
                         type: array
-                    required:
-                    - resources
                     type: object
                 type: object
               enrollment:
@@ -3903,6 +3898,9 @@ spec:
                 - secretKey
                 - secretName
                 type: object
+              mspid:
+                description: MSP ID
+                type: string
             required:
             - components
             - genesis

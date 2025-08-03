@@ -31,30 +31,53 @@ func (s *OrdererGroupCertService) ProvisionComponentCertificates(
 	componentName string,
 	componentConfig *fabricxv1alpha1.ComponentConfig,
 ) error {
-	// Determine certificate types to generate
+	// Handle each certificate type separately
 	certTypes := []string{"sign", "tls"}
 
-	// Create certificate request
-	request := OrdererGroupCertificateRequest{
-		ComponentName:    componentName,
-		ComponentType:    "orderer",
-		Namespace:        ordererGroup.Namespace,
-		OrdererGroupName: ordererGroup.Name,
-		CertConfig:       convertToCertConfig(componentConfig.Certificates),
-		EnrollmentConfig: convertToEnrollmentConfig(ordererGroup.Spec.Enrollment),
-		CertTypes:        certTypes,
-	}
+	for _, certType := range certTypes {
+		// Get enrollment parameters based on certificate type
+		var enrollID, enrollSecret string
 
-	// Provision certificates with client context
-	certificates, err := ProvisionOrdererGroupCertificatesWithClient(ctx, s.Client, request)
-	if err != nil {
-		return fmt.Errorf("failed to provision certificates for component %s: %w", componentName, err)
-	}
+		if ordererGroup.Spec.Enrollment != nil {
+			if certType == "sign" && ordererGroup.Spec.Enrollment.Sign != nil {
+				enrollID = ordererGroup.Spec.Enrollment.Sign.EnrollID
+				enrollSecret = ordererGroup.Spec.Enrollment.Sign.EnrollSecret
+			} else if certType == "tls" && ordererGroup.Spec.Enrollment.TLS != nil {
+				enrollID = ordererGroup.Spec.Enrollment.TLS.EnrollID
+				enrollSecret = ordererGroup.Spec.Enrollment.TLS.EnrollSecret
+			}
+		}
 
-	// Create Kubernetes secrets for each certificate
-	for _, certData := range certificates {
-		if err := s.createCertificateSecret(ctx, ordererGroup, componentName, certData); err != nil {
-			return fmt.Errorf("failed to create certificate secret for %s %s: %w", componentName, certData.CertType, err)
+		// Fallback to component-specific enrollment if global enrollment is not available
+		if enrollID == "" && componentConfig.Certificates != nil {
+			enrollID = componentConfig.Certificates.EnrollID
+			enrollSecret = componentConfig.Certificates.EnrollSecret
+		}
+
+		// Create certificate request for this specific type
+		request := OrdererGroupCertificateRequest{
+			ComponentName:    componentName,
+			ComponentType:    "orderer",
+			Namespace:        ordererGroup.Namespace,
+			OrdererGroupName: ordererGroup.Name,
+			CertConfig:       convertToCertConfig(ordererGroup.Spec.MSPID, componentConfig.Certificates),
+			EnrollmentConfig: convertToEnrollmentConfig(ordererGroup.Spec.MSPID, ordererGroup.Spec.Enrollment),
+			CertTypes:        []string{certType}, // Only one cert type per request
+			EnrollID:         enrollID,
+			EnrollSecret:     enrollSecret,
+		}
+
+		// Provision certificates with client context
+		certificates, err := ProvisionOrdererGroupCertificatesWithClient(ctx, s.Client, request)
+		if err != nil {
+			return fmt.Errorf("failed to provision %s certificates for component %s: %w", certType, componentName, err)
+		}
+
+		// Create Kubernetes secrets for each certificate
+		for _, certData := range certificates {
+			if err := s.createCertificateSecret(ctx, ordererGroup, componentName, certData); err != nil {
+				return fmt.Errorf("failed to create certificate secret for %s %s: %w", componentName, certData.CertType, err)
+			}
 		}
 	}
 
@@ -108,7 +131,7 @@ func (s *OrdererGroupCertService) createCertificateSecret(
 				},
 			},
 		},
-		Type: corev1.SecretTypeTLS,
+		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			"cert.pem": certData.Cert,
 			"key.pem":  certData.Key,
@@ -163,7 +186,7 @@ func generateCertificateSecretName(ordererGroupName, componentName, certType str
 }
 
 // convertToCertConfig converts API certificate config to internal format
-func convertToCertConfig(apiConfig *fabricxv1alpha1.CertificateConfig) *CertificateConfig {
+func convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *CertificateConfig {
 	if apiConfig == nil {
 		return nil
 	}
@@ -174,6 +197,10 @@ func convertToCertConfig(apiConfig *fabricxv1alpha1.CertificateConfig) *Certific
 		CAPort:       apiConfig.CAPort,
 		EnrollID:     apiConfig.EnrollID,
 		EnrollSecret: apiConfig.EnrollSecret,
+		MSPID:        mspID,
+		CATLS: &CATLSConfig{
+			CACert: apiConfig.CATLS.CACert,
+		},
 	}
 
 	if apiConfig.CATLS != nil {
@@ -194,7 +221,7 @@ func convertToCertConfig(apiConfig *fabricxv1alpha1.CertificateConfig) *Certific
 }
 
 // convertToEnrollmentConfig converts API enrollment config to internal format
-func convertToEnrollmentConfig(apiConfig *fabricxv1alpha1.EnrollmentConfig) *EnrollmentConfig {
+func convertToEnrollmentConfig(mspID string, apiConfig *fabricxv1alpha1.EnrollmentConfig) *EnrollmentConfig {
 	if apiConfig == nil {
 		return nil
 	}
@@ -202,11 +229,11 @@ func convertToEnrollmentConfig(apiConfig *fabricxv1alpha1.EnrollmentConfig) *Enr
 	config := &EnrollmentConfig{}
 
 	if apiConfig.Sign != nil {
-		config.Sign = convertToCertConfig(apiConfig.Sign)
+		config.Sign = convertToCertConfig(mspID, apiConfig.Sign)
 	}
 
 	if apiConfig.TLS != nil {
-		config.TLS = convertToCertConfig(apiConfig.TLS)
+		config.TLS = convertToCertConfig(mspID, apiConfig.TLS)
 	}
 
 	return config

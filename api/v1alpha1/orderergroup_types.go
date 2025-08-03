@@ -30,7 +30,9 @@ type CommonComponentConfig struct {
 	Storage *StorageConfig `json:"storage,omitempty"`
 
 	// Resources configuration
-	Resources *corev1.ResourceRequirements `json:"resources"`
+	// +kubebuilder:validation:Optional
+	// +nullable
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// Security context
 	SecurityContext *SecurityContext `json:"securityContext,omitempty"`
@@ -484,6 +486,9 @@ type GenesisConfig struct {
 type OrdererGroupSpec struct {
 	// Bootstrap mode: "configure" or "deploy"
 	BootstrapMode string `json:"bootstrapMode,omitempty"`
+
+	// MSP ID
+	MSPID string `json:"mspid,omitempty"`
 
 	// Common configuration applied to all components
 	Common *CommonComponentConfig `json:"common,omitempty"`

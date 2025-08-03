@@ -332,7 +332,6 @@ func EnrollUser(params EnrollUserRequest) (*x509.Certificate, *ecdsa.PrivateKey,
 		Secret:   params.Secret,
 		CAName:   params.Name,
 		AttrReqs: params.Attributes,
-		Profile:  params.Profile,
 		Label:    "",
 		Type:     "x509",
 		CSR: &api.CSRInfo{
@@ -429,6 +428,12 @@ type OrdererGroupCertificateRequest struct {
 
 	// Certificate types to generate (sign, tls)
 	CertTypes []string
+
+	// Enrollment ID
+	EnrollID string
+
+	// Enrollment secret
+	EnrollSecret string
 }
 
 // CertificateConfig represents the certificate configuration from the API
@@ -439,6 +444,7 @@ type CertificateConfig struct {
 	CATLS        *CATLSConfig `json:"catls,omitempty"`
 	EnrollID     string       `json:"enrollid,omitempty"`
 	EnrollSecret string       `json:"enrollsecret,omitempty"`
+	MSPID        string       `json:"mspid,omitempty"`
 }
 
 // CATLSConfig represents CA TLS configuration
@@ -516,7 +522,6 @@ func ProvisionOrdererGroupCertificatesWithClient(ctx context.Context, k8sClient 
 		}
 		certificates = append(certificates, *certData)
 	}
-
 	return certificates, nil
 }
 
@@ -550,8 +555,6 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 	}
 
 	// Generate component-specific enrollment parameters
-	enrollID := generateComponentEnrollID(request.ComponentName, request.OrdererGroupName, certType)
-	secret := generateComponentSecret(request.ComponentName, request.OrdererGroupName, certType)
 	hosts := generateComponentHosts(request.ComponentName, request.OrdererGroupName, request.Namespace)
 	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
 
@@ -560,19 +563,18 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 		TLSCert:    caCert,
 		URL:        fmt.Sprintf("https://%s:%d", certConfig.CAHost, certConfig.CAPort),
 		Name:       certConfig.CAName,
-		MSPID:      "OrdererMSP", // Default MSP ID for orderer components
-		User:       enrollID,
-		Secret:     secret,
+		MSPID:      certConfig.MSPID,
+		User:       request.EnrollID,
+		Secret:     request.EnrollSecret,
 		Hosts:      hosts,
 		CN:         cn,
-		Profile:    certType, // Use cert type as profile
 		Attributes: []*api.AttributeRequest{},
 	}
 
 	// Enroll the component
 	userCert, userKey, rootCert, err := EnrollUser(enrollRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll component %s: %w", request.ComponentName, err)
+		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollRequest.User, err)
 	}
 
 	// Convert certificates to PEM format
@@ -622,8 +624,8 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 	}
 
 	// Generate component-specific enrollment parameters
-	enrollID := generateComponentEnrollID(request.ComponentName, request.OrdererGroupName, certType)
-	secret := generateComponentSecret(request.ComponentName, request.OrdererGroupName, certType)
+	enrollID := request.EnrollID
+	secret := request.EnrollSecret
 	hosts := generateComponentHosts(request.ComponentName, request.OrdererGroupName, request.Namespace)
 	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
 
@@ -632,19 +634,18 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 		TLSCert:    caCert,
 		URL:        fmt.Sprintf("https://%s:%d", certConfig.CAHost, certConfig.CAPort),
 		Name:       certConfig.CAName,
-		MSPID:      "OrdererMSP", // Default MSP ID for orderer components
+		MSPID:      certConfig.MSPID, // Default MSP ID for orderer components
 		User:       enrollID,
 		Secret:     secret,
 		Hosts:      hosts,
 		CN:         cn,
-		Profile:    certType, // Use cert type as profile
 		Attributes: []*api.AttributeRequest{},
 	}
 
 	// Enroll the component
 	userCert, userKey, rootCert, err := EnrollUser(enrollRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll component %s: %w", request.ComponentName, err)
+		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollID, err)
 	}
 
 	// Convert certificates to PEM format
@@ -709,18 +710,6 @@ func getCACertificate(ctx context.Context, k8sClient client.Client, certConfig *
 	}
 
 	return "", fmt.Errorf("no CA certificate found in configuration")
-}
-
-// generateComponentEnrollID generates an enrollment ID for a component
-func generateComponentEnrollID(componentName, ordererGroupName, certType string) string {
-	return fmt.Sprintf("%s-%s-%s", componentName, ordererGroupName, certType)
-}
-
-// generateComponentSecret generates a secret for a component
-func generateComponentSecret(componentName, ordererGroupName, certType string) string {
-	// In a real implementation, this should be more secure
-	// For now, we'll use a simple pattern
-	return fmt.Sprintf("%s-%s-%s-secret", componentName, ordererGroupName, certType)
 }
 
 // generateComponentHosts generates host names for a component
