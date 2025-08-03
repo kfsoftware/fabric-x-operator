@@ -20,26 +20,66 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // CommitterSpec defines the desired state of Committer.
 type CommitterSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Bootstrap mode: "configure" or "deploy"
+	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
-	// Foo is an example field of Committer. Edit committer_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// MSP ID
+	MSPID string `json:"mspid,omitempty"`
+
+	// Common configuration applied to all components
+	Common *CommonComponentConfig `json:"common,omitempty"`
+
+	// Genesis block configuration for Sidecar
+	Genesis GenesisConfig `json:"genesis"`
+
+	// Component-specific configurations
+	Components CommitterComponents `json:"components"`
+
+	// Global enrollment configuration (inherited by components)
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+}
+
+// CommitterComponents defines configurations for each committer component
+type CommitterComponents struct {
+	// Sidecar configuration
+	Sidecar *ComponentConfig `json:"sidecar,omitempty"`
+
+	// Coordinator configuration
+	Coordinator *ComponentConfig `json:"coordinator,omitempty"`
+
+	// Verifier Service configuration
+	VerifierService *ComponentConfig `json:"verifierService,omitempty"`
+
+	// Validator configuration
+	Validator *ComponentConfig `json:"validator,omitempty"`
 }
 
 // CommitterStatus defines the observed state of Committer.
 type CommitterStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Status of the Committer
+	Status DeploymentStatus `json:"status,omitempty"`
+
+	// Message describing the current state
+	Message string `json:"message,omitempty"`
+
+	// Conditions represent the latest available observations of an object's state
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Component statuses
+	ComponentStatuses map[string]ComponentStatus `json:"componentStatuses,omitempty"`
+
+	// Overall phase
+	Phase string `json:"phase,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,shortName=committer,singular=committer
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Committer is the Schema for the committers API.
 type Committer struct {

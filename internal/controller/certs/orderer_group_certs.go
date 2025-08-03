@@ -8,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 )
@@ -35,6 +36,27 @@ func (s *OrdererGroupCertService) ProvisionComponentCertificates(
 	certTypes := []string{"sign", "tls"}
 
 	for _, certType := range certTypes {
+		// Check if certificate secret already exists
+		secretName := generateCertificateSecretName(ordererGroup.Name, componentName, certType)
+		existingSecret := &corev1.Secret{}
+		err := s.Client.Get(ctx, client.ObjectKey{
+			Namespace: ordererGroup.Namespace,
+			Name:      secretName,
+		}, existingSecret)
+
+		// If secret exists and has the required data, skip certificate generation
+		if err == nil && existingSecret.Data != nil {
+			if _, hasCert := existingSecret.Data["cert.pem"]; hasCert {
+				if _, hasKey := existingSecret.Data["key.pem"]; hasKey {
+					if _, hasCA := existingSecret.Data["ca.pem"]; hasCA {
+						logf.FromContext(ctx).Info("Certificate secret already exists, skipping generation",
+							"secret", secretName, "component", componentName, "certType", certType)
+						continue
+					}
+				}
+			}
+		}
+
 		// Get enrollment parameters based on certificate type
 		var enrollID, enrollSecret string
 
@@ -101,7 +123,20 @@ func (s *OrdererGroupCertService) createCertificateSecret(
 	}, existingSecret)
 
 	if err == nil {
-		// Secret exists, update it
+		// Secret exists, check if it has the required data
+		if existingSecret.Data != nil {
+			if _, hasCert := existingSecret.Data["cert.pem"]; hasCert {
+				if _, hasKey := existingSecret.Data["key.pem"]; hasKey {
+					if _, hasCA := existingSecret.Data["ca.pem"]; hasCA {
+						logf.FromContext(ctx).Info("Certificate secret already exists with required data, skipping creation",
+							"secret", secretName, "component", componentName, "certType", certData.CertType)
+						return nil
+					}
+				}
+			}
+		}
+
+		// Secret exists but doesn't have required data, update it
 		existingSecret.Data = map[string][]byte{
 			"cert.pem": certData.Cert,
 			"key.pem":  certData.Key,
@@ -198,9 +233,6 @@ func convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateCon
 		EnrollID:     apiConfig.EnrollID,
 		EnrollSecret: apiConfig.EnrollSecret,
 		MSPID:        mspID,
-		CATLS: &CATLSConfig{
-			CACert: apiConfig.CATLS.CACert,
-		},
 	}
 
 	if apiConfig.CATLS != nil {

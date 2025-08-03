@@ -6,4 +6,201 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: committer-sample
 spec:
-  # TODO(user): Add fields here
+  # Bootstrap mode: "configure" or "deploy"
+  bootstrapMode: "deploy"
+  
+  # MSP ID for the committer
+  mspid: "Org1MSP"
+  
+  # Common configuration applied to all components
+  common:
+    replicas: 1
+    storage:
+      size: "1Gi"
+      storageClass: "standard"
+      accessMode: "ReadWriteOnce"
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "200m"
+  
+  # Genesis block configuration for Sidecar
+  genesis:
+    secretName: "genesis-block-secret"
+    secretKey: "genesis.block"
+    secretNamespace: "default"
+  
+  # Component-specific configurations
+  components:
+    # Sidecar configuration
+    sidecar:
+      replicas: 1
+      storage:
+        size: "1Gi"
+        storageClass: "standard"
+        accessMode: "ReadWriteOnce"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "200m"
+      ingress:
+        istio:
+          hosts:
+            - "sidecar.org1.localho.st"
+          port: 443
+          ingressGateway: "istio-ingressgateway"
+          tls:
+            enabled: true
+            secretName: "sidecar-tls-secret"
+      certificates:
+        cahost: "test-ca2.org1.localho.st"
+        caname: "ca"
+        caport: 443
+        catls:
+          secretRef:
+            name: "test-ca2-tls-crypto"
+            key: "tls.crt"
+            namespace: "default"
+        enrollid: "sidecar"
+        enrollsecret: "sidecarpw"
+    
+    # Coordinator configuration
+    coordinator:
+      replicas: 1
+      storage:
+        size: "1Gi"
+        storageClass: "standard"
+        accessMode: "ReadWriteOnce"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "200m"
+      ingress:
+        istio:
+          hosts:
+            - "coordinator.org1.localho.st"
+          port: 443
+          ingressGateway: "istio-ingressgateway"
+          tls:
+            enabled: true
+            secretName: "coordinator-tls-secret"
+      certificates:
+        cahost: "test-ca2.default"
+        caname: "ca"
+        caport: 443
+        catls:
+          secretRef:
+            name: "test-ca2-tls-crypto"
+            key: "tls.crt"
+            namespace: "default"
+        enrollid: "coordinator"
+        enrollsecret: "coordinatorpw"
+        
+    
+    # Verifier Service configuration
+    verifierService:
+      replicas: 1
+      storage:
+        size: "1Gi"
+        storageClass: "standard"
+        accessMode: "ReadWriteOnce"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "200m"
+      ingress:
+        istio:
+          hosts:
+            - "verifier.org1.localho.st"
+          port: 443
+          ingressGateway: "istio-ingressgateway"
+          tls:
+            enabled: true
+            secretName: "verifier-tls-secret"
+      certificates:
+        cahost: "test-ca2.default"
+        caname: "ca"
+        caport: 443
+        catls:
+          secretRef:
+            name: "test-ca2-tls-crypto"
+            key: "tls.crt"
+            namespace: "default"
+        enrollid: "verifier"
+        enrollsecret: "verifierpw"
+        
+    
+    # Validator configuration
+    validator:
+      replicas: 1
+      storage:
+        size: "1Gi"
+        storageClass: "standard"
+        accessMode: "ReadWriteOnce"
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "512Mi"
+          cpu: "200m"
+      ingress:
+        istio:
+          hosts:
+            - "validator.org1.localho.st"
+          port: 443
+          ingressGateway: "istio-ingressgateway"
+          tls:
+            enabled: true
+            secretName: "validator-tls-secret"
+      certificates:
+        cahost: "test-ca2.default"
+        caname: "ca"
+        caport: 443
+        catls:
+          secretRef:
+            name: "test-ca2-tls-crypto"
+            key: "tls.crt"
+            namespace: "default"
+        enrollid: "validator"
+        enrollsecret: "validatorpw"
+        
+  
+  # Global enrollment configuration (inherited by components)
+  enrollment:
+    sign:
+      cahost: "test-ca2.default"
+      caname: "ca"
+      caport: 443
+      catls:
+        secretRef:
+          name: "test-ca2-tls-crypto"
+          key: "tls.crt"
+          namespace: "default"
+      enrollid: "admin"
+      enrollsecret: "adminpw"
+      
+    tls:
+      cahost: "test-ca2.default"
+      caname: "ca"
+      caport: 443
+      catls:
+        secretRef:
+          name: "test-ca2-tls-crypto"
+          key: "tls.crt"
+          namespace: "default"
+      enrollid: "admin"
+      enrollsecret: "adminpw"
+      
