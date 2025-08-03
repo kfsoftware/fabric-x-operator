@@ -211,7 +211,7 @@ func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
 		ca.Spec.CA.Registry.MaxEnrollments = -1
 	}
 	if ca.Spec.CA.CSR.CN == "" {
-		ca.Spec.CA.CSR.CN = "fabric-ca-server"
+		ca.Spec.CA.CSR.CN = "ca"
 	}
 	if ca.Spec.CA.CSR.Names == nil {
 		ca.Spec.CA.CSR.Names = []fabricxv1alpha1.FabricCANames{}
@@ -251,7 +251,7 @@ func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
 		ca.Spec.TLSCA.Registry.MaxEnrollments = -1
 	}
 	if ca.Spec.TLSCA.CSR.CN == "" {
-		ca.Spec.TLSCA.CSR.CN = "fabric-tlsca-server"
+		ca.Spec.TLSCA.CSR.CN = "tlsca"
 	}
 	if ca.Spec.TLSCA.CSR.Names == nil {
 		ca.Spec.TLSCA.CSR.Names = []fabricxv1alpha1.FabricCANames{}
@@ -463,30 +463,37 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 	// Check if we need to regenerate certificates
 	shouldRegenerate := r.shouldRegenerateCertificates(ctx, ca)
 
-	var tlsCert, tlsKey, caCert, caKey []byte
+	var tlsCert, tlsKey, caCert, caKey, tlscaCert, tlscaKey []byte
 	var err error
 
 	if shouldRegenerate {
 		log.Info("Regenerating certificates", "ca", ca.Name)
 
-		// Generate TLS certificates
+		// Generate TLS certificates for server TLS
 		tlsCert, tlsKey, err = r.generateTLSCertificate(ca)
 		if err != nil {
 			log.Error(err, "Failed to generate TLS certificate", "ca", ca.Name)
 			return fmt.Errorf("failed to generate TLS certificate: %w", err)
 		}
 
-		// Generate CA certificates
+		// Generate CA certificates for signing
 		caCert, caKey, err = r.generateCACertificate(ca)
 		if err != nil {
 			log.Error(err, "Failed to generate CA certificate", "ca", ca.Name)
 			return fmt.Errorf("failed to generate CA certificate: %w", err)
 		}
+
+		// Generate TLS CA certificates for TLS CA
+		tlscaCert, tlscaKey, err = r.generateTLSCACertificate(ca)
+		if err != nil {
+			log.Error(err, "Failed to generate TLS CA certificate", "ca", ca.Name)
+			return fmt.Errorf("failed to generate TLS CA certificate: %w", err)
+		}
 	} else {
 		log.Info("Using existing certificates", "ca", ca.Name)
 
 		// Use existing certificates if available
-		tlsCert, tlsKey, caCert, caKey, err = r.getExistingCertificates(ctx, ca)
+		tlsCert, tlsKey, caCert, caKey, tlscaCert, tlscaKey, err = r.getExistingCertificates(ctx, ca)
 		if err != nil {
 			log.Error(err, "Failed to get existing certificates, regenerating", "ca", ca.Name)
 
@@ -501,10 +508,15 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 				log.Error(err, "Failed to generate CA certificate", "ca", ca.Name)
 				return fmt.Errorf("failed to generate CA certificate: %w", err)
 			}
+			tlscaCert, tlscaKey, err = r.generateTLSCACertificate(ca)
+			if err != nil {
+				log.Error(err, "Failed to generate TLS CA certificate", "ca", ca.Name)
+				return fmt.Errorf("failed to generate TLS CA certificate: %w", err)
+			}
 		}
 	}
 
-	// TLS crypto material secret
+	// TLS crypto material secret (for server TLS)
 	tlsSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-tls-crypto", ca.Name),
@@ -520,7 +532,7 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 		return fmt.Errorf("failed to update TLS crypto secret %s: %w", tlsSecret.Name, err)
 	}
 
-	// MSP crypto material secret
+	// MSP crypto material secret (for CA signing)
 	mspSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-msp-crypto", ca.Name),
@@ -534,6 +546,22 @@ func (r *CAReconciler) reconcileSecrets(ctx context.Context, ca *fabricxv1alpha1
 	if err := r.updateSecret(ctx, ca, mspSecret, mspSecretTemplate); err != nil {
 		log.Error(err, "Failed to update MSP crypto secret", "name", mspSecret.Name)
 		return fmt.Errorf("failed to update MSP crypto secret %s: %w", mspSecret.Name, err)
+	}
+
+	// TLS CA crypto material secret (for TLS CA)
+	tlscaSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-tlsca-crypto", ca.Name),
+			Namespace: ca.Namespace,
+		},
+	}
+	tlscaSecretTemplate := r.getSecretTemplate(ca, fmt.Sprintf("%s-tlsca-crypto", ca.Name), map[string][]byte{
+		"certfile": tlscaCert,
+		"keyfile":  tlscaKey,
+	})
+	if err := r.updateSecret(ctx, ca, tlscaSecret, tlscaSecretTemplate); err != nil {
+		log.Error(err, "Failed to update TLS CA crypto secret", "name", tlscaSecret.Name)
+		return fmt.Errorf("failed to update TLS CA crypto secret %s: %w", tlscaSecret.Name, err)
 	}
 
 	log.Info("Secrets reconciled successfully", "ca", ca.Name)
@@ -560,7 +588,7 @@ func (r *CAReconciler) shouldRegenerateCertificates(ctx context.Context, ca *fab
 }
 
 // getExistingCertificates retrieves existing certificates from secrets
-func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv1alpha1.CA) ([]byte, []byte, []byte, []byte, error) {
+func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv1alpha1.CA) ([]byte, []byte, []byte, []byte, []byte, []byte, error) {
 	// Get TLS certificates
 	tlsSecret := &corev1.Secret{}
 	err := r.Get(ctx, types.NamespacedName{
@@ -568,7 +596,7 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 		Namespace: ca.Namespace,
 	}, tlsSecret)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to get TLS secret %s: %w", fmt.Sprintf("%s-tls-crypto", ca.Name), err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get TLS secret %s: %w", fmt.Sprintf("%s-tls-crypto", ca.Name), err)
 	}
 
 	// Get MSP certificates
@@ -578,28 +606,46 @@ func (r *CAReconciler) getExistingCertificates(ctx context.Context, ca *fabricxv
 		Namespace: ca.Namespace,
 	}, mspSecret)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to get MSP secret %s: %w", fmt.Sprintf("%s-msp-crypto", ca.Name), err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get MSP secret %s: %w", fmt.Sprintf("%s-msp-crypto", ca.Name), err)
+	}
+
+	// Get TLS CA certificates
+	tlscaSecret := &corev1.Secret{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-tlsca-crypto", ca.Name),
+		Namespace: ca.Namespace,
+	}, tlscaSecret)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("failed to get TLS CA secret %s: %w", fmt.Sprintf("%s-tlsca-crypto", ca.Name), err)
 	}
 
 	tlsCert := tlsSecret.Data["tls.crt"]
 	tlsKey := tlsSecret.Data["tls.key"]
 	caCert := mspSecret.Data["certfile"]
 	caKey := mspSecret.Data["keyfile"]
+	tlscaCert := tlscaSecret.Data["certfile"]
+	tlscaKey := tlscaSecret.Data["keyfile"]
 
 	if tlsCert == nil {
-		return nil, nil, nil, nil, fmt.Errorf("TLS certificate not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("TLS certificate not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
 	}
 	if tlsKey == nil {
-		return nil, nil, nil, nil, fmt.Errorf("TLS private key not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("TLS private key not found in secret %s", fmt.Sprintf("%s-tls-crypto", ca.Name))
 	}
 	if caCert == nil {
-		return nil, nil, nil, nil, fmt.Errorf("CA certificate not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("CA certificate not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
 	}
 	if caKey == nil {
-		return nil, nil, nil, nil, fmt.Errorf("CA private key not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("CA private key not found in secret %s", fmt.Sprintf("%s-msp-crypto", ca.Name))
+	}
+	if tlscaCert == nil {
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("TLS CA certificate not found in secret %s", fmt.Sprintf("%s-tlsca-crypto", ca.Name))
+	}
+	if tlscaKey == nil {
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("TLS CA private key not found in secret %s", fmt.Sprintf("%s-tlsca-crypto", ca.Name))
 	}
 
-	return tlsCert, tlsKey, caCert, caKey, nil
+	return tlsCert, tlsKey, caCert, caKey, tlscaCert, tlscaKey, nil
 }
 
 // reconcilePVC reconciles the PersistentVolumeClaim
@@ -958,6 +1004,68 @@ func (r *CAReconciler) generateCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []
 	return certPEM, keyPEM, nil
 }
 
+// generateTLSCACertificate generates TLS CA certificate and key
+func (r *CAReconciler) generateTLSCACertificate(ca *fabricxv1alpha1.CA) ([]byte, []byte, error) {
+	// Generate private key
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate ECDSA private key: %w", err)
+	}
+
+	// Create certificate template
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	if len(ca.Spec.TLSCA.CSR.Names) == 0 {
+		return nil, nil, fmt.Errorf("no certificate names specified in TLS CA CSR configuration")
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			Organization:       []string{ca.Spec.TLSCA.CSR.Names[0].O},
+			Country:            []string{ca.Spec.TLSCA.CSR.Names[0].C},
+			Locality:           []string{ca.Spec.TLSCA.CSR.Names[0].L},
+			OrganizationalUnit: []string{ca.Spec.TLSCA.CSR.Names[0].OU},
+			CommonName:         ca.Spec.TLSCA.CSR.CN,
+		},
+		NotBefore:             time.Now().AddDate(0, 0, -1),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
+		IsCA:                  true,
+		SubjectKeyId:          r.computeSKI(privateKey),
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageKeyEncipherment,
+		BasicConstraintsValid: true,
+	}
+
+	// Create certificate
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create TLS CA certificate: %w", err)
+	}
+
+	// Encode certificate
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	})
+
+	// Encode private key
+	keyBytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal private key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+
+	return certPEM, keyPEM, nil
+}
+
 // computeSKI computes the Subject Key Identifier
 func (r *CAReconciler) computeSKI(privKey *ecdsa.PrivateKey) []byte {
 	// Convert ECDSA public key to ECDH format for modern marshaling
@@ -1173,6 +1281,7 @@ func (r *CAReconciler) deleteResources(ctx context.Context, ca *fabricxv1alpha1.
 	secrets := []string{
 		fmt.Sprintf("%s-tls-crypto", ca.Name),
 		fmt.Sprintf("%s-msp-crypto", ca.Name),
+		fmt.Sprintf("%s-tlsca-crypto", ca.Name),
 	}
 	for _, name := range secrets {
 		secret := &corev1.Secret{
@@ -1257,6 +1366,9 @@ func (r *CAReconciler) GetDeploymentTemplate(ctx context.Context, ca *fabricxv1a
 								`mkdir -p $FABRIC_CA_HOME
 cp /var/hyperledger/ca_config/ca.yaml $FABRIC_CA_HOME/fabric-ca-server-config.yaml
 cp /var/hyperledger/ca_config_tls/fabric-ca-server-config.yaml $FABRIC_CA_HOME/fabric-ca-server-config-tls.yaml
+
+ls -l $FABRIC_CA_HOME
+
 echo ">\033[0;35m fabric-ca-server start \033[0m"
 fabric-ca-server start`,
 							},
@@ -1379,7 +1491,7 @@ fabric-ca-server start`,
 							Name: "msp-tls-cryptomaterial",
 							VolumeSource: corev1.VolumeSource{
 								Secret: &corev1.SecretVolumeSource{
-									SecretName: fmt.Sprintf("%s-msp-crypto", ca.Name),
+									SecretName: fmt.Sprintf("%s-tlsca-crypto", ca.Name),
 								},
 							},
 						},

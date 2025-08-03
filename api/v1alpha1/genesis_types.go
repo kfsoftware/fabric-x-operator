@@ -146,7 +146,7 @@ type GenesisStatus struct {
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
-// Genesis is the Schema for the geneses API.
+// Genesis is the Schema for the genesis API.
 type Genesis struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

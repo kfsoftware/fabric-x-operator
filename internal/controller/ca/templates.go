@@ -91,13 +91,13 @@ registry:
       type: {{.Type}}
       affiliation: {{.Affiliation}}
       attrs:
-        hf.Registrar.Roles: {{.Attrs.RegistrarRoles}}
-        hf.Registrar.DelegateRoles: {{.Attrs.DelegateRoles}}
-        hf.Registrar.Attributes: {{.Attrs.Attributes}}
-        hf.Revoker: {{.Attrs.Revoker}}
-        hf.IntermediateCA: {{.Attrs.IntermediateCA}}
-        hf.GenCRL: {{.Attrs.GenCRL}}
-        hf.AffiliationMgr: {{.Attrs.AffiliationMgr}}
+        hf.Registrar.Roles: "{{.Attrs.RegistrarRoles}}"
+        hf.Registrar.DelegateRoles: "{{.Attrs.DelegateRoles}}"
+        hf.Registrar.Attributes: "{{.Attrs.Attributes}}"
+        hf.Revoker: "{{.Attrs.Revoker}}"
+        hf.IntermediateCA: "{{.Attrs.IntermediateCA}}"
+        hf.GenCRL: "{{.Attrs.GenCRL}}"
+        hf.AffiliationMgr: "{{.Attrs.AffiliationMgr}}"
 {{end}}
 #############################################################################
 #  Database section
@@ -273,7 +273,7 @@ bccsp:
 #############################################################################
 cacount:
 cafiles:
-- /var/hyperledger/fabric-ca/fabric-ca-server-config-tls.yaml
+- /etc/hyperledger/fabric-ca-server/fabric-ca-server-config-tls.yaml
 
 #############################################################################
 # Intermediate CA section
@@ -405,13 +405,13 @@ registry:
       type: {{.Type}}
       affiliation: {{.Affiliation}}
       attrs:
-        hf.Registrar.Roles: {{.Attrs.RegistrarRoles}}
-        hf.Registrar.DelegateRoles: {{.Attrs.DelegateRoles}}
-        hf.Registrar.Attributes: {{.Attrs.Attributes}}
-        hf.Revoker: {{.Attrs.Revoker}}
-        hf.IntermediateCA: {{.Attrs.IntermediateCA}}
-        hf.GenCRL: {{.Attrs.GenCRL}}
-        hf.AffiliationMgr: {{.Attrs.AffiliationMgr}}
+        hf.Registrar.Roles: "{{.Attrs.RegistrarRoles}}"
+        hf.Registrar.DelegateRoles: "{{.Attrs.DelegateRoles}}"
+        hf.Registrar.Attributes: "{{.Attrs.Attributes}}"
+        hf.Revoker: "{{.Attrs.Revoker}}"
+        hf.IntermediateCA: "{{.Attrs.IntermediateCA}}"
+        hf.GenCRL: "{{.Attrs.GenCRL}}"
+        hf.AffiliationMgr: "{{.Attrs.AffiliationMgr}}"
 {{end}}
 #############################################################################
 #  Database section
@@ -587,7 +587,7 @@ bccsp:
 #############################################################################
 cacount:
 cafiles:
-- /var/hyperledger/fabric-ca/fabric-ca-server-config-tls.yaml
+- /etc/hyperledger/fabric-ca-server/fabric-ca-server-config-tls.yaml
 
 #############################################################################
 # Intermediate CA section

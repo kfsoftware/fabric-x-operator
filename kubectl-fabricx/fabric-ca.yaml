@@ -75,6 +75,17 @@ spec:
         pass: adminpw
         type: client
       maxenrollments: -1
+    signing:
+      default:
+        expiry: 8760h
+      profiles:
+        ca:
+          expiry: 43800h
+          caconstraint:
+            isca: true
+            maxpathlen: 1
+        tls:
+          expiry: 8760h
   cors: {}
   credentialStore: kubernetes
   db:
@@ -132,6 +143,17 @@ spec:
         pass: adminpw
         type: client
       maxenrollments: -1
+    signing:
+      default:
+        expiry: 8760h
+      profiles:
+        ca:
+          expiry: 43800h
+          caconstraint:
+            isca: true
+            maxpathlen: 1
+        tls:
+          expiry: 8760h
   vault:
     vault: {}
   version: 1.5.15

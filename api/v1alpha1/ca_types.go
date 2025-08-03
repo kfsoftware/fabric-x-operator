@@ -136,6 +136,7 @@ type FabricCAItemConf struct {
 	Intermediate FabricCAItemIntermediate `json:"intermediate,omitempty"`
 	Affiliations []FabricCAAffiliation    `json:"affiliations,omitempty"`
 	BCCSP        FabricCAItemBCCSP        `json:"bccsp,omitempty"`
+	Signing      FabricCASigning          `json:"signing,omitempty"`
 }
 
 // FabricCAItemCFG represents CA item configuration

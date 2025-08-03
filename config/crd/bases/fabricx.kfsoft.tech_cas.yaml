@@ -1114,6 +1114,56 @@ spec:
                       maxenrollments:
                         type: integer
                     type: object
+                  signing:
+                    description: FabricCASigning represents signing configuration
+                    properties:
+                      default:
+                        description: FabricCASigningDefault represents default signing
+                          configuration
+                        properties:
+                          expiry:
+                            type: string
+                          usage:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      profiles:
+                        description: FabricCASigningProfiles represents signing profiles
+                        properties:
+                          ca:
+                            description: FabricCASigningSignProfile represents a signing
+                              profile
+                            properties:
+                              caconstraint:
+                                description: FabricCASigningSignProfileConstraint
+                                  represents CA constraint
+                                properties:
+                                  isca:
+                                    type: boolean
+                                  maxpathlen:
+                                    type: integer
+                                type: object
+                              expiry:
+                                type: string
+                              usage:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          tls:
+                            description: FabricCASigningTLSProfile represents TLS
+                              signing profile
+                            properties:
+                              expiry:
+                                type: string
+                              usage:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                        type: object
+                    type: object
                 required:
                 - name
                 type: object
@@ -1726,6 +1776,56 @@ spec:
                         type: array
                       maxenrollments:
                         type: integer
+                    type: object
+                  signing:
+                    description: FabricCASigning represents signing configuration
+                    properties:
+                      default:
+                        description: FabricCASigningDefault represents default signing
+                          configuration
+                        properties:
+                          expiry:
+                            type: string
+                          usage:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      profiles:
+                        description: FabricCASigningProfiles represents signing profiles
+                        properties:
+                          ca:
+                            description: FabricCASigningSignProfile represents a signing
+                              profile
+                            properties:
+                              caconstraint:
+                                description: FabricCASigningSignProfileConstraint
+                                  represents CA constraint
+                                properties:
+                                  isca:
+                                    type: boolean
+                                  maxpathlen:
+                                    type: integer
+                                type: object
+                              expiry:
+                                type: string
+                              usage:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          tls:
+                            description: FabricCASigningTLSProfile represents TLS
+                              signing profile
+                            properties:
+                              expiry:
+                                type: string
+                              usage:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                        type: object
                     type: object
                 required:
                 - name
