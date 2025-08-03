@@ -73,8 +73,8 @@ spec:
       caport: 7054
       catls:
         secretRef:
-          name: 'test-ca2'
-          key: 'ca-cert.pem'
+          name: 'test-ca2-tls-crypto'
+          key: 'tls.crt'
           namespace: 'default'
       enrollid: 'admin'
       enrollsecret: 'adminpw'
@@ -83,8 +83,8 @@ spec:
       caport: 7054
       catls:
         secretRef:
-          name: 'test-ca2'
-          key: 'ca-cert.pem'
+          name: 'test-ca2-tls-crypto'
+          key: 'tls.crt'
           namespace: 'default'
       enrollid: 'admin'
       enrollsecret: 'adminpw'
@@ -113,8 +113,8 @@ spec:
         caport: 7054
         catls:
           secretRef:
-            name: 'test-ca2'
-            key: 'ca-cert.pem'
+            name: 'test-ca2-tls-crypto'
+            key: 'tls.crt'
             namespace: 'default'
         enrollid: 'admin'
         enrollsecret: 'adminpw'
@@ -161,8 +161,8 @@ spec:
         caport: 7054
         catls:
           secretRef:
-            name: 'test-ca2'
-            key: 'ca-cert.pem'
+            name: 'test-ca2-tls-crypto'
+            key: 'tls.crt'
             namespace: 'default'
         enrollid: 'admin'
         enrollsecret: 'adminpw'
@@ -194,8 +194,8 @@ spec:
         caport: 7054
         catls:
           secretRef:
-            name: 'test-ca2'
-            key: 'ca-cert.pem'
+            name: 'test-ca2-tls-crypto'
+            key: 'tls.crt'
             namespace: 'default'
         enrollid: 'admin'
         enrollsecret: 'adminpw'
@@ -228,8 +228,8 @@ spec:
         caport: 7054
         catls:
           secretRef:
-            name: 'test-ca2'
-            key: 'ca-cert.pem'
+            name: 'test-ca2-tls-crypto'
+            key: 'tls.crt'
             namespace: 'default'
         enrollid: 'admin'
         enrollsecret: 'adminpw'
