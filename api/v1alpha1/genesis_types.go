@@ -92,8 +92,57 @@ type OrdererNode struct {
 	Identity string `json:"identity"`
 }
 
+// ApplicationOrganization represents an application organization
+type ApplicationOrganization struct {
+	// Name of the organization
+	Name string `json:"name"`
+
+	// MSP ID for the organization
+	MSPID string `json:"mspId"`
+
+	// Type of organization: "internal" or "external"
+	Type string `json:"type"`
+
+	// Internal organization configuration (only if Type is "internal")
+	Internal *InternalApplicationOrg `json:"internal,omitempty"`
+
+	// External organization configuration (only if Type is "external")
+	External *ExternalApplicationOrg `json:"external,omitempty"`
+}
+
+// InternalApplicationOrg represents an internal application organization
+type InternalApplicationOrg struct {
+	// Reference to the Fabric CA
+	CAReference CAReference `json:"caReference"`
+
+	// Admin identity name in the CA
+	AdminIdentity string `json:"adminIdentity,omitempty"`
+
+	// Peer identity name in the CA (optional)
+	PeerIdentity string `json:"peerIdentity,omitempty"`
+}
+
+// ExternalApplicationOrg represents an external application organization
+type ExternalApplicationOrg struct {
+	// Signing CA certificate (base64 encoded)
+	SignCACert string `json:"signCaCert"`
+
+	// TLS CA certificate (base64 encoded)
+	TLSCACert string `json:"tlsCaCert"`
+
+	// Admin certificate (base64 encoded)
+	AdminCert string `json:"adminCert,omitempty"`
+
+	// Peer certificate (base64 encoded, optional)
+	PeerCert string `json:"peerCert,omitempty"`
+}
+
 // GenesisSpec defines the desired state of Genesis.
 type GenesisSpec struct {
+	// Channel ID for the genesis block
+	// +kubebuilder:validation:Required
+	ChannelID string `json:"channelID"`
+
 	// Config template reference
 	ConfigTemplate ConfigTemplateReference `json:"configTemplate"`
 
@@ -102,6 +151,9 @@ type GenesisSpec struct {
 
 	// External organizations (with provided certificates)
 	ExternalOrgs []ExternalOrganization `json:"externalOrgs,omitempty"`
+
+	// Application organizations (can be internal or external)
+	ApplicationOrgs []ApplicationOrganization `json:"applicationOrgs,omitempty"`
 
 	// Specific orderer nodes for consensus
 	OrdererNodes []OrdererNode `json:"ordererNodes,omitempty"`

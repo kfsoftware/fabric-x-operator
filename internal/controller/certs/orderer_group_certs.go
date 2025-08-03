@@ -13,6 +13,13 @@ import (
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 )
 
+// OrdererGroupCertServiceInterface defines the interface for certificate provisioning services
+type OrdererGroupCertServiceInterface interface {
+	ProvisionComponentCertificates(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, componentName string, componentConfig *fabricxv1alpha1.ComponentConfig) error
+	CleanupComponentCertificates(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, componentName string) error
+	GetCertificateSecretName(ordererGroupName string, componentName string, certType string) string
+}
+
 // OrdererGroupCertService provides certificate provisioning services for OrdererGroup components
 type OrdererGroupCertService struct {
 	Client client.Client

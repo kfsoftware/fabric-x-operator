@@ -48,6 +48,75 @@ spec:
           spec:
             description: GenesisSpec defines the desired state of Genesis.
             properties:
+              applicationOrgs:
+                description: Application organizations (can be internal or external)
+                items:
+                  description: ApplicationOrganization represents an application organization
+                  properties:
+                    external:
+                      description: External organization configuration (only if Type
+                        is "external")
+                      properties:
+                        adminCert:
+                          description: Admin certificate (base64 encoded)
+                          type: string
+                        peerCert:
+                          description: Peer certificate (base64 encoded, optional)
+                          type: string
+                        signCaCert:
+                          description: Signing CA certificate (base64 encoded)
+                          type: string
+                        tlsCaCert:
+                          description: TLS CA certificate (base64 encoded)
+                          type: string
+                      required:
+                      - signCaCert
+                      - tlsCaCert
+                      type: object
+                    internal:
+                      description: Internal organization configuration (only if Type
+                        is "internal")
+                      properties:
+                        adminIdentity:
+                          description: Admin identity name in the CA
+                          type: string
+                        caReference:
+                          description: Reference to the Fabric CA
+                          properties:
+                            name:
+                              description: Name of the CA resource
+                              type: string
+                            namespace:
+                              description: Namespace of the CA resource
+                              type: string
+                          required:
+                          - name
+                          - namespace
+                          type: object
+                        peerIdentity:
+                          description: Peer identity name in the CA (optional)
+                          type: string
+                      required:
+                      - caReference
+                      type: object
+                    mspId:
+                      description: MSP ID for the organization
+                      type: string
+                    name:
+                      description: Name of the organization
+                      type: string
+                    type:
+                      description: 'Type of organization: "internal" or "external"'
+                      type: string
+                  required:
+                  - mspId
+                  - name
+                  - type
+                  type: object
+                type: array
+              channelID:
+                description: Channel ID for the genesis block
+                type: string
               configTemplate:
                 description: Config template reference
                 properties:
@@ -184,6 +253,7 @@ spec:
                 - secretName
                 type: object
             required:
+            - channelID
             - configTemplate
             - output
             type: object

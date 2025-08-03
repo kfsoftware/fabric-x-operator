@@ -40,7 +40,7 @@ type ComponentController interface {
 type BaseComponentController struct {
 	Client      client.Client
 	Scheme      *runtime.Scheme
-	CertService *certs.OrdererGroupCertService
+	CertService certs.OrdererGroupCertServiceInterface
 }
 
 // NewBaseComponentController creates a new base component controller

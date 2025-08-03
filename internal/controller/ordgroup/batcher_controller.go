@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 )
 
 // BatcherController handles reconciliation for the Batcher component
@@ -36,6 +37,17 @@ type BatcherController struct {
 func NewBatcherController(client client.Client, scheme *runtime.Scheme) *BatcherController {
 	return &BatcherController{
 		BaseComponentController: NewBaseComponentController(client, scheme),
+	}
+}
+
+// NewBatcherControllerWithCertService creates a new Batcher controller with a custom certificate service
+func NewBatcherControllerWithCertService(client client.Client, scheme *runtime.Scheme, certService certs.OrdererGroupCertServiceInterface) *BatcherController {
+	return &BatcherController{
+		BaseComponentController: BaseComponentController{
+			Client:      client,
+			Scheme:      scheme,
+			CertService: certService,
+		},
 	}
 }
 

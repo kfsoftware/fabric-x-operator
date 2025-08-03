@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,8 +28,8 @@ import (
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
-	ordgroup "github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
 const (
@@ -48,7 +49,7 @@ type OrdererGroupReconciler struct {
 	ConsenterController *ordgroup.ConsenterController
 
 	// Certificate service
-	CertService *certs.OrdererGroupCertService
+	CertService certs.OrdererGroupCertServiceInterface
 }
 
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=orderergroups,verbs=get;list;watch;create;update;patch;delete
@@ -261,7 +262,7 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 
 // ensureFinalizer ensures the finalizer is present on the OrdererGroup
 func (r *OrdererGroupReconciler) ensureFinalizer(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
-	if !containsString(ordererGroup.Finalizers, FinalizerName) {
+	if !utils.ContainsString(ordererGroup.Finalizers, FinalizerName) {
 		ordererGroup.Finalizers = append(ordererGroup.Finalizers, FinalizerName)
 		return r.Update(ctx, ordererGroup)
 	}
@@ -270,7 +271,7 @@ func (r *OrdererGroupReconciler) ensureFinalizer(ctx context.Context, ordererGro
 
 // removeFinalizer removes the finalizer from the OrdererGroup
 func (r *OrdererGroupReconciler) removeFinalizer(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
-	ordererGroup.Finalizers = removeString(ordererGroup.Finalizers, FinalizerName)
+	ordererGroup.Finalizers = utils.RemoveString(ordererGroup.Finalizers, FinalizerName)
 	return r.Update(ctx, ordererGroup)
 }
 
@@ -437,24 +438,4 @@ func (r *OrdererGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&fabricxv1alpha1.OrdererGroup{}).
 		Named("orderergroup").
 		Complete(r)
-}
-
-// Helper functions for string slice operations
-func containsString(slice []string, str string) bool {
-	for _, item := range slice {
-		if item == str {
-			return true
-		}
-	}
-	return false
-}
-
-func removeString(slice []string, str string) []string {
-	result := make([]string, 0, len(slice))
-	for _, item := range slice {
-		if item != str {
-			result = append(result, item)
-		}
-	}
-	return result
 }

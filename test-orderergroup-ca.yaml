@@ -14,13 +14,8 @@ spec:
     replicas: 1
     storage:
       size: "10Gi"
-      storageClass: "fast-ssd"
+      storageClass: "local-storage"
       accessMode: "ReadWriteOnce"
-    resources:
-      cpuRequests: "500m"
-      cpuLimits: "1000m"
-      memoryRequests: "1Gi"
-      memoryLimits: "2Gi"
     securityContext:
       runAsUser: 1000
       runAsGroup: 1000
@@ -69,7 +64,7 @@ spec:
   # Global enrollment configuration (inherited by components)
   enrollment:
     sign:
-      cahost: 'test-ca2'
+      cahost: 'test-ca2.default'
       caport: 7054
       catls:
         secretRef:
@@ -79,7 +74,7 @@ spec:
       enrollid: 'admin'
       enrollsecret: 'adminpw'
     tls:
-      cahost: 'test-ca2'
+      cahost: 'test-ca2.default'
       caport: 7054
       catls:
         secretRef:
@@ -109,7 +104,7 @@ spec:
           value: "500"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'test-ca2'
+        cahost: 'test-ca2.default'
         caport: 7054
         catls:
           secretRef:
@@ -157,7 +152,7 @@ spec:
           value: "2097152"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'test-ca2'
+        cahost: 'test-ca2.default'
         caport: 7054
         catls:
           secretRef:
@@ -190,7 +185,7 @@ spec:
           value: "500"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'test-ca2'
+        cahost: 'test-ca2.default'
         caport: 7054
         catls:
           secretRef:
@@ -224,7 +219,7 @@ spec:
           value: "1000"
       # Component-specific certificates (optional - will inherit from global enrollment)
       certificates:
-        cahost: 'test-ca2'
+        cahost: 'test-ca2.default'
         caport: 7054
         catls:
           secretRef:

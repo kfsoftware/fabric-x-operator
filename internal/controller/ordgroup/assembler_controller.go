@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 )
 
 // AssemblerController handles reconciliation for the Assembler component
@@ -36,6 +37,17 @@ type AssemblerController struct {
 func NewAssemblerController(client client.Client, scheme *runtime.Scheme) *AssemblerController {
 	return &AssemblerController{
 		BaseComponentController: NewBaseComponentController(client, scheme),
+	}
+}
+
+// NewAssemblerControllerWithCertService creates a new Assembler controller with a custom certificate service
+func NewAssemblerControllerWithCertService(client client.Client, scheme *runtime.Scheme, certService certs.OrdererGroupCertServiceInterface) *AssemblerController {
+	return &AssemblerController{
+		BaseComponentController: BaseComponentController{
+			Client:      client,
+			Scheme:      scheme,
+			CertService: certService,
+		},
 	}
 }
 

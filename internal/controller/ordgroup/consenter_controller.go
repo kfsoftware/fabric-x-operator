@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 )
 
 // ConsenterController handles reconciliation for the Consenter component
@@ -36,6 +37,17 @@ type ConsenterController struct {
 func NewConsenterController(client client.Client, scheme *runtime.Scheme) *ConsenterController {
 	return &ConsenterController{
 		BaseComponentController: NewBaseComponentController(client, scheme),
+	}
+}
+
+// NewConsenterControllerWithCertService creates a new Consenter controller with a custom certificate service
+func NewConsenterControllerWithCertService(client client.Client, scheme *runtime.Scheme, certService certs.OrdererGroupCertServiceInterface) *ConsenterController {
+	return &ConsenterController{
+		BaseComponentController: BaseComponentController{
+			Client:      client,
+			Scheme:      scheme,
+			CertService: certService,
+		},
 	}
 }
 

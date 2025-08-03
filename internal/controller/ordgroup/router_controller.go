@@ -25,6 +25,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 )
 
 // RouterController handles reconciliation for the Router component
@@ -36,6 +37,17 @@ type RouterController struct {
 func NewRouterController(client client.Client, scheme *runtime.Scheme) *RouterController {
 	return &RouterController{
 		BaseComponentController: NewBaseComponentController(client, scheme),
+	}
+}
+
+// NewRouterControllerWithCertService creates a new Router controller with a custom certificate service
+func NewRouterControllerWithCertService(client client.Client, scheme *runtime.Scheme, certService certs.OrdererGroupCertServiceInterface) *RouterController {
+	return &RouterController{
+		BaseComponentController: BaseComponentController{
+			Client:      client,
+			Scheme:      scheme,
+			CertService: certService,
+		},
 	}
 }
 

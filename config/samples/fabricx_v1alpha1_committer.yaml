@@ -17,7 +17,7 @@ spec:
     replicas: 1
     storage:
       size: "1Gi"
-      storageClass: "standard"
+      storageClass: "local-storage"
       accessMode: "ReadWriteOnce"
     resources:
       requests:
@@ -40,7 +40,7 @@ spec:
       replicas: 1
       storage:
         size: "1Gi"
-        storageClass: "standard"
+        storageClass: "local-storage"
         accessMode: "ReadWriteOnce"
       resources:
         requests:
@@ -53,15 +53,15 @@ spec:
         istio:
           hosts:
             - "sidecar.org1.localho.st"
-          port: 443
+          port: 7054
           ingressGateway: "istio-ingressgateway"
           tls:
             enabled: true
             secretName: "sidecar-tls-secret"
       certificates:
-        cahost: "test-ca2.org1.localho.st"
+        cahost: "test-ca2.default"
         caname: "ca"
-        caport: 443
+        caport: 7054
         catls:
           secretRef:
             name: "test-ca2-tls-crypto"
@@ -75,7 +75,7 @@ spec:
       replicas: 1
       storage:
         size: "1Gi"
-        storageClass: "standard"
+        storageClass: "local-storage"
         accessMode: "ReadWriteOnce"
       resources:
         requests:
@@ -88,7 +88,7 @@ spec:
         istio:
           hosts:
             - "coordinator.org1.localho.st"
-          port: 443
+          port: 7054
           ingressGateway: "istio-ingressgateway"
           tls:
             enabled: true
@@ -96,7 +96,7 @@ spec:
       certificates:
         cahost: "test-ca2.default"
         caname: "ca"
-        caport: 443
+        caport: 7054
         catls:
           secretRef:
             name: "test-ca2-tls-crypto"
@@ -111,7 +111,7 @@ spec:
       replicas: 1
       storage:
         size: "1Gi"
-        storageClass: "standard"
+        storageClass: "local-storage"
         accessMode: "ReadWriteOnce"
       resources:
         requests:
@@ -124,7 +124,7 @@ spec:
         istio:
           hosts:
             - "verifier.org1.localho.st"
-          port: 443
+          port: 7054
           ingressGateway: "istio-ingressgateway"
           tls:
             enabled: true
@@ -132,7 +132,7 @@ spec:
       certificates:
         cahost: "test-ca2.default"
         caname: "ca"
-        caport: 443
+        caport: 7054
         catls:
           secretRef:
             name: "test-ca2-tls-crypto"
@@ -147,7 +147,7 @@ spec:
       replicas: 1
       storage:
         size: "1Gi"
-        storageClass: "standard"
+        storageClass: "local-storage"
         accessMode: "ReadWriteOnce"
       resources:
         requests:
@@ -160,7 +160,7 @@ spec:
         istio:
           hosts:
             - "validator.org1.localho.st"
-          port: 443
+          port: 7054
           ingressGateway: "istio-ingressgateway"
           tls:
             enabled: true
@@ -168,7 +168,7 @@ spec:
       certificates:
         cahost: "test-ca2.default"
         caname: "ca"
-        caport: 443
+        caport: 7054
         catls:
           secretRef:
             name: "test-ca2-tls-crypto"
@@ -183,7 +183,7 @@ spec:
     sign:
       cahost: "test-ca2.default"
       caname: "ca"
-      caport: 443
+      caport: 7054
       catls:
         secretRef:
           name: "test-ca2-tls-crypto"
@@ -195,7 +195,7 @@ spec:
     tls:
       cahost: "test-ca2.default"
       caname: "ca"
-      caport: 443
+      caport: 7054
       catls:
         secretRef:
           name: "test-ca2-tls-crypto"
