@@ -1,0 +1,114 @@
+apiVersion: fabric.hyperledger.org/v1alpha1
+kind: CA
+metadata:
+  name: test-ca2
+  namespace: test-ns
+spec:
+  ca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: ca
+      hosts:
+      - localhost
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: ca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  cors: {}
+  credentialStore: kubernetes
+  db:
+    datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
+    type: sqlite3
+  image: hyperledger/fabric-ca:1.4.3
+  metrics:
+    statsd: {}
+  resources: {}
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  tls:
+    subject:
+      C: US
+      L: Raleigh
+      O: Hyperledger
+      OU: Fabric
+      ST: North Carolina
+  tlsca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: tlsca
+      hosts:
+      - localhost
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: tlsca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  vault:
+    vault: {}
+  version: 1.4.3
+status: {}
+

@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the fabric-x-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- ca_admin_role.yaml
+- ca_editor_role.yaml
+- ca_viewer_role.yaml
 - endorser_admin_role.yaml
 - endorser_editor_role.yaml
 - endorser_viewer_role.yaml

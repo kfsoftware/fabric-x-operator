@@ -3,4 +3,5 @@ resources:
 - fabricx_v1alpha1_committer.yaml
 - fabricx_v1alpha1_orderergroup.yaml
 - fabricx_v1alpha1_endorser.yaml
+- fabricx_v1alpha1_ca.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

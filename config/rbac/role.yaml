@@ -5,8 +5,36 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - persistentvolumeclaims
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - cas
   - committers
   - endorsers
   - orderergroups
@@ -21,6 +49,7 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - cas/finalizers
   - committers/finalizers
   - endorsers/finalizers
   - orderergroups/finalizers
@@ -29,6 +58,7 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - cas/status
   - committers/status
   - endorsers/status
   - orderergroups/status
