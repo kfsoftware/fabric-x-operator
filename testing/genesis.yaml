@@ -1,0 +1,101 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Genesis
+metadata:
+  name: shared-genesis
+  namespace: default
+
+spec:
+  applicationOrgs:
+    - mspId: Org1MSP
+      name: Org1MSP
+      signCaCertRef:
+        key: certfile
+        name: test-ca2-msp-crypto
+        namespace: default
+      tlsCaCertRef:
+        key: certfile
+        name: test-ca2-tlsca-crypto
+        namespace: default
+  channelID: mychannel
+  configTemplate:
+    configMapName: fabricx-config-template
+    key: configtx.yaml
+  ordererNodes:
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-0-tls-cert
+        namespace: default
+      host: orderer1.org1.example.com
+      id: 1
+      identityRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-0-sign-cert
+        namespace: default
+      mspId: OrdererMSP
+      port: 7050
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-0-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-1-tls-cert
+        namespace: default
+      host: orderer2.org1.example.com
+      id: 2
+      identityRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-1-sign-cert
+        namespace: default
+      mspId: OrdererMSP
+      port: 7050
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-1-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-2-tls-cert
+        namespace: default
+      host: orderer3.org1.example.com
+      id: 3
+      identityRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-2-sign-cert
+        namespace: default
+      mspId: OrdererMSP
+      port: 7050
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-2-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-3-tls-cert
+        namespace: default
+      host: orderer4.org1.example.com
+      id: 4
+      identityRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-3-sign-cert
+        namespace: default
+      mspId: OrdererMSP
+      port: 7050
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-sample-consenter-3-tls-cert
+        namespace: default
+  ordererOrganizations:
+    - mspId: OrdererMSP
+      name: OrdererMSP
+      signCaCertRef:
+        key: certfile
+        name: test-ca2-msp-crypto
+        namespace: default
+      tlsCaCertRef:
+        key: certfile
+        name: test-ca2-tlsca-crypto
+        namespace: default
+  output:
+    blockKey: genesis.block
+    secretName: fabricx-shared-genesis
