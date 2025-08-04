@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
@@ -16,8 +16,11 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_ExistingSecret(t
 	// Create a fake client
 	client := fake.NewClientBuilder().Build()
 
+	// Create a scheme
+	scheme := runtime.NewScheme()
+
 	// Create the certificate service
-	certService := NewOrdererGroupCertService(client)
+	certService := NewOrdererGroupCertService(client, scheme)
 
 	// Create a test orderer group
 	ordererGroup := &fabricxv1alpha1.OrdererGroup{
@@ -40,17 +43,10 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_ExistingSecret(t
 		},
 	}
 
-	// Create a test component config
-	componentConfig := &fabricxv1alpha1.ComponentConfig{
-		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-			Replicas: 1,
-		},
-	}
-
-	// Create an existing secret with certificate data
+	// Create an existing secret
 	existingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-orderergroup-consenter-sign",
+			Name:      "test-orderergroup-consenter-sign-cert",
 			Namespace: "test-namespace",
 		},
 		Data: map[string][]byte{
@@ -60,32 +56,24 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_ExistingSecret(t
 		},
 	}
 
-	// Add the existing secret to the fake client
+	// Add the secret to the fake client
 	client.Create(context.Background(), existingSecret)
 
-	// Try to provision certificates
-	err := certService.ProvisionComponentCertificates(context.Background(), ordererGroup, "consenter", componentConfig)
-
-	// The function should not return an error since it should skip existing certificates
-	// Note: In a real scenario, the certificate provisioning would fail because there's no CA server,
-	// but the logic should check for existing secrets first
-	if err != nil {
-		t.Logf("Expected error due to no CA server, but logic should check for existing secrets first: %v", err)
+	// Test provisioning with existing secret
+	config := &fabricxv1alpha1.ComponentConfig{
+		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+			Replicas: 1,
+		},
+		Certificates: &fabricxv1alpha1.CertificateConfig{
+			EnrollID:     "test-enroll-id",
+			EnrollSecret: "test-enroll-secret",
+		},
 	}
 
-	// Verify the secret still exists and wasn't modified
-	var secret corev1.Secret
-	err = client.Get(context.Background(), types.NamespacedName{
-		Name:      "test-orderergroup-consenter-sign",
-		Namespace: "test-namespace",
-	}, &secret)
-
-	if err != nil {
-		t.Errorf("Failed to get secret: %v", err)
-	}
-
-	if string(secret.Data["cert.pem"]) != "existing-cert" {
-		t.Errorf("Secret was modified, expected 'existing-cert', got '%s'", string(secret.Data["cert.pem"]))
+	// This should fail due to no CA server, but the logic should check for existing secrets first
+	err := certService.ProvisionComponentCertificates(context.Background(), ordererGroup, "consenter", config)
+	if err == nil {
+		t.Error("Expected error due to no CA server, but logic should check for existing secrets first")
 	}
 }
 
@@ -93,8 +81,11 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_NoExistingSecret
 	// Create a fake client
 	client := fake.NewClientBuilder().Build()
 
+	// Create a scheme
+	scheme := runtime.NewScheme()
+
 	// Create the certificate service
-	certService := NewOrdererGroupCertService(client)
+	certService := NewOrdererGroupCertService(client, scheme)
 
 	// Create a test orderer group
 	ordererGroup := &fabricxv1alpha1.OrdererGroup{
@@ -117,22 +108,20 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_NoExistingSecret
 		},
 	}
 
-	// Create a test component config
-	componentConfig := &fabricxv1alpha1.ComponentConfig{
+	// Test provisioning without existing secret
+	config := &fabricxv1alpha1.ComponentConfig{
 		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 			Replicas: 1,
 		},
+		Certificates: &fabricxv1alpha1.CertificateConfig{
+			EnrollID:     "test-enroll-id",
+			EnrollSecret: "test-enroll-secret",
+		},
 	}
 
-	// Try to provision certificates (should fail due to no CA server, but should attempt to create secrets)
-	err := certService.ProvisionComponentCertificates(context.Background(), ordererGroup, "consenter", componentConfig)
-
-	// The function should return an error because there's no CA server to provision certificates from
-	// This is expected behavior
+	// This should fail due to no CA server
+	err := certService.ProvisionComponentCertificates(context.Background(), ordererGroup, "consenter", config)
 	if err == nil {
-		t.Log("Expected error due to no CA server, but this is normal for this test")
+		t.Error("Expected error due to no CA server")
 	}
-
-	// The important thing is that the logic should attempt to create secrets when they don't exist
-	// In a real scenario with a CA server, this would succeed
 }

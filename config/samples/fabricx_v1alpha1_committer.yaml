@@ -7,7 +7,7 @@ metadata:
   name: committer-sample
 spec:
   # Bootstrap mode: "configure" or "deploy"
-  bootstrapMode: "deploy"
+  bootstrapMode: "configure"
   
   # MSP ID for the committer
   mspid: "Org1MSP"

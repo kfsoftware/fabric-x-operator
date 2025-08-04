@@ -1,245 +1,255 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: OrdererGroup
 metadata:
-  labels:
-    app.kubernetes.io/name: fabric-x-operator
-    app.kubernetes.io/managed-by: kustomize
   name: orderergroup-sample
+  namespace: default
+
 spec:
-  bootstrapMode: 'configure' # can be "configure" or "deploy"
-  
-  # Common configuration applied to all components
+  bootstrapMode: configure
+  mspid: OrdererMSP
   common:
-    replicas: 1
-    storage:
-      size: "10Gi"
-      storageClass: "fast-ssd"
-      accessMode: "ReadWriteOnce"
-    resources:
-      cpuRequests: "500m"
-      cpuLimits: "1000m"
-      memoryRequests: "1Gi"
-      memoryLimits: "2Gi"
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-      readOnlyRootFilesystem: true
-    # Common pod annotations
+    imagePullSecrets:
+      - name: fabric-x-registry
     podAnnotations:
-      prometheus.io/scrape: "true"
-      prometheus.io/port: "8080"
-    # Common pod labels
+      prometheus.io/port: '8080'
+      prometheus.io/scrape: 'true'
     podLabels:
-      app.kubernetes.io/component: "fabric-x"
-      app.kubernetes.io/part-of: "orderergroup"
-    # Common volumes
+      app.kubernetes.io/component: fabric-x
+      app.kubernetes.io/part-of: orderergroup
+    replicas: 1
+    securityContext:
+      readOnlyRootFilesystem: true
+      runAsGroup: 1000
+      runAsUser: 1000
+    storage:
+      accessMode: ReadWriteOnce
+      size: 10Gi
+      storageClass: fast-ssd
+    tolerations:
+      - effect: NoSchedule
+        key: node-role.kubernetes.io/master
+        operator: Exists
+    volumeMounts:
+      - mountPath: /etc/fabric-x/config
+        name: shared-config
+        readOnly: true
+      - mountPath: /etc/fabric-x/certs
+        name: shared-certs
+        readOnly: true
     volumes:
-      - name: "shared-config"
+      - name: shared-config
         volumeSource:
           configMap:
-            name: "fabric-x-config"
-      - name: "shared-certs"
+            name: fabric-x-config
+      - name: shared-certs
         volumeSource:
           secret:
-            secretName: "fabric-x-certs"
-    # Common volume mounts
-    volumeMounts:
-      - name: "shared-config"
-        mountPath: "/etc/fabric-x/config"
-        readOnly: true
-      - name: "shared-certs"
-        mountPath: "/etc/fabric-x/certs"
-        readOnly: true
-    # Common image pull secrets
-    imagePullSecrets:
-      - name: "fabric-x-registry"
-    # Common tolerations
-    tolerations:
-      - key: "node-role.kubernetes.io/master"
-        operator: "Exists"
-        effect: "NoSchedule"
-  
-  # Genesis block configuration
-  genesis:
-    secretName: 'fabricx-genesis'
-    secretKey: 'genesis.block'
-    secretNamespace: 'default'
-  
-  # Global enrollment configuration (inherited by components)
-  enrollment:
-    sign:
-      cahost: 'ca.org1.localho.st'
-      caport: 7054
-      catls:
-        secretRef:
-          name: 'org1-ca'
-          key: 'ca-cert.pem'
-          namespace: 'default'
-      enrollid: 'admin'
-      enrollsecret: 'adminpw'
-    tls:
-      cahost: 'ca.org1.localho.st'
-      caport: 7054
-      catls:
-        secretRef:
-          name: 'org1-ca'
-          key: 'ca-cert.pem'
-          namespace: 'default'
-      enrollid: 'admin'
-      enrollsecret: 'adminpw'
-  
-  # Component-specific configurations
+            secretName: fabric-x-certs
   components:
-    # Consenter configuration
-    consenter:
-      replicas: 1
-      ingress:
-        istio:
-          hosts:
-            - 'consenter-org1.localho.st'
-          port: 443
-          ingressGateway: 'istio-ingressgateway'
-      endpoints:
-        - 'consenter-org1.localho.st:7050'
-      env:
-        - name: CONSENTER_TYPE
-          value: "raft"
-        - name: CONSENTER_BATCH_SIZE
-          value: "500"
-      # Component-specific certificates (optional - will inherit from global enrollment)
+    assembler:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: assembler
+                topologyKey: kubernetes.io/hostname
+              weight: 100
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: test-ca2.default
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
-            key: 'ca-cert.pem'
-            namespace: 'default'
-        enrollid: 'admin'
-        enrollsecret: 'adminpw'
-      # Component-specific pod annotations
-      podAnnotations:
-        fabric-x/consenter-type: "raft"
-        fabric-x/consenter-batch-size: "500"
-      # Component-specific volumes
-      volumes:
-        - name: "consenter-data"
-          volumeSource:
-            persistentVolumeClaim:
-              claimName: "consenter-pvc"
-      # Component-specific volume mounts
-      volumeMounts:
-        - name: "consenter-data"
-          mountPath: "/var/fabric-x/consenter"
-      # Component-specific affinity
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: orderer
+        enrollsecret: ordererpw
+      env:
+        - name: ASSEMBLER_MAX_MESSAGE_COUNT
+          value: '500'
+      ingress:
+        istio:
+          hosts:
+            - assembler-org1.localho.st
+          ingressGateway: istio-ingressgateway
+          port: 443
+      replicas: 1
+    batchers:
+      - shardID: 1
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: orderer
+          enrollsecret: ordererpw
+        env:
+          - name: BATCHER_TIMEOUT
+            value: 2s
+          - name: BATCHER_PREFERRED_MAX_BYTES
+            value: '2097152'
+        ingress:
+          istio:
+            hosts:
+              - batcher-1-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podLabels:
+          fabric-x/batcher-type: high-throughput
+          fabric-x/shard-id: '1'
+        replicas: 1
+        tolerations:
+          - effect: NoSchedule
+            key: dedicated
+            operator: Equal
+            value: batcher
+        volumeMounts:
+          - name: batcher-1-store
+            mountPath: /orderergroup-sample/batcher-1/store
+        volumes:
+          - name: batcher-1-store
+            volumeSource:
+              persistentVolumeClaim:
+                claimName: batcher-1-store-pvc
+      - shardID: 2
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: orderer
+          enrollsecret: ordererpw
+        env:
+          - name: BATCHER_TIMEOUT
+            value: 2s
+          - name: BATCHER_PREFERRED_MAX_BYTES
+            value: '2097152'
+        ingress:
+          istio:
+            hosts:
+              - batcher-2-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podLabels:
+          fabric-x/batcher-type: high-throughput
+          fabric-x/shard-id: '2'
+        replicas: 1
+        tolerations:
+          - effect: NoSchedule
+            key: dedicated
+            operator: Equal
+            value: batcher
+        volumeMounts:
+          - name: batcher-2-store
+            mountPath: /orderergroup-sample/batcher-2/store
+        volumes:
+          - name: batcher-2-store
+            volumeSource:
+              persistentVolumeClaim:
+                claimName: batcher-2-store-pvc
+    consenter:
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: "node-role.kubernetes.io/worker"
-                    operator: "Exists"
-    
-    # Batcher configuration (inherits common settings, overrides replicas)
-    batcher:
-      replicas: 2
-      ingress:
-        istio:
-          hosts:
-            - 'batcher-org1.localho.st'
-          port: 443
-          ingressGateway: 'istio-ingressgateway'
-      env:
-        - name: BATCHER_TIMEOUT
-          value: "2s"
-        - name: BATCHER_PREFERRED_MAX_BYTES
-          value: "2097152"
-      # Component-specific certificates (optional - will inherit from global enrollment)
+                  - key: node-role.kubernetes.io/worker
+                    operator: Exists
       certificates:
-        cahost: 'ca.org1.localho.st'
+        cahost: test-ca2.default
         caport: 7054
         catls:
           secretRef:
-            name: 'org1-ca'
-            key: 'ca-cert.pem'
-            namespace: 'default'
-        enrollid: 'admin'
-        enrollsecret: 'adminpw'
-      # Component-specific pod labels
-      podLabels:
-        fabric-x/batcher-type: "high-throughput"
-      # Component-specific tolerations
-      tolerations:
-        - key: "dedicated"
-          operator: "Equal"
-          value: "batcher"
-          effect: "NoSchedule"
-    
-    # Assembler configuration (inherits common settings)
-    assembler:
-      replicas: 1
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: orderer
+        enrollsecret: ordererpw
+      endpoints:
+        - consenter-org1.localho.st:7050
+      env:
+        - name: CONSENTER_TYPE
+          value: raft
+        - name: CONSENTER_BATCH_SIZE
+          value: '500'
       ingress:
         istio:
           hosts:
-            - 'assembler-org1.localho.st'
+            - consenter-org1.localho.st
+          ingressGateway: istio-ingressgateway
           port: 443
-          ingressGateway: 'istio-ingressgateway'
-      env:
-        - name: ASSEMBLER_MAX_MESSAGE_COUNT
-          value: "500"
-      # Component-specific certificates (optional - will inherit from global enrollment)
-      certificates:
-        cahost: 'ca.org1.localho.st'
-        caport: 7054
-        catls:
-          secretRef:
-            name: 'org1-ca'
-            key: 'ca-cert.pem'
-            namespace: 'default'
-        enrollid: 'admin'
-        enrollsecret: 'adminpw'
-      # Component-specific affinity
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/component: "assembler"
-                topologyKey: "kubernetes.io/hostname"
-    
-    # Router configuration (inherits common settings)
+      podAnnotations:
+        fabric-x/consenter-batch-size: '500'
+        fabric-x/consenter-type: raft
+      replicas: 4
+      volumeMounts:
+        - mountPath: /var/fabric-x/consenter
+          name: consenter-data
+      volumes:
+        - name: consenter-data
+          volumeSource:
+            persistentVolumeClaim:
+              claimName: consenter-pvc
     router:
-      replicas: 1
-      ingress:
-        istio:
-          hosts:
-            - 'router-org1.localho.st'
-          port: 443
-          ingressGateway: 'istio-ingressgateway'
+      certificates:
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: orderer
+        enrollsecret: ordererpw
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
-          value: "1000"
-      # Component-specific certificates (optional - will inherit from global enrollment)
-      certificates:
-        cahost: 'ca.org1.localho.st'
-        caport: 7054
-        catls:
-          secretRef:
-            name: 'org1-ca'
-            key: 'ca-cert.pem'
-            namespace: 'default'
-        enrollid: 'admin'
-        enrollsecret: 'adminpw'
-      # Component-specific image pull secrets
+          value: '1000'
       imagePullSecrets:
-        - name: "router-registry"
-        - name: "fabric-x-registry"
-      # Component-specific volumes
+        - name: router-registry
+        - name: fabric-x-registry
+      ingress:
+        istio:
+          hosts:
+            - router-org1.localho.st
+          ingressGateway: istio-ingressgateway
+          port: 443
+      replicas: 1
       volumes:
-        - name: "router-cache"
+        - name: router-cache
           volumeSource:
             emptyDir:
-              medium: "Memory"
-              sizeLimit: "1Gi"
+              medium: Memory
+              sizeLimit: 1Gi
+  enrollment:
+    sign:
+      cahost: test-ca2.default
+      caport: 7054
+      catls:
+        secretRef:
+          key: tls.crt
+          name: test-ca2-tls-crypto
+          namespace: default
+      enrollid: orderer
+      enrollsecret: ordererpw
+    tls:
+      cahost: test-ca2.default
+      caport: 7054
+      catls:
+        secretRef:
+          key: tls.crt
+          name: test-ca2-tls-crypto
+          namespace: default
+      enrollid: orderer
+      enrollsecret: ordererpw
+  genesis:
+    secretKey: genesis.block
+    secretName: fabricx-shared-genesis
+    secretNamespace: default

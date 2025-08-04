@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/pem"
 	"math/big"
 	"testing"
@@ -17,7 +16,10 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 // generateTestCertificates creates valid test certificates using Go's crypto library
@@ -106,70 +108,158 @@ func generateTestCertificates(t *testing.T) ([]byte, []byte, []byte, []byte) {
 	adminCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: adminCertBytes})
 	peerCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: peerCertBytes})
 
-	// Encode to base64 for external orgs
-	caCertBase64 := base64.StdEncoding.EncodeToString(caCertPEM)
-	tlsCACertBase64 := base64.StdEncoding.EncodeToString(tlsCACertPEM)
-	adminCertBase64 := base64.StdEncoding.EncodeToString(adminCertPEM)
-	peerCertBase64 := base64.StdEncoding.EncodeToString(peerCertPEM)
-
-	return []byte(caCertBase64), []byte(tlsCACertBase64), []byte(adminCertBase64), []byte(peerCertBase64)
+	return caCertPEM, tlsCACertPEM, adminCertPEM, peerCertPEM
 }
 
 func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
-	logger := logrus.New()
-	service := NewSharedConfigService(logger)
+	// Setup scheme
+	err := v1alpha1.AddToScheme(scheme.Scheme)
+	require.NoError(t, err)
 
 	// Generate test certificates
-	caCert, tlsCACert, adminCert, peerCert := generateTestCertificates(t)
+	ca1Cert, tls1Cert, admin1Cert, _ := generateTestCertificates(t)
+	ca2Cert, tls2Cert, admin2Cert, _ := generateTestCertificates(t)
+	ca3Cert, tls3Cert, admin3Cert, _ := generateTestCertificates(t)
+	ca4Cert, tls4Cert, admin4Cert, _ := generateTestCertificates(t)
+
+	// Create mock secrets for certificate references
+	ca1Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca1",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":    ca1Cert,
+			"tls.crt":   tls1Cert,
+			"admin.crt": admin1Cert,
+		},
+	}
+
+	ca2Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca2",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":    ca2Cert,
+			"tls.crt":   tls2Cert,
+			"admin.crt": admin2Cert,
+		},
+	}
+
+	ca3Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca3",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":    ca3Cert,
+			"tls.crt":   tls3Cert,
+			"admin.crt": admin3Cert,
+		},
+	}
+
+	ca4Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca4",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":    ca4Cert,
+			"tls.crt":   tls4Cert,
+			"admin.crt": admin4Cert,
+		},
+	}
+
+	// Create fake client with secrets
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
+		Build()
+
+	logger := logrus.New()
+	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create test genesis with all organization types
 	genesis := &v1alpha1.Genesis{
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs: []v1alpha1.InternalOrganization{
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{
 				{
 					Name:  "Org1",
 					MSPID: "Org1MSP",
-					CAReference: v1alpha1.CAReference{
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
 						Name:      "ca1",
 						Namespace: "default",
+						Key:       "ca.crt",
 					},
-					AdminIdentity:   "admin",
-					OrdererIdentity: "orderer",
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca1",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
+					AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+						Name:      "ca1",
+						Namespace: "default",
+						Key:       "admin.crt",
+					},
 				},
-			},
-			ExternalOrgs: []v1alpha1.ExternalOrganization{
 				{
-					Name:        "Org2",
-					MSPID:       "Org2MSP",
-					SignCert:    string(caCert),
-					TLSCert:     string(tlsCACert),
-					AdminCert:   string(adminCert),
-					OrdererCert: string(peerCert),
+					Name:  "Org2",
+					MSPID: "Org2MSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca2",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca2",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
+					AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+						Name:      "ca2",
+						Namespace: "default",
+						Key:       "admin.crt",
+					},
 				},
 			},
 			ApplicationOrgs: []v1alpha1.ApplicationOrganization{
 				{
 					Name:  "AppOrg1",
 					MSPID: "AppOrg1MSP",
-					Type:  "internal",
-					Internal: &v1alpha1.InternalApplicationOrg{
-						CAReference: v1alpha1.CAReference{
-							Name:      "ca2",
-							Namespace: "default",
-						},
-						AdminIdentity: "admin",
-						PeerIdentity:  "peer",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca3",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca3",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
+					AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+						Name:      "ca3",
+						Namespace: "default",
+						Key:       "admin.crt",
 					},
 				},
 				{
 					Name:  "AppOrg2",
 					MSPID: "AppOrg2MSP",
-					Type:  "external",
-					External: &v1alpha1.ExternalApplicationOrg{
-						SignCACert: string(caCert),
-						TLSCACert:  string(tlsCACert),
-						AdminCert:  string(adminCert),
-						PeerCert:   string(peerCert),
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca4",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca4",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
+					AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+						Name:      "ca4",
+						Namespace: "default",
+						Key:       "admin.crt",
 					},
 				},
 			},
@@ -188,7 +278,7 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 	assert.NotNil(t, sharedConfig)
 
 	// Verify parties configuration
-	assert.Len(t, sharedConfig.PartiesConfig, 4) // 1 internal + 1 external + 2 application orgs
+	assert.Len(t, sharedConfig.PartiesConfig, 4) // 2 orderer + 2 application orgs
 
 	// Verify party IDs are assigned correctly
 	partyIDs := make(map[uint32]bool)
@@ -278,8 +368,15 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 }
 
 func TestSharedConfigService_GenerateSharedConfig_EmptyGenesis(t *testing.T) {
+	// Setup scheme
+	err := v1alpha1.AddToScheme(scheme.Scheme)
+	require.NoError(t, err)
+
+	// Create fake client
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+
 	logger := logrus.New()
-	service := NewSharedConfigService(logger)
+	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create empty genesis - this should fail due to minimum party requirement
 	genesis := &v1alpha1.Genesis{
@@ -292,145 +389,141 @@ func TestSharedConfigService_GenerateSharedConfig_EmptyGenesis(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := service.GenerateSharedConfig(ctx, req)
+	_, err = service.GenerateSharedConfig(ctx, req)
 
 	// Should fail because at least 1 party is required
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "at least 1 party is required")
 }
 
-func TestSharedConfigService_GenerateSharedConfig_InvalidOrgType(t *testing.T) {
-	logger := logrus.New()
-	service := NewSharedConfigService(logger)
-
-	// Create genesis with invalid organization type
-	genesis := &v1alpha1.Genesis{
-		Spec: v1alpha1.GenesisSpec{
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{
-				{
-					Name:  "InvalidOrg",
-					MSPID: "InvalidOrgMSP",
-					Type:  "invalid",
-				},
-			},
-		},
-	}
-
-	req := &SharedConfigRequest{
-		Genesis:   genesis,
-		ChannelID: "testchannel",
-	}
-
-	ctx := context.Background()
-	_, err := service.GenerateSharedConfig(ctx, req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create party config for application org InvalidOrg")
-}
-
-func TestSharedConfigService_GenerateSharedConfig_MissingInternalConfig(t *testing.T) {
-	logger := logrus.New()
-	service := NewSharedConfigService(logger)
-
-	// Create genesis with internal org type but missing internal config
-	genesis := &v1alpha1.Genesis{
-		Spec: v1alpha1.GenesisSpec{
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{
-				{
-					Name:  "InvalidOrg",
-					MSPID: "InvalidOrgMSP",
-					Type:  "internal",
-					// Missing Internal field
-				},
-			},
-		},
-	}
-
-	req := &SharedConfigRequest{
-		Genesis:   genesis,
-		ChannelID: "testchannel",
-	}
-
-	ctx := context.Background()
-	_, err := service.GenerateSharedConfig(ctx, req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "internal configuration is required")
-}
-
-func TestSharedConfigService_GenerateSharedConfig_MissingExternalConfig(t *testing.T) {
-	logger := logrus.New()
-	service := NewSharedConfigService(logger)
-
-	// Create genesis with external org type but missing external config
-	genesis := &v1alpha1.Genesis{
-		Spec: v1alpha1.GenesisSpec{
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{
-				{
-					Name:  "InvalidOrg",
-					MSPID: "InvalidOrgMSP",
-					Type:  "external",
-					// Missing External field
-				},
-			},
-		},
-	}
-
-	req := &SharedConfigRequest{
-		Genesis:   genesis,
-		ChannelID: "testchannel",
-	}
-
-	ctx := context.Background()
-	_, err := service.GenerateSharedConfig(ctx, req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create party config for application org InvalidOrg")
-}
-
 func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
-	logger := logrus.New()
-	service := NewSharedConfigService(logger)
+	// Setup scheme
+	err := v1alpha1.AddToScheme(scheme.Scheme)
+	require.NoError(t, err)
 
-	// Create a simple genesis with four external organizations to meet minimum requirements
+	// Generate test certificates for each organization
+	ca1Cert, tls1Cert, _, _ := generateTestCertificates(t)
+	ca2Cert, tls2Cert, _, _ := generateTestCertificates(t)
+	ca3Cert, tls3Cert, _, _ := generateTestCertificates(t)
+	ca4Cert, tls4Cert, _, _ := generateTestCertificates(t)
+
+	// Create mock secrets with generated certificates
+	ca1Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca1",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":  ca1Cert,
+			"tls.crt": tls1Cert,
+		},
+	}
+
+	ca2Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca2",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":  ca2Cert,
+			"tls.crt": tls2Cert,
+		},
+	}
+
+	ca3Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca3",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":  ca3Cert,
+			"tls.crt": tls3Cert,
+		},
+	}
+
+	ca4Secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ca4",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt":  ca4Cert,
+			"tls.crt": tls4Cert,
+		},
+	}
+
+	// Create fake client with secrets
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(scheme.Scheme).
+		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
+		Build()
+
+	logger := logrus.New()
+	service := NewSharedConfigService(logger, fakeClient)
+
+	// Create a simple genesis with four orderer organizations to meet minimum requirements
 	genesis := &v1alpha1.Genesis{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-genesis",
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			ExternalOrgs: []v1alpha1.ExternalOrganization{
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{
 				{
-					Name:        "TestOrg1",
-					MSPID:       "TestOrg1MSP",
-					SignCert:    "dGVzdC1jZXJ0",             // base64 encoded "test-cert"
-					TLSCert:     "dGVzdC10bHMtY2VydA==",     // base64 encoded "test-tls-cert"
-					AdminCert:   "dGVzdC1hZG1pbi1jZXJ0",     // base64 encoded "test-admin-cert"
-					OrdererCert: "dGVzdC1vcmRlcmVyLWNlcnQ=", // base64 encoded "test-orderer-cert"
+					Name:  "TestOrg1",
+					MSPID: "TestOrg1MSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca1",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca1",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
 				},
 				{
-					Name:        "TestOrg2",
-					MSPID:       "TestOrg2MSP",
-					SignCert:    "dGVzdC1jZXJ0",             // base64 encoded "test-cert"
-					TLSCert:     "dGVzdC10bHMtY2VydA==",     // base64 encoded "test-tls-cert"
-					AdminCert:   "dGVzdC1hZG1pbi1jZXJ0",     // base64 encoded "test-admin-cert"
-					OrdererCert: "dGVzdC1vcmRlcmVyLWNlcnQ=", // base64 encoded "test-orderer-cert"
+					Name:  "TestOrg2",
+					MSPID: "TestOrg2MSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca2",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca2",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
 				},
 				{
-					Name:        "TestOrg3",
-					MSPID:       "TestOrg3MSP",
-					SignCert:    "dGVzdC1jZXJ0",             // base64 encoded "test-cert"
-					TLSCert:     "dGVzdC10bHMtY2VydA==",     // base64 encoded "test-tls-cert"
-					AdminCert:   "dGVzdC1hZG1pbi1jZXJ0",     // base64 encoded "test-admin-cert"
-					OrdererCert: "dGVzdC1vcmRlcmVyLWNlcnQ=", // base64 encoded "test-orderer-cert"
+					Name:  "TestOrg3",
+					MSPID: "TestOrg3MSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca3",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca3",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
 				},
 				{
-					Name:        "TestOrg4",
-					MSPID:       "TestOrg4MSP",
-					SignCert:    "dGVzdC1jZXJ0",             // base64 encoded "test-cert"
-					TLSCert:     "dGVzdC10bHMtY2VydA==",     // base64 encoded "test-tls-cert"
-					AdminCert:   "dGVzdC1hZG1pbi1jZXJ0",     // base64 encoded "test-admin-cert"
-					OrdererCert: "dGVzdC1vcmRlcmVyLWNlcnQ=", // base64 encoded "test-orderer-cert"
+					Name:  "TestOrg4",
+					MSPID: "TestOrg4MSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca4",
+						Namespace: "default",
+						Key:       "ca.crt",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "ca4",
+						Namespace: "default",
+						Key:       "tls.crt",
+					},
 				},
 			},
 		},
@@ -453,8 +546,15 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 }
 
 func TestSharedConfigService_GenerateSharedConfig_Minimal(t *testing.T) {
+	// Setup scheme
+	err := v1alpha1.AddToScheme(scheme.Scheme)
+	require.NoError(t, err)
+
+	// Create fake client
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+
 	logger := logrus.New()
-	service := NewSharedConfigService(logger)
+	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create a minimal genesis with no organizations - this should fail due to minimum party requirement
 	genesis := &v1alpha1.Genesis{
@@ -473,7 +573,7 @@ func TestSharedConfigService_GenerateSharedConfig_Minimal(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_, err := service.GenerateSharedConfig(ctx, req)
+	_, err = service.GenerateSharedConfig(ctx, req)
 
 	// Should fail because at least 1 party is required
 	assert.Error(t, err)

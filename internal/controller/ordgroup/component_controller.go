@@ -48,7 +48,7 @@ func NewBaseComponentController(client client.Client, scheme *runtime.Scheme) Ba
 	return BaseComponentController{
 		Client:      client,
 		Scheme:      scheme,
-		CertService: certs.NewOrdererGroupCertService(client),
+		CertService: certs.NewOrdererGroupCertService(client, scheme),
 	}
 }
 

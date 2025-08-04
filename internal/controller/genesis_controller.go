@@ -19,6 +19,14 @@ package controller
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
+	"reflect"
+
+	"github.com/hyperledger/fabric-config/protolator"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +38,7 @@ import (
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/genesis"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -37,6 +46,38 @@ const (
 	// GenesisFinalizerName is the name of the finalizer used by Genesis
 	GenesisFinalizerName = "genesis.fabricx.kfsoft.tech/finalizer"
 )
+
+// decodeProto decodes a protobuf message and converts it to JSON
+func decodeProto(msgName string, input, output *os.File) error {
+	mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(msgName))
+	if err != nil {
+		return pkgerrors.Wrapf(err, "error encode input")
+	}
+
+	msgType := reflect.TypeOf(mt.Zero().Interface())
+
+	if msgType == nil {
+		return pkgerrors.Errorf("message of type %s unknown", msgType)
+	}
+	msg := reflect.New(msgType.Elem()).Interface().(proto.Message)
+
+	in, err := io.ReadAll(input)
+	if err != nil {
+		return pkgerrors.Wrapf(err, "error reading input")
+	}
+
+	err = proto.Unmarshal(in, msg)
+	if err != nil {
+		return pkgerrors.Wrapf(err, "error unmarshalling")
+	}
+
+	err = protolator.DeepMarshalJSON(output, msg)
+	if err != nil {
+		return pkgerrors.Wrapf(err, "error encoding output")
+	}
+
+	return nil
+}
 
 // GenesisReconciler reconciles a Genesis object
 type GenesisReconciler struct {
@@ -145,6 +186,14 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 		"namespace", genesisCR.Namespace,
 		"channelID", genesisCR.Spec.ChannelID)
 
+	// Validate Genesis spec before proceeding
+	if err := r.validateGenesisSpec(genesisCR); err != nil {
+		errorMsg := fmt.Sprintf("Invalid Genesis spec: %v", err)
+		log.Error(err, "Genesis spec validation failed")
+		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
+		return fmt.Errorf("genesis spec validation failed: %w", err)
+	}
+
 	// Create a logger for the Genesis service
 	logger := logrus.New()
 	logger.SetLevel(logrus.InfoLevel)
@@ -152,7 +201,7 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 	// Create Genesis service
 	genesisService := genesis.NewGenesisService(r.Client, logger, genesisCR.Spec.ChannelID)
 
-	// Create genesis block
+	// Create genesis block with additional error handling
 	genesisBlock, err := genesisService.CreateGenesisBlock(ctx, &genesis.GenesisRequest{
 		Genesis:   genesisCR,
 		ChannelID: genesisCR.Spec.ChannelID,
@@ -162,6 +211,21 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 		log.Error(err, "Failed to create genesis block")
 		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
 		return fmt.Errorf("failed to create genesis block: %w", err)
+	}
+
+	// Validate that genesis block is not nil or empty
+	if genesisBlock == nil {
+		errorMsg := "Generated genesis block is nil"
+		log.Error(nil, "Generated genesis block is nil")
+		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
+		return fmt.Errorf("generated genesis block is nil")
+	}
+
+	if len(genesisBlock) == 0 {
+		errorMsg := "Generated genesis block is empty"
+		log.Error(nil, "Generated genesis block is empty")
+		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
+		return fmt.Errorf("generated genesis block is empty")
 	}
 
 	// Store genesis block in Kubernetes Secret
@@ -179,6 +243,64 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 		"name", genesisCR.Name,
 		"namespace", genesisCR.Namespace,
 		"channelID", genesisCR.Spec.ChannelID)
+	return nil
+}
+
+// validateGenesisSpec validates the Genesis spec before processing
+func (r *GenesisReconciler) validateGenesisSpec(genesisCR *fabricxv1alpha1.Genesis) error {
+	// Check if ChannelID is specified
+	if genesisCR.Spec.ChannelID == "" {
+		return fmt.Errorf("channelID is required")
+	}
+
+	// Check if at least one organization is specified
+	if len(genesisCR.Spec.OrdererOrganizations) == 0 &&
+		len(genesisCR.Spec.ApplicationOrgs) == 0 {
+		return fmt.Errorf("at least one organization must be specified")
+	}
+
+	// Check if output configuration is specified
+	if genesisCR.Spec.Output.SecretName == "" {
+		return fmt.Errorf("output.secretName is required")
+	}
+
+	if genesisCR.Spec.Output.BlockKey == "" {
+		return fmt.Errorf("output.blockKey is required")
+	}
+
+	// Validate organizations
+	for i, org := range genesisCR.Spec.OrdererOrganizations {
+		if org.Name == "" {
+			return fmt.Errorf("organization %d: name is required", i)
+		}
+		if org.MSPID == "" {
+			return fmt.Errorf("organization %s: mspID is required", org.Name)
+		}
+	}
+
+	// Validate application organizations
+	for i, org := range genesisCR.Spec.ApplicationOrgs {
+		if org.Name == "" {
+			return fmt.Errorf("application organization %d: name is required", i)
+		}
+		if org.MSPID == "" {
+			return fmt.Errorf("application organization %s: mspID is required", org.Name)
+		}
+	}
+
+	// Validate orderer nodes
+	for i, node := range genesisCR.Spec.OrdererNodes {
+		if node.Host == "" {
+			return fmt.Errorf("orderer node %d: host is required", i)
+		}
+		if node.Port == 0 {
+			return fmt.Errorf("orderer node %d: port is required", i)
+		}
+		if node.MSPID == "" {
+			return fmt.Errorf("orderer node %d: mspId is required", i)
+		}
+	}
+
 	return nil
 }
 

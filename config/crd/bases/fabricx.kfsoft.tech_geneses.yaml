@@ -20,6 +20,9 @@ spec:
     - jsonPath: .status.status
       name: Status
       type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -53,51 +56,22 @@ spec:
                 items:
                   description: ApplicationOrganization represents an application organization
                   properties:
-                    external:
-                      description: External organization configuration (only if Type
-                        is "external")
+                    adminCertRef:
+                      description: Admin certificate reference (optional)
                       properties:
-                        adminCert:
-                          description: Admin certificate (base64 encoded)
+                        key:
+                          description: Secret key
                           type: string
-                        peerCert:
-                          description: Peer certificate (base64 encoded, optional)
+                        name:
+                          description: Secret name
                           type: string
-                        signCaCert:
-                          description: Signing CA certificate (base64 encoded)
-                          type: string
-                        tlsCaCert:
-                          description: TLS CA certificate (base64 encoded)
+                        namespace:
+                          description: Namespace of the secret
                           type: string
                       required:
-                      - signCaCert
-                      - tlsCaCert
-                      type: object
-                    internal:
-                      description: Internal organization configuration (only if Type
-                        is "internal")
-                      properties:
-                        adminIdentity:
-                          description: Admin identity name in the CA
-                          type: string
-                        caReference:
-                          description: Reference to the Fabric CA
-                          properties:
-                            name:
-                              description: Name of the CA resource
-                              type: string
-                            namespace:
-                              description: Namespace of the CA resource
-                              type: string
-                          required:
-                          - name
-                          - namespace
-                          type: object
-                        peerIdentity:
-                          description: Peer identity name in the CA (optional)
-                          type: string
-                      required:
-                      - caReference
+                      - key
+                      - name
+                      - namespace
                       type: object
                     mspId:
                       description: MSP ID for the organization
@@ -105,13 +79,45 @@ spec:
                     name:
                       description: Name of the organization
                       type: string
-                    type:
-                      description: 'Type of organization: "internal" or "external"'
-                      type: string
+                    signCaCertRef:
+                      description: Signing CA certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                    tlsCaCertRef:
+                      description: TLS CA certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
                   required:
                   - mspId
                   - name
-                  - type
+                  - signCaCertRef
+                  - tlsCaCertRef
                   type: object
                 type: array
               channelID:
@@ -130,58 +136,106 @@ spec:
                 - configMapName
                 - key
                 type: object
-              externalOrgs:
-                description: External organizations (with provided certificates)
+              ordererNodes:
+                description: Specific orderer nodes for consensus
                 items:
-                  description: ExternalOrganization represents an organization with
-                    externally provided certificates
+                  description: OrdererNode represents a specific orderer node for
+                    consensus
                   properties:
-                    adminCert:
-                      description: Admin certificate (base64 encoded)
-                      type: string
-                    mspId:
-                      description: MSP ID for the organization
-                      type: string
-                    name:
-                      description: Name of the organization
-                      type: string
-                    ordererCert:
-                      description: Orderer certificate (base64 encoded, if this is
-                        an orderer org)
-                      type: string
-                    signCert:
-                      description: Signing certificate (base64 encoded)
-                      type: string
-                    tlsCert:
-                      description: TLS certificate (base64 encoded)
-                      type: string
-                  required:
-                  - adminCert
-                  - mspId
-                  - name
-                  - signCert
-                  - tlsCert
-                  type: object
-                type: array
-              internalOrgs:
-                description: Internal organizations (using Fabric CA)
-                items:
-                  description: InternalOrganization represents an organization that
-                    uses Fabric CA
-                  properties:
-                    adminIdentity:
-                      description: Admin identity name in the CA
-                      type: string
-                    caReference:
-                      description: Reference to the Fabric CA
+                    clientTlsCertRef:
+                      description: Client TLS certificate reference
                       properties:
+                        key:
+                          description: Secret key
+                          type: string
                         name:
-                          description: Name of the CA resource
+                          description: Secret name
                           type: string
                         namespace:
-                          description: Namespace of the CA resource
+                          description: Namespace of the secret
                           type: string
                       required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                    host:
+                      description: Host address of the orderer node
+                      type: string
+                    id:
+                      description: Unique identifier for the orderer node
+                      type: integer
+                    identityRef:
+                      description: Identity certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                    mspId:
+                      description: MSP ID of the organization this orderer belongs
+                        to
+                      type: string
+                    port:
+                      description: Port number for the orderer node
+                      type: integer
+                    serverTlsCertRef:
+                      description: Server TLS certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                  required:
+                  - clientTlsCertRef
+                  - host
+                  - id
+                  - identityRef
+                  - mspId
+                  - port
+                  - serverTlsCertRef
+                  type: object
+                type: array
+              ordererOrganizations:
+                description: OrdererOrganizations (with certificates stored in secrets)
+                items:
+                  description: OrdererOrganization represents an organization with
+                    certificates stored in secrets
+                  properties:
+                    adminCertRef:
+                      description: Admin certificate reference (optional)
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
                       - name
                       - namespace
                       type: object
@@ -191,52 +245,45 @@ spec:
                     name:
                       description: Name of the organization
                       type: string
-                    ordererIdentity:
-                      description: Orderer identity name in the CA (if this is an
-                        orderer org)
-                      type: string
+                    signCaCertRef:
+                      description: Signing CA certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
+                    tlsCaCertRef:
+                      description: TLS CA certificate reference
+                      properties:
+                        key:
+                          description: Secret key
+                          type: string
+                        name:
+                          description: Secret name
+                          type: string
+                        namespace:
+                          description: Namespace of the secret
+                          type: string
+                      required:
+                      - key
+                      - name
+                      - namespace
+                      type: object
                   required:
-                  - caReference
                   - mspId
                   - name
-                  type: object
-                type: array
-              ordererNodes:
-                description: Specific orderer nodes for consensus
-                items:
-                  description: OrdererNode represents a specific orderer node for
-                    consensus
-                  properties:
-                    clientTlsCert:
-                      description: Client TLS certificate (base64 encoded)
-                      type: string
-                    host:
-                      description: Host address of the orderer node
-                      type: string
-                    id:
-                      description: Unique identifier for the orderer node
-                      type: integer
-                    identity:
-                      description: Identity certificate (base64 encoded)
-                      type: string
-                    mspId:
-                      description: MSP ID of the organization this orderer belongs
-                        to
-                      type: string
-                    port:
-                      description: Port number for the orderer node
-                      type: integer
-                    serverTlsCert:
-                      description: Server TLS certificate (base64 encoded)
-                      type: string
-                  required:
-                  - clientTlsCert
-                  - host
-                  - id
-                  - identity
-                  - mspId
-                  - port
-                  - serverTlsCert
+                  - signCaCertRef
+                  - tlsCaCertRef
                   type: object
                 type: array
               output:

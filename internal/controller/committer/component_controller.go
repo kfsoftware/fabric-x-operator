@@ -40,7 +40,7 @@ type ComponentController interface {
 type BaseComponentController struct {
 	Client      client.Client
 	Scheme      *runtime.Scheme
-	CertService *certs.CommitterCertService
+	CertService certs.CommitterCertServiceInterface
 }
 
 // NewBaseComponentController creates a new base component controller
@@ -48,7 +48,7 @@ func NewBaseComponentController(client client.Client, scheme *runtime.Scheme) Ba
 	return BaseComponentController{
 		Client:      client,
 		Scheme:      scheme,
-		CertService: certs.NewCommitterCertService(client),
+		CertService: certs.NewCommitterCertService(client, scheme),
 	}
 }
 

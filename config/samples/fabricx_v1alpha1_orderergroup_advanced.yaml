@@ -6,6 +6,12 @@ metadata:
 spec:
   bootstrapMode: 'deploy'
   
+  # MSP ID for this orderer group
+  mspid: 'OrdererOrg1'
+  
+  # Party ID for this orderer group
+  partyID: 2
+  
   # Global common configuration - applies to all components unless overridden
   common:
     replicas: 1
@@ -177,56 +183,106 @@ spec:
           value: "consenter"
           effect: "NoSchedule"
     
-    # Batcher - multiple replicas with load balancing
-    batcher:
-      replicas: 5  # Override common replicas
-      ingress:
-        istio:
-          hosts:
-            - 'batcher-org1.localho.st'
-          port: 443
-          ingressGateway: 'istio-ingressgateway'
-          tls:
-            enabled: true
-            secretName: 'batcher-tls'
-      env:
-        - name: BATCHER_TIMEOUT
-          value: "2s"
-        - name: BATCHER_PREFERRED_MAX_BYTES
-          value: "2097152"
-        - name: BATCHER_ABSOLUTE_MAX_BYTES
-          value: "1048576"
-        - name: BATCHER_MAX_MESSAGE_COUNT
-          value: "500"
-      resources:
-        cpuRequests: "500m"  # Use common CPU
-        memoryRequests: "1Gi"  # Use common memory
-      # Inherit common storage settings
-      # Component-specific pod labels
-      podLabels:
-        fabric-x/batcher-type: "high-throughput"
-        fabric-x/batcher-replicas: "5"
-      # Component-specific volumes
-      volumes:
-        - name: "batcher-cache"
-          volumeSource:
-            emptyDir:
-              medium: "Memory"
-              sizeLimit: "2Gi"
-      # Component-specific volume mounts
-      volumeMounts:
-        - name: "batcher-cache"
-          mountPath: "/var/fabric-x/batcher/cache"
-      # Component-specific affinity
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/component: "batcher"
-                topologyKey: "kubernetes.io/hostname"
+    # Batcher configurations - multiple batchers with different ShardIDs
+    batchers:
+      - shardID: 1
+        replicas: 2  # Multiple replicas for high availability
+        ingress:
+          istio:
+            hosts:
+              - 'batcher-1-org1.localho.st'
+            port: 443
+            ingressGateway: 'istio-ingressgateway'
+            tls:
+              enabled: true
+              secretName: 'batcher-1-tls'
+        env:
+          - name: BATCHER_TIMEOUT
+            value: "2s"
+          - name: BATCHER_PREFERRED_MAX_BYTES
+            value: "2097152"
+          - name: BATCHER_ABSOLUTE_MAX_BYTES
+            value: "1048576"
+          - name: BATCHER_MAX_MESSAGE_COUNT
+            value: "500"
+        resources:
+          cpuRequests: "500m"  # Use common CPU
+          memoryRequests: "1Gi"  # Use common memory
+        # Component-specific pod labels
+        podLabels:
+          fabric-x/batcher-type: "high-throughput"
+          fabric-x/batcher-replicas: "2"
+          fabric-x/shard-id: "1"
+        # Component-specific volumes
+        volumes:
+          - name: "batcher-cache"
+            volumeSource:
+              emptyDir:
+                medium: "Memory"
+                sizeLimit: "2Gi"
+        # Component-specific volume mounts
+        volumeMounts:
+          - name: "batcher-cache"
+            mountPath: "/var/fabric-x/batcher/cache"
+        # Component-specific affinity
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/component: "batcher"
+                  topologyKey: "kubernetes.io/hostname"
+      - shardID: 2
+        replicas: 2  # Multiple replicas for high availability
+        ingress:
+          istio:
+            hosts:
+              - 'batcher-2-org1.localho.st'
+            port: 443
+            ingressGateway: 'istio-ingressgateway'
+            tls:
+              enabled: true
+              secretName: 'batcher-2-tls'
+        env:
+          - name: BATCHER_TIMEOUT
+            value: "2s"
+          - name: BATCHER_PREFERRED_MAX_BYTES
+            value: "2097152"
+          - name: BATCHER_ABSOLUTE_MAX_BYTES
+            value: "1048576"
+          - name: BATCHER_MAX_MESSAGE_COUNT
+            value: "500"
+        resources:
+          cpuRequests: "500m"  # Use common CPU
+          memoryRequests: "1Gi"  # Use common memory
+        # Component-specific pod labels
+        podLabels:
+          fabric-x/batcher-type: "high-throughput"
+          fabric-x/batcher-replicas: "2"
+          fabric-x/shard-id: "2"
+        # Component-specific volumes
+        volumes:
+          - name: "batcher-cache"
+            volumeSource:
+              emptyDir:
+                medium: "Memory"
+                sizeLimit: "2Gi"
+        # Component-specific volume mounts
+        volumeMounts:
+          - name: "batcher-cache"
+            mountPath: "/var/fabric-x/batcher/cache"
+        # Component-specific affinity
+        affinity:
+          podAntiAffinity:
+            preferredDuringSchedulingIgnoredDuringExecution:
+              - weight: 100
+                podAffinityTerm:
+                  labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/component: "batcher"
+                  topologyKey: "kubernetes.io/hostname"
     
     # Assembler - single instance with high performance
     assembler:

@@ -69,9 +69,10 @@ func (s *MockOrdererGroupCertService) CleanupComponentCertificates(
 func (s *MockOrdererGroupCertService) GetCertificateSecretName(
 	ordererGroupName string,
 	componentName string,
+	replicaIndex int,
 	certType string,
 ) string {
-	return fmt.Sprintf("%s-%s-%s-cert", ordererGroupName, componentName, certType)
+	return fmt.Sprintf("%s-%s-%d-%s-cert", ordererGroupName, componentName, replicaIndex, certType)
 }
 
 func TestOrdererGroupReconciler_Reconcile(t *testing.T) {

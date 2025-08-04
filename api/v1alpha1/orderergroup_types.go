@@ -490,6 +490,9 @@ type OrdererGroupSpec struct {
 	// MSP ID
 	MSPID string `json:"mspid,omitempty"`
 
+	// Party ID for this orderer group
+	PartyID int32 `json:"partyID,omitempty"`
+
 	// Common configuration applied to all components
 	Common *CommonComponentConfig `json:"common,omitempty"`
 
@@ -499,7 +502,7 @@ type OrdererGroupSpec struct {
 	// Component-specific configurations
 	Components OrdererComponents `json:"components"`
 
-	// Global enrollment configuration (inherited by components)
+	// Global enrollment configuration (inherited by components)C
 	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
 }
 
@@ -512,13 +515,40 @@ type EnrollmentConfig struct {
 	TLS *CertificateConfig `json:"tls,omitempty"`
 }
 
+// BatcherInstance defines a single batcher instance configuration
+type BatcherInstance struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Shard ID for this batcher instance
+	ShardID int32 `json:"shardID"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific certificates
+	Certificates *CertificateConfig `json:"certificates,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+}
+
 // OrdererComponents defines configurations for each component
 type OrdererComponents struct {
 	// Consenter configuration
 	Consenter *ComponentConfig `json:"consenter,omitempty"`
 
-	// Batcher configuration
-	Batcher *ComponentConfig `json:"batcher,omitempty"`
+	// Batcher configurations - can have multiple batcher instances
+	Batchers []BatcherInstance `json:"batchers,omitempty"`
 
 	// Assembler configuration
 	Assembler *ComponentConfig `json:"assembler,omitempty"`

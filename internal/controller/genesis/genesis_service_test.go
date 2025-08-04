@@ -118,10 +118,135 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		},
 	}
 
-	// Create fake client with CA resources
+	// Create mock secrets for certificate references
+	ordererSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle3.CA,
+		},
+	}
+
+	ordererTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle3.TLS,
+		},
+	}
+
+	ordererAdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle3.Admin,
+		},
+	}
+
+	externalSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle3.CA,
+		},
+	}
+
+	externalTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle3.TLS,
+		},
+	}
+
+	externalAdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle3.Admin,
+		},
+	}
+
+	appOrg1SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle1.CA,
+		},
+	}
+
+	appOrg1TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle1.TLS,
+		},
+	}
+
+	appOrg1AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle1.Admin,
+		},
+	}
+
+	appOrg2SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle2.CA,
+		},
+	}
+
+	appOrg2TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle2.TLS,
+		},
+	}
+
+	appOrg2AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle2.Admin,
+		},
+	}
+
+	// Create fake client with CA resources and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ca1, ca2, ordererCA, appOrg1CA).
+		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
+		WithObjects(externalSignSecret, externalTLSSecret, externalAdminSecret).
+		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
+		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
 		Build()
 
 	logger := logrus.New()
@@ -134,10 +259,9 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs:    []v1alpha1.InternalOrganization{*ordererOrg},
-			ExternalOrgs:    []v1alpha1.ExternalOrganization{*externalOrg},
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:    ordererNodes,
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
+			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
+			OrdererNodes:         ordererNodes,
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -212,7 +336,7 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create orderer organization for the orderer nodes
-	ordererOrg, certBundle, err := GenerateOrdererOrganization("OrdererOrg", "ExternalOrg1MSP")
+	ordererOrg, certBundle, err := GenerateOrdererOrganization("OrdererOrg", "OrdererOrgMSP")
 	require.NoError(t, err)
 
 	ordererNodes, _, err := GenerateOrdererNodes("ExternalOrg1MSP", 1, "orderer", 7050)
@@ -235,10 +359,104 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		},
 	}
 
-	// Create fake client with CA resource
+	// Create mock secrets for certificate references
+	ordererSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	ordererTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	ordererAdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	external1SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg1-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	external1TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg1-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	external1AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg1-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	external2SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg2-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	external2TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg2-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	external2AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "ExternalOrg2-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ordererCA).
+		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
+		WithObjects(external1SignSecret, external1TLSSecret, external1AdminSecret).
+		WithObjects(external2SignSecret, external2TLSSecret, external2AdminSecret).
 		Build()
 
 	logger := logrus.New()
@@ -251,9 +469,8 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs: []v1alpha1.InternalOrganization{*ordererOrg}, // Add orderer org
-			ExternalOrgs: []v1alpha1.ExternalOrganization{*externalOrg1, *externalOrg2},
-			OrdererNodes: ordererNodes,
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg1, *externalOrg2},
+			OrdererNodes:         ordererNodes,
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -311,10 +528,104 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 		},
 	}
 
-	// Create fake client with CA resource
+	// Create mock secrets for certificate references
+	ordererSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	ordererTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	ordererAdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	appOrg1SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	appOrg1TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	appOrg1AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg1-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	appOrg2SignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	appOrg2TLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	appOrg2AdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "AppOrg2-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ordererCA).
+		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
+		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
+		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
 		Build()
 
 	logger := logrus.New()
@@ -327,9 +638,9 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs:    []v1alpha1.InternalOrganization{*ordererOrg}, // Add orderer org
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:    ordererNodes, // Add orderer nodes
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg}, // Add orderer org
+			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
+			OrdererNodes:         ordererNodes, // Add orderer nodes
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -348,50 +659,6 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, genesisBlock)
 	assert.NotEmpty(t, genesisBlock)
-}
-
-func TestGenesisService_CreateGenesisBlock_InvalidOrgType(t *testing.T) {
-	// Setup scheme
-	err := v1alpha1.AddToScheme(scheme.Scheme)
-	require.NoError(t, err)
-
-	// Create fake client
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-
-	logger := logrus.New()
-	service := NewGenesisService(fakeClient, logger, "testchannel")
-
-	// Create genesis with invalid organization type
-	genesis := &v1alpha1.Genesis{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "invalid-genesis",
-			Namespace: "default",
-		},
-		Spec: v1alpha1.GenesisSpec{
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{
-				{
-					Name:  "InvalidOrg",
-					MSPID: "InvalidOrgMSP",
-					Type:  "invalid",
-				},
-			},
-			Output: v1alpha1.GenesisOutput{
-				SecretName: "genesis-block-secret",
-				BlockKey:   "genesis.block",
-			},
-		},
-	}
-
-	req := &GenesisRequest{
-		Genesis:   genesis,
-		ChannelID: "testchannel",
-	}
-
-	ctx := context.Background()
-	_, err = service.CreateGenesisBlock(ctx, req)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid organization type")
 }
 
 func TestGenesisService_StoreGenesisBlock(t *testing.T) {
@@ -437,6 +704,7 @@ func TestGenesisService_StoreGenesisBlock(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, secret)
 	assert.Equal(t, genesisBlock, secret.Data["genesis.block"])
+	assert.Contains(t, secret.Data, "genesis.json")
 }
 
 func TestGenesisService_GetConfigTemplate(t *testing.T) {
@@ -512,10 +780,42 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		},
 	}
 
-	// Create fake client with CA resource
+	// Create mock secrets for certificate references
+	ordererSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-sign-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.CA,
+		},
+	}
+
+	ordererTLSSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-tls-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.crt": certBundle.TLS,
+		},
+	}
+
+	ordererAdminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "OrdererOrg-admin-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"admin.crt": certBundle.Admin,
+		},
+	}
+
+	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ca).
+		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		Build()
 
 	logger := logrus.New()
@@ -528,8 +828,8 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs: []v1alpha1.InternalOrganization{*ordererOrg},
-			OrdererNodes: ordererNodes, // Add orderer nodes
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
+			OrdererNodes:         ordererNodes, // Add orderer nodes
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",

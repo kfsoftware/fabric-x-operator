@@ -144,13 +144,12 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 
 	// Get merged configurations for each component
 	consenterConfig := r.getMergedComponentConfig(ordererGroup, "consenter", ordererGroup.Spec.Components.Consenter)
-	batcherConfig := r.getMergedComponentConfig(ordererGroup, "batcher", ordererGroup.Spec.Components.Batcher)
 	assemblerConfig := r.getMergedComponentConfig(ordererGroup, "assembler", ordererGroup.Spec.Components.Assembler)
 	routerConfig := r.getMergedComponentConfig(ordererGroup, "router", ordererGroup.Spec.Components.Router)
 
 	log.Info("Reconciling OrdererGroup components",
 		"consenter", consenterConfig.Replicas,
-		"batcher", batcherConfig.Replicas,
+		"batchers", len(ordererGroup.Spec.Components.Batchers),
 		"assembler", assemblerConfig.Replicas,
 		"router", routerConfig.Replicas)
 
@@ -162,11 +161,12 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 		return fmt.Errorf("failed to reconcile consenter: %w", err)
 	}
 
-	if err := r.BatcherController.Reconcile(ctx, ordererGroup, batcherConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to reconcile batcher: %v", err)
-		log.Error(err, "Failed to reconcile Batcher")
+	// Reconcile batchers (multiple batcher instances)
+	if err := r.BatcherController.Reconcile(ctx, ordererGroup, nil); err != nil {
+		errorMsg := fmt.Sprintf("Failed to reconcile batchers: %v", err)
+		log.Error(err, "Failed to reconcile Batchers")
 		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return fmt.Errorf("failed to reconcile batcher: %w", err)
+		return fmt.Errorf("failed to reconcile batchers: %w", err)
 	}
 
 	if err := r.AssemblerController.Reconcile(ctx, ordererGroup, assemblerConfig); err != nil {
@@ -215,7 +215,6 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 
 	// Get merged configurations for cleanup
 	consenterConfig := r.getMergedComponentConfig(ordererGroup, "consenter", ordererGroup.Spec.Components.Consenter)
-	batcherConfig := r.getMergedComponentConfig(ordererGroup, "batcher", ordererGroup.Spec.Components.Batcher)
 	assemblerConfig := r.getMergedComponentConfig(ordererGroup, "assembler", ordererGroup.Spec.Components.Assembler)
 	routerConfig := r.getMergedComponentConfig(ordererGroup, "router", ordererGroup.Spec.Components.Router)
 
@@ -227,11 +226,12 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 		return ctrl.Result{}, fmt.Errorf("failed to cleanup consenter: %w", err)
 	}
 
-	if err := r.BatcherController.Cleanup(ctx, ordererGroup, batcherConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to cleanup batcher: %v", err)
-		log.Error(err, "Failed to cleanup Batcher")
+	// Clean up batchers (multiple batcher instances)
+	if err := r.BatcherController.Cleanup(ctx, ordererGroup, nil); err != nil {
+		errorMsg := fmt.Sprintf("Failed to cleanup batchers: %v", err)
+		log.Error(err, "Failed to cleanup Batchers")
 		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup batcher: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to cleanup batchers: %w", err)
 	}
 
 	if err := r.AssemblerController.Cleanup(ctx, ordererGroup, assemblerConfig); err != nil {
@@ -432,7 +432,7 @@ func (r *OrdererGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.ConsenterController = ordgroup.NewConsenterController(r.Client, r.Scheme)
 
 	// Initialize certificate service
-	r.CertService = certs.NewOrdererGroupCertService(r.Client)
+	r.CertService = certs.NewOrdererGroupCertService(r.Client, r.Scheme)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.OrdererGroup{}).

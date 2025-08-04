@@ -20,52 +20,34 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// InternalOrganization represents an organization that uses Fabric CA
-type InternalOrganization struct {
-	// Name of the organization
+// SecretKeyNSSelector defines a secret key reference
+type SecretKeyNSSelector struct {
+	// Secret name
 	Name string `json:"name"`
 
-	// MSP ID for the organization
-	MSPID string `json:"mspId"`
+	// Secret key
+	Key string `json:"key"`
 
-	// Reference to the Fabric CA
-	CAReference CAReference `json:"caReference"`
-
-	// Admin identity name in the CA
-	AdminIdentity string `json:"adminIdentity,omitempty"`
-
-	// Orderer identity name in the CA (if this is an orderer org)
-	OrdererIdentity string `json:"ordererIdentity,omitempty"`
-}
-
-// CAReference represents a reference to a Fabric CA
-type CAReference struct {
-	// Name of the CA resource
-	Name string `json:"name"`
-
-	// Namespace of the CA resource
+	// Namespace of the secret
 	Namespace string `json:"namespace"`
 }
 
-// ExternalOrganization represents an organization with externally provided certificates
-type ExternalOrganization struct {
+// OrdererOrganization represents an organization with certificates stored in secrets
+type OrdererOrganization struct {
 	// Name of the organization
 	Name string `json:"name"`
 
 	// MSP ID for the organization
 	MSPID string `json:"mspId"`
 
-	// Signing certificate (base64 encoded)
-	SignCert string `json:"signCert"`
+	// Signing CA certificate reference
+	SignCACertRef SecretKeyNSSelector `json:"signCaCertRef"`
 
-	// TLS certificate (base64 encoded)
-	TLSCert string `json:"tlsCert"`
+	// TLS CA certificate reference
+	TLSCACertRef SecretKeyNSSelector `json:"tlsCaCertRef"`
 
-	// Admin certificate (base64 encoded)
-	AdminCert string `json:"adminCert"`
-
-	// Orderer certificate (base64 encoded, if this is an orderer org)
-	OrdererCert string `json:"ordererCert,omitempty"`
+	// Admin certificate reference (optional)
+	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 }
 
 // OrdererNode represents a specific orderer node for consensus
@@ -82,14 +64,14 @@ type OrdererNode struct {
 	// MSP ID of the organization this orderer belongs to
 	MSPID string `json:"mspId"`
 
-	// Client TLS certificate (base64 encoded)
-	ClientTLSCert string `json:"clientTlsCert"`
+	// Client TLS certificate reference
+	ClientTLSCertRef SecretKeyNSSelector `json:"clientTlsCertRef"`
 
-	// Server TLS certificate (base64 encoded)
-	ServerTLSCert string `json:"serverTlsCert"`
+	// Server TLS certificate reference
+	ServerTLSCertRef SecretKeyNSSelector `json:"serverTlsCertRef"`
 
-	// Identity certificate (base64 encoded)
-	Identity string `json:"identity"`
+	// Identity certificate reference
+	IdentityRef SecretKeyNSSelector `json:"identityRef"`
 }
 
 // ApplicationOrganization represents an application organization
@@ -100,41 +82,39 @@ type ApplicationOrganization struct {
 	// MSP ID for the organization
 	MSPID string `json:"mspId"`
 
-	// Type of organization: "internal" or "external"
-	Type string `json:"type"`
+	// Signing CA certificate reference
+	SignCACertRef SecretKeyNSSelector `json:"signCaCertRef"`
 
-	// Internal organization configuration (only if Type is "internal")
-	Internal *InternalApplicationOrg `json:"internal,omitempty"`
+	// TLS CA certificate reference
+	TLSCACertRef SecretKeyNSSelector `json:"tlsCaCertRef"`
 
-	// External organization configuration (only if Type is "external")
-	External *ExternalApplicationOrg `json:"external,omitempty"`
+	// Admin certificate reference (optional)
+	// +optional
+	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 }
 
 // InternalApplicationOrg represents an internal application organization
 type InternalApplicationOrg struct {
-	// Reference to the Fabric CA
-	CAReference CAReference `json:"caReference"`
+	// Signing CA certificate reference
+	SignCACertRef SecretKeyNSSelector `json:"signCaCertRef"`
 
-	// Admin identity name in the CA
-	AdminIdentity string `json:"adminIdentity,omitempty"`
+	// TLS CA certificate reference
+	TLSCACertRef SecretKeyNSSelector `json:"tlsCaCertRef"`
 
-	// Peer identity name in the CA (optional)
-	PeerIdentity string `json:"peerIdentity,omitempty"`
+	// Admin certificate reference (optional)
+	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 }
 
 // ExternalApplicationOrg represents an external application organization
 type ExternalApplicationOrg struct {
-	// Signing CA certificate (base64 encoded)
-	SignCACert string `json:"signCaCert"`
+	// Signing CA certificate reference
+	SignCACertRef SecretKeyNSSelector `json:"signCaCertRef"`
 
-	// TLS CA certificate (base64 encoded)
-	TLSCACert string `json:"tlsCaCert"`
+	// TLS CA certificate reference
+	TLSCACertRef SecretKeyNSSelector `json:"tlsCaCertRef"`
 
-	// Admin certificate (base64 encoded)
-	AdminCert string `json:"adminCert,omitempty"`
-
-	// Peer certificate (base64 encoded, optional)
-	PeerCert string `json:"peerCert,omitempty"`
+	// Admin certificate reference
+	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 }
 
 // GenesisSpec defines the desired state of Genesis.
@@ -146,11 +126,8 @@ type GenesisSpec struct {
 	// Config template reference
 	ConfigTemplate ConfigTemplateReference `json:"configTemplate"`
 
-	// Internal organizations (using Fabric CA)
-	InternalOrgs []InternalOrganization `json:"internalOrgs,omitempty"`
-
-	// External organizations (with provided certificates)
-	ExternalOrgs []ExternalOrganization `json:"externalOrgs,omitempty"`
+	// OrdererOrganizations (with certificates stored in secrets)
+	OrdererOrganizations []OrdererOrganization `json:"ordererOrganizations,omitempty"`
 
 	// Application organizations (can be internal or external)
 	ApplicationOrgs []ApplicationOrganization `json:"applicationOrgs,omitempty"`
@@ -196,6 +173,7 @@ type GenesisStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=genesis,singular=genesis
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Genesis is the Schema for the genesis API.

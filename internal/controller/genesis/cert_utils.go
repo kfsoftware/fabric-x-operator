@@ -22,7 +22,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -164,67 +163,83 @@ func GenerateApplicationOrganization(name, mspID, orgType string) (*v1alpha1.App
 	appOrg := &v1alpha1.ApplicationOrganization{
 		Name:  name,
 		MSPID: mspID,
-		Type:  orgType,
-	}
-
-	if orgType == "internal" {
-		appOrg.Internal = &v1alpha1.InternalApplicationOrg{
-			CAReference: v1alpha1.CAReference{
-				Name:      name + "-ca",
-				Namespace: "default",
-			},
-			AdminIdentity: "admin",
-			PeerIdentity:  "peer",
-		}
-	} else if orgType == "external" {
-		appOrg.External = &v1alpha1.ExternalApplicationOrg{
-			SignCACert: base64.StdEncoding.EncodeToString(certBundle.CA),
-			TLSCACert:  base64.StdEncoding.EncodeToString(certBundle.TLS),
-			AdminCert:  base64.StdEncoding.EncodeToString(certBundle.Admin),
-			PeerCert:   base64.StdEncoding.EncodeToString(certBundle.Peer),
-		}
+		SignCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-sign-ca-secret",
+			Namespace: "default",
+			Key:       "ca.crt",
+		},
+		TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-tls-ca-secret",
+			Namespace: "default",
+			Key:       "ca.crt",
+		},
+		AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-admin-secret",
+			Namespace: "default",
+			Key:       "admin.crt",
+		},
 	}
 
 	return appOrg, certBundle, nil
 }
 
 // GenerateOrdererOrganization creates an orderer organization with certificates
-func GenerateOrdererOrganization(name, mspID string) (*v1alpha1.InternalOrganization, *CertificateBundle, error) {
+func GenerateOrdererOrganization(name, mspID string) (*v1alpha1.OrdererOrganization, *CertificateBundle, error) {
 	config := DefaultOrganizationConfig(name, mspID)
 	certBundle, err := GenerateOrganizationCertificates(config)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ordererOrg := &v1alpha1.InternalOrganization{
+	ordererOrg := &v1alpha1.OrdererOrganization{
 		Name:  name,
 		MSPID: mspID,
-		CAReference: v1alpha1.CAReference{
-			Name:      name + "-ca",
+		SignCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-sign-ca-secret",
 			Namespace: "default",
+			Key:       "ca.crt",
 		},
-		AdminIdentity:   "admin",
-		OrdererIdentity: "orderer",
+		TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-tls-ca-secret",
+			Namespace: "default",
+			Key:       "ca.crt",
+		},
+		AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-admin-secret",
+			Namespace: "default",
+			Key:       "admin.crt",
+		},
 	}
 
 	return ordererOrg, certBundle, nil
 }
 
 // GenerateExternalOrganization creates an external organization with certificates
-func GenerateExternalOrganization(name, mspID string) (*v1alpha1.ExternalOrganization, *CertificateBundle, error) {
+func GenerateExternalOrganization(name, mspID string) (*v1alpha1.OrdererOrganization, *CertificateBundle, error) {
 	config := DefaultOrganizationConfig(name, mspID)
 	certBundle, err := GenerateOrganizationCertificates(config)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	externalOrg := &v1alpha1.ExternalOrganization{
-		Name:        name,
-		MSPID:       mspID,
-		SignCert:    base64.StdEncoding.EncodeToString(certBundle.CA),
-		TLSCert:     base64.StdEncoding.EncodeToString(certBundle.TLS),
-		AdminCert:   base64.StdEncoding.EncodeToString(certBundle.Admin),
-		OrdererCert: base64.StdEncoding.EncodeToString(certBundle.Orderer),
+	externalOrg := &v1alpha1.OrdererOrganization{
+		Name:  name,
+		MSPID: mspID,
+		SignCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-sign-ca-secret",
+			Namespace: "default",
+			Key:       "ca.crt",
+		},
+		TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-tls-ca-secret",
+			Namespace: "default",
+			Key:       "ca.crt",
+		},
+		AdminCertRef: &v1alpha1.SecretKeyNSSelector{
+			Name:      name + "-admin-secret",
+			Namespace: "default",
+			Key:       "admin.crt",
+		},
 	}
 
 	return externalOrg, certBundle, nil
@@ -241,13 +256,25 @@ func GenerateOrdererNodes(mspID string, count int, baseHost string, basePort int
 	var nodes []v1alpha1.OrdererNode
 	for i := 1; i <= count; i++ {
 		node := v1alpha1.OrdererNode{
-			ID:            i,
-			Host:          fmt.Sprintf("%s%d", baseHost, i),
-			Port:          basePort + i - 1,
-			MSPID:         mspID,
-			ClientTLSCert: base64.StdEncoding.EncodeToString(certBundle.TLS),
-			ServerTLSCert: base64.StdEncoding.EncodeToString(certBundle.TLS),
-			Identity:      base64.StdEncoding.EncodeToString(certBundle.Consenter),
+			ID:    i,
+			Host:  fmt.Sprintf("%s%d", baseHost, i),
+			Port:  basePort + i - 1,
+			MSPID: mspID,
+			ClientTLSCertRef: v1alpha1.SecretKeyNSSelector{
+				Name:      fmt.Sprintf("orderer%d-tls-secret", i),
+				Namespace: "default",
+				Key:       "tls.crt",
+			},
+			ServerTLSCertRef: v1alpha1.SecretKeyNSSelector{
+				Name:      fmt.Sprintf("orderer%d-tls-secret", i),
+				Namespace: "default",
+				Key:       "tls.crt",
+			},
+			IdentityRef: v1alpha1.SecretKeyNSSelector{
+				Name:      fmt.Sprintf("orderer%d-identity-secret", i),
+				Namespace: "default",
+				Key:       "identity.crt",
+			},
 		}
 		nodes = append(nodes, node)
 	}

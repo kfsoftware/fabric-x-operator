@@ -51,15 +51,11 @@ func TestGenerateApplicationOrganization_Internal(t *testing.T) {
 	// Verify organization structure
 	assert.Equal(t, "AppOrg1", appOrg.Name)
 	assert.Equal(t, "AppOrg1MSP", appOrg.MSPID)
-	assert.Equal(t, "internal", appOrg.Type)
-	assert.NotNil(t, appOrg.Internal)
-	assert.Nil(t, appOrg.External)
 
-	// Verify internal configuration
-	assert.Equal(t, "AppOrg1-ca", appOrg.Internal.CAReference.Name)
-	assert.Equal(t, "default", appOrg.Internal.CAReference.Namespace)
-	assert.Equal(t, "admin", appOrg.Internal.AdminIdentity)
-	assert.Equal(t, "peer", appOrg.Internal.PeerIdentity)
+	// Verify certificate references are set
+	assert.NotEmpty(t, appOrg.SignCACertRef)
+	assert.NotEmpty(t, appOrg.TLSCACertRef)
+	assert.NotNil(t, appOrg.AdminCertRef)
 
 	// Verify certificates are generated
 	assert.NotEmpty(t, certBundle.CA)
@@ -78,15 +74,11 @@ func TestGenerateApplicationOrganization_External(t *testing.T) {
 	// Verify organization structure
 	assert.Equal(t, "AppOrg2", appOrg.Name)
 	assert.Equal(t, "AppOrg2MSP", appOrg.MSPID)
-	assert.Equal(t, "external", appOrg.Type)
-	assert.Nil(t, appOrg.Internal)
-	assert.NotNil(t, appOrg.External)
 
-	// Verify external configuration
-	assert.NotEmpty(t, appOrg.External.SignCACert)
-	assert.NotEmpty(t, appOrg.External.TLSCACert)
-	assert.NotEmpty(t, appOrg.External.AdminCert)
-	assert.NotEmpty(t, appOrg.External.PeerCert)
+	// Verify certificate references are set
+	assert.NotEmpty(t, appOrg.SignCACertRef)
+	assert.NotEmpty(t, appOrg.TLSCACertRef)
+	assert.NotNil(t, appOrg.AdminCertRef)
 
 	// Verify certificates are generated
 	assert.NotEmpty(t, certBundle.CA)
@@ -105,10 +97,11 @@ func TestGenerateOrdererOrganization(t *testing.T) {
 	// Verify organization structure
 	assert.Equal(t, "OrdererOrg", ordererOrg.Name)
 	assert.Equal(t, "OrdererOrgMSP", ordererOrg.MSPID)
-	assert.Equal(t, "OrdererOrg-ca", ordererOrg.CAReference.Name)
-	assert.Equal(t, "default", ordererOrg.CAReference.Namespace)
-	assert.Equal(t, "admin", ordererOrg.AdminIdentity)
-	assert.Equal(t, "orderer", ordererOrg.OrdererIdentity)
+
+	// Verify certificate references are set
+	assert.NotEmpty(t, ordererOrg.SignCACertRef)
+	assert.NotEmpty(t, ordererOrg.TLSCACertRef)
+	assert.NotNil(t, ordererOrg.AdminCertRef)
 
 	// Verify certificates are generated
 	assert.NotEmpty(t, certBundle.CA)
@@ -128,10 +121,11 @@ func TestGenerateExternalOrganization(t *testing.T) {
 	// Verify organization structure
 	assert.Equal(t, "ExternalOrg", externalOrg.Name)
 	assert.Equal(t, "ExternalOrgMSP", externalOrg.MSPID)
-	assert.NotEmpty(t, externalOrg.SignCert)
-	assert.NotEmpty(t, externalOrg.TLSCert)
-	assert.NotEmpty(t, externalOrg.AdminCert)
-	assert.NotEmpty(t, externalOrg.OrdererCert)
+
+	// Verify certificate references are set
+	assert.NotEmpty(t, externalOrg.SignCACertRef)
+	assert.NotEmpty(t, externalOrg.TLSCACertRef)
+	assert.NotNil(t, externalOrg.AdminCertRef)
 
 	// Verify certificates are generated
 	assert.NotEmpty(t, certBundle.CA)
@@ -154,9 +148,9 @@ func TestGenerateOrdererNodes(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf("orderer%d", i+1), node.Host)
 		assert.Equal(t, 7050+i, node.Port)
 		assert.Equal(t, "OrdererOrgMSP", node.MSPID)
-		assert.NotEmpty(t, node.ClientTLSCert)
-		assert.NotEmpty(t, node.ServerTLSCert)
-		assert.NotEmpty(t, node.Identity)
+		assert.NotEmpty(t, node.ClientTLSCertRef)
+		assert.NotEmpty(t, node.ServerTLSCertRef)
+		assert.NotEmpty(t, node.IdentityRef)
 	}
 
 	// Verify certificates are generated
@@ -202,10 +196,9 @@ func TestGenerateCompleteGenesis(t *testing.T) {
 	// Create complete genesis
 	genesis := &v1alpha1.Genesis{
 		Spec: v1alpha1.GenesisSpec{
-			InternalOrgs:    []v1alpha1.InternalOrganization{*ordererOrg},
-			ExternalOrgs:    []v1alpha1.ExternalOrganization{*externalOrg},
-			ApplicationOrgs: []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:    ordererNodes,
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
+			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
+			OrdererNodes:         ordererNodes,
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -214,27 +207,24 @@ func TestGenerateCompleteGenesis(t *testing.T) {
 	}
 
 	// Verify genesis structure
-	assert.Len(t, genesis.Spec.InternalOrgs, 1)
-	assert.Len(t, genesis.Spec.ExternalOrgs, 1)
+	assert.Len(t, genesis.Spec.OrdererOrganizations, 2)
 	assert.Len(t, genesis.Spec.ApplicationOrgs, 2)
 	assert.Len(t, genesis.Spec.OrdererNodes, 2)
 
-	// Verify internal orgs
-	assert.Equal(t, "OrdererOrg", genesis.Spec.InternalOrgs[0].Name)
-	assert.Equal(t, "OrdererOrgMSP", genesis.Spec.InternalOrgs[0].MSPID)
+	// Verify orderer orgs
+	assert.Equal(t, "OrdererOrg", genesis.Spec.OrdererOrganizations[0].Name)
+	assert.Equal(t, "OrdererOrgMSP", genesis.Spec.OrdererOrganizations[0].MSPID)
 
 	// Verify external orgs
-	assert.Equal(t, "ExternalOrg", genesis.Spec.ExternalOrgs[0].Name)
-	assert.Equal(t, "ExternalOrgMSP", genesis.Spec.ExternalOrgs[0].MSPID)
+	assert.Equal(t, "ExternalOrg", genesis.Spec.OrdererOrganizations[1].Name)
+	assert.Equal(t, "ExternalOrgMSP", genesis.Spec.OrdererOrganizations[1].MSPID)
 
 	// Verify application orgs
 	assert.Equal(t, "AppOrg1", genesis.Spec.ApplicationOrgs[0].Name)
 	assert.Equal(t, "AppOrg1MSP", genesis.Spec.ApplicationOrgs[0].MSPID)
-	assert.Equal(t, "internal", genesis.Spec.ApplicationOrgs[0].Type)
 
 	assert.Equal(t, "AppOrg2", genesis.Spec.ApplicationOrgs[1].Name)
 	assert.Equal(t, "AppOrg2MSP", genesis.Spec.ApplicationOrgs[1].MSPID)
-	assert.Equal(t, "external", genesis.Spec.ApplicationOrgs[1].Type)
 
 	// Verify orderer nodes
 	assert.Equal(t, 1, genesis.Spec.OrdererNodes[0].ID)
