@@ -502,8 +502,13 @@ type OrdererGroupSpec struct {
 	// Component-specific configurations
 	Components OrdererComponents `json:"components"`
 
-	// Global enrollment configuration (inherited by components)C
+	// Global enrollment configuration (inherited by components)
 	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Manage child CRDs automatically (default: true)
+	// When true, OrdererGroup will create/manage child OrdererBatcher, OrdererAssembler, OrdererConsenter, OrdererRouter CRDs
+	// When false, child CRDs must be created manually
+	ManageChildCRDs *bool `json:"manageChildCRDs,omitempty"`
 }
 
 // EnrollmentConfig defines enrollment configuration
@@ -573,6 +578,39 @@ type OrdererGroupStatus struct {
 
 	// Overall phase
 	Phase string `json:"phase,omitempty"`
+
+	// Child CRD statuses
+	ChildCRDStatuses *ChildCRDStatuses `json:"childCRDStatuses,omitempty"`
+}
+
+// ChildCRDStatuses tracks the status of child CRDs
+type ChildCRDStatuses struct {
+	// Consenter status
+	Consenter *ChildCRDStatus `json:"consenter,omitempty"`
+
+	// Assembler status
+	Assembler *ChildCRDStatus `json:"assembler,omitempty"`
+
+	// Router status
+	Router *ChildCRDStatus `json:"router,omitempty"`
+
+	// Batcher statuses (multiple batcher instances)
+	Batchers []ChildCRDStatus `json:"batchers,omitempty"`
+}
+
+// ChildCRDStatus defines the status of a child CRD
+type ChildCRDStatus struct {
+	// Name of the child CRD
+	Name string `json:"name"`
+
+	// Status of the child CRD
+	Status DeploymentStatus `json:"status,omitempty"`
+
+	// Message describing the current state
+	Message string `json:"message,omitempty"`
+
+	// Last update time
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
 }
 
 // ComponentStatus defines the status of a component

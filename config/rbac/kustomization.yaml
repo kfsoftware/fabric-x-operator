@@ -22,6 +22,18 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the fabric-x-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- ordererassembler_admin_role.yaml
+- ordererassembler_editor_role.yaml
+- ordererassembler_viewer_role.yaml
+- ordererrouter_admin_role.yaml
+- ordererrouter_editor_role.yaml
+- ordererrouter_viewer_role.yaml
+- ordererconsenter_admin_role.yaml
+- ordererconsenter_editor_role.yaml
+- ordererconsenter_viewer_role.yaml
+- ordererbatcher_admin_role.yaml
+- ordererbatcher_editor_role.yaml
+- ordererbatcher_viewer_role.yaml
 - genesis_admin_role.yaml
 - genesis_editor_role.yaml
 - genesis_viewer_role.yaml

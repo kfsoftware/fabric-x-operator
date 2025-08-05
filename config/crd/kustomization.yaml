@@ -7,6 +7,10 @@ resources:
 - bases/fabricx.kfsoft.tech_endorsers.yaml
 - bases/fabricx.kfsoft.tech_cas.yaml
 - bases/fabricx.kfsoft.tech_geneses.yaml
+- bases/fabricx.kfsoft.tech_ordererbatchers.yaml
+- bases/fabricx.kfsoft.tech_ordererconsenters.yaml
+- bases/fabricx.kfsoft.tech_ordererrouters.yaml
+- bases/fabricx.kfsoft.tech_ordererassemblers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

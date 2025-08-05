@@ -5,12 +5,15 @@ go 1.24.3
 toolchain go1.24.5
 
 require (
+	github.com/hyperledger/fabric-config v0.3.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
 	github.com/sirupsen/logrus v1.9.3
+	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.33.0
-	k8s.io/apimachinery v0.33.0
+	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.0
+	k8s.io/code-generator v0.33.3
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
@@ -37,7 +40,6 @@ require (
 	github.com/hyperledger-labs/SmartBFT v0.0.0-20240916013553-852e5be5889b // indirect
 	github.com/hyperledger/aries-bbs-go v0.0.0-20240528084656-761671ea73bc // indirect
 	github.com/hyperledger/fabric-amcl v0.0.0-20230602173724-9e02669dceb2 // indirect
-	github.com/hyperledger/fabric-config v0.3.0 // indirect
 	github.com/hyperledger/fabric-lib-go v1.1.3-0.20240523144151-25edd1eaf5f5 // indirect
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.3 // indirect
 	github.com/jinzhu/copier v0.3.5 // indirect
@@ -58,7 +60,6 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/spf13/viper v1.20.0-alpha.6 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/sykesm/zap-logfmt v0.0.4 // indirect
 	github.com/weppos/publicsuffix-go v0.5.0 // indirect

@@ -27,8 +27,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
@@ -41,28 +39,15 @@ const (
 type OrdererGroupReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	// Component controllers
-	AssemblerController *ordgroup.AssemblerController
-	BatcherController   *ordgroup.BatcherController
-	RouterController    *ordgroup.RouterController
-	ConsenterController *ordgroup.ConsenterController
-
-	// Certificate service
-	CertService certs.OrdererGroupCertServiceInterface
 }
 
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=orderergroups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=orderergroups/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=orderergroups/finalizers,verbs=update
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
+// +kubebuilder:groups=fabricx.kfsoft.tech,resources=orderergroups/finalizers,verbs=update
+// +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=ordererbatchers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=ordererassemblers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=ordererconsenters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=ordererrouters,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -142,45 +127,12 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 		"name", ordererGroup.Name,
 		"namespace", ordererGroup.Namespace)
 
-	// Get merged configurations for each component
-	consenterConfig := r.getMergedComponentConfig(ordererGroup, "consenter", ordererGroup.Spec.Components.Consenter)
-	assemblerConfig := r.getMergedComponentConfig(ordererGroup, "assembler", ordererGroup.Spec.Components.Assembler)
-	routerConfig := r.getMergedComponentConfig(ordererGroup, "router", ordererGroup.Spec.Components.Router)
-
-	log.Info("Reconciling OrdererGroup components",
-		"consenter", consenterConfig.Replicas,
-		"batchers", len(ordererGroup.Spec.Components.Batchers),
-		"assembler", assemblerConfig.Replicas,
-		"router", routerConfig.Replicas)
-
-	// Reconcile each component (certificates are handled by individual component controllers)
-	if err := r.ConsenterController.Reconcile(ctx, ordererGroup, consenterConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to reconcile consenter: %v", err)
-		log.Error(err, "Failed to reconcile Consenter")
+	// Reconcile child CRDs
+	if err := r.reconcileChildCRDs(ctx, ordererGroup); err != nil {
+		errorMsg := fmt.Sprintf("Failed to reconcile child CRDs: %v", err)
+		log.Error(err, "Failed to reconcile child CRDs")
 		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return fmt.Errorf("failed to reconcile consenter: %w", err)
-	}
-
-	// Reconcile batchers (multiple batcher instances)
-	if err := r.BatcherController.Reconcile(ctx, ordererGroup, nil); err != nil {
-		errorMsg := fmt.Sprintf("Failed to reconcile batchers: %v", err)
-		log.Error(err, "Failed to reconcile Batchers")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return fmt.Errorf("failed to reconcile batchers: %w", err)
-	}
-
-	if err := r.AssemblerController.Reconcile(ctx, ordererGroup, assemblerConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to reconcile assembler: %v", err)
-		log.Error(err, "Failed to reconcile Assembler")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return fmt.Errorf("failed to reconcile assembler: %w", err)
-	}
-
-	if err := r.RouterController.Reconcile(ctx, ordererGroup, routerConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to reconcile router: %v", err)
-		log.Error(err, "Failed to reconcile Router")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return fmt.Errorf("failed to reconcile router: %w", err)
+		return fmt.Errorf("failed to reconcile child CRDs: %w", err)
 	}
 
 	// Update status to success
@@ -188,6 +140,477 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 
 	log.Info("OrdererGroup reconciliation completed successfully")
 	return nil
+}
+
+// reconcileChildCRDs creates or updates the child CRDs for the OrdererGroup
+func (r *OrdererGroupReconciler) reconcileChildCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	log := logf.FromContext(ctx)
+
+	// Reconcile Consenter
+	if ordererGroup.Spec.Components.Consenter != nil {
+		if err := r.reconcileConsenter(ctx, ordererGroup); err != nil {
+			return fmt.Errorf("failed to reconcile consenter: %w", err)
+		}
+	}
+
+	// Reconcile Assembler
+	if ordererGroup.Spec.Components.Assembler != nil {
+		if err := r.reconcileAssembler(ctx, ordererGroup); err != nil {
+			return fmt.Errorf("failed to reconcile assembler: %w", err)
+		}
+	}
+
+	// Reconcile Router
+	if ordererGroup.Spec.Components.Router != nil {
+		if err := r.reconcileRouter(ctx, ordererGroup); err != nil {
+			return fmt.Errorf("failed to reconcile router: %w", err)
+		}
+	}
+
+	// Reconcile Batchers (multiple batcher instances)
+	if len(ordererGroup.Spec.Components.Batchers) > 0 {
+		if err := r.reconcileBatchers(ctx, ordererGroup); err != nil {
+			return fmt.Errorf("failed to reconcile batchers: %w", err)
+		}
+	}
+
+	log.Info("Child CRDs reconciled successfully")
+	return nil
+}
+
+// reconcileConsenter creates or updates the OrdererConsenter CRD
+func (r *OrdererGroupReconciler) reconcileConsenter(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	log := logf.FromContext(ctx)
+
+	consenterName := fmt.Sprintf("%s-consenter", ordererGroup.Name)
+	consenter := &fabricxv1alpha1.OrdererConsenter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consenterName,
+			Namespace: ordererGroup.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: ordererGroup.APIVersion,
+					Kind:       ordererGroup.Kind,
+					Name:       ordererGroup.Name,
+					UID:        ordererGroup.UID,
+					Controller: &[]bool{true}[0],
+				},
+			},
+		},
+		Spec: fabricxv1alpha1.OrdererConsenterSpec{
+			MSPID:   ordererGroup.Spec.MSPID,
+			PartyID: ordererGroup.Spec.PartyID,
+		},
+	}
+
+	// Merge configuration from OrdererGroup
+	r.mergeConsenterConfig(&consenter.Spec, ordererGroup.Spec.Common, ordererGroup.Spec.Components.Consenter)
+
+	// Create or update the consenter
+	if err := r.Create(ctx, consenter); err != nil {
+		if client.IgnoreAlreadyExists(err) != nil {
+			return fmt.Errorf("failed to create consenter: %w", err)
+		}
+		// Update existing consenter
+		if err := r.Update(ctx, consenter); err != nil {
+			return fmt.Errorf("failed to update consenter: %w", err)
+		}
+	}
+
+	log.Info("Consenter reconciled successfully", "name", consenterName)
+	return nil
+}
+
+// reconcileAssembler creates or updates the OrdererAssembler CRD
+func (r *OrdererGroupReconciler) reconcileAssembler(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	log := logf.FromContext(ctx)
+
+	assemblerName := fmt.Sprintf("%s-assembler", ordererGroup.Name)
+	assembler := &fabricxv1alpha1.OrdererAssembler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      assemblerName,
+			Namespace: ordererGroup.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: ordererGroup.APIVersion,
+					Kind:       ordererGroup.Kind,
+					Name:       ordererGroup.Name,
+					UID:        ordererGroup.UID,
+					Controller: &[]bool{true}[0],
+				},
+			},
+		},
+		Spec: fabricxv1alpha1.OrdererAssemblerSpec{
+			MSPID:   ordererGroup.Spec.MSPID,
+			PartyID: ordererGroup.Spec.PartyID,
+		},
+	}
+
+	// Merge configuration from OrdererGroup
+	r.mergeAssemblerConfig(&assembler.Spec, ordererGroup.Spec.Common, ordererGroup.Spec.Components.Assembler)
+
+	// Create or update the assembler
+	if err := r.Create(ctx, assembler); err != nil {
+		if client.IgnoreAlreadyExists(err) != nil {
+			return fmt.Errorf("failed to create assembler: %w", err)
+		}
+		// Update existing assembler
+		if err := r.Update(ctx, assembler); err != nil {
+			return fmt.Errorf("failed to update assembler: %w", err)
+		}
+	}
+
+	log.Info("Assembler reconciled successfully", "name", assemblerName)
+	return nil
+}
+
+// reconcileRouter creates or updates the OrdererRouter CRD
+func (r *OrdererGroupReconciler) reconcileRouter(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	log := logf.FromContext(ctx)
+
+	routerName := fmt.Sprintf("%s-router", ordererGroup.Name)
+	router := &fabricxv1alpha1.OrdererRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      routerName,
+			Namespace: ordererGroup.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: ordererGroup.APIVersion,
+					Kind:       ordererGroup.Kind,
+					Name:       ordererGroup.Name,
+					UID:        ordererGroup.UID,
+					Controller: &[]bool{true}[0],
+				},
+			},
+		},
+		Spec: fabricxv1alpha1.OrdererRouterSpec{
+			MSPID:   ordererGroup.Spec.MSPID,
+			PartyID: ordererGroup.Spec.PartyID,
+		},
+	}
+
+	// Merge configuration from OrdererGroup
+	r.mergeRouterConfig(&router.Spec, ordererGroup.Spec.Common, ordererGroup.Spec.Components.Router)
+
+	// Create or update the router
+	if err := r.Create(ctx, router); err != nil {
+		if client.IgnoreAlreadyExists(err) != nil {
+			return fmt.Errorf("failed to create router: %w", err)
+		}
+		// Update existing router
+		if err := r.Update(ctx, router); err != nil {
+			return fmt.Errorf("failed to update router: %w", err)
+		}
+	}
+
+	log.Info("Router reconciled successfully", "name", routerName)
+	return nil
+}
+
+// reconcileBatchers creates or updates the OrdererBatcher CRDs for each batcher instance
+func (r *OrdererGroupReconciler) reconcileBatchers(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	log := logf.FromContext(ctx)
+
+	for i, batcherConfig := range ordererGroup.Spec.Components.Batchers {
+		batcherName := fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, i)
+		batcher := &fabricxv1alpha1.OrdererBatcher{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      batcherName,
+				Namespace: ordererGroup.Namespace,
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						APIVersion: ordererGroup.APIVersion,
+						Kind:       ordererGroup.Kind,
+						Name:       ordererGroup.Name,
+						UID:        ordererGroup.UID,
+						Controller: &[]bool{true}[0],
+					},
+				},
+			},
+			Spec: fabricxv1alpha1.OrdererBatcherSpec{
+				MSPID:   ordererGroup.Spec.MSPID,
+				PartyID: ordererGroup.Spec.PartyID,
+				ShardID: batcherConfig.ShardID,
+			},
+		}
+
+		// Merge configuration from OrdererGroup
+		r.mergeBatcherConfig(&batcher.Spec, ordererGroup.Spec.Common, &batcherConfig)
+
+		// Create or update the batcher
+		if err := r.Create(ctx, batcher); err != nil {
+			if client.IgnoreAlreadyExists(err) != nil {
+				return fmt.Errorf("failed to create batcher %d: %w", i, err)
+			}
+			// Update existing batcher
+			if err := r.Update(ctx, batcher); err != nil {
+				return fmt.Errorf("failed to update batcher %d: %w", i, err)
+			}
+		}
+
+		log.Info("Batcher reconciled successfully", "name", batcherName, "shardID", batcherConfig.ShardID)
+	}
+
+	return nil
+}
+
+// mergeComponentConfig merges common configuration with component-specific configuration
+func (r *OrdererGroupReconciler) mergeComponentConfig(spec interface{}, common *fabricxv1alpha1.CommonComponentConfig, component *fabricxv1alpha1.ComponentConfig) {
+	// This is a generic merge function that can be implemented based on the specific needs
+	// For now, we'll use reflection or type-specific merging
+	// The actual implementation would depend on the specific struct types
+}
+
+// mergeConsenterConfig merges common configuration with consenter-specific configuration
+func (r *OrdererGroupReconciler) mergeConsenterConfig(spec *fabricxv1alpha1.OrdererConsenterSpec, common *fabricxv1alpha1.CommonComponentConfig, component *fabricxv1alpha1.ComponentConfig) {
+	// Apply common configuration if specified
+	if common != nil {
+		if spec.Replicas == 0 {
+			spec.Replicas = common.Replicas
+		}
+		spec.Storage = common.Storage
+		spec.Resources = common.Resources
+		spec.SecurityContext = common.SecurityContext
+		spec.PodAnnotations = common.PodAnnotations
+		spec.PodLabels = common.PodLabels
+		spec.Volumes = common.Volumes
+		spec.Affinity = common.Affinity
+		spec.VolumeMounts = common.VolumeMounts
+		spec.ImagePullSecrets = common.ImagePullSecrets
+		spec.Tolerations = common.Tolerations
+	}
+
+	// Apply component-specific configuration
+	if component != nil {
+		if component.Replicas > 0 {
+			spec.Replicas = component.Replicas
+		}
+		if component.Storage != nil {
+			spec.Storage = component.Storage
+		}
+		if component.Resources != nil {
+			spec.Resources = component.Resources
+		}
+		if component.SecurityContext != nil {
+			spec.SecurityContext = component.SecurityContext
+		}
+		if component.PodAnnotations != nil {
+			spec.PodAnnotations = component.PodAnnotations
+		}
+		if component.PodLabels != nil {
+			spec.PodLabels = component.PodLabels
+		}
+		if component.Volumes != nil {
+			spec.Volumes = component.Volumes
+		}
+		if component.Affinity != nil {
+			spec.Affinity = component.Affinity
+		}
+		if component.VolumeMounts != nil {
+			spec.VolumeMounts = component.VolumeMounts
+		}
+		if component.ImagePullSecrets != nil {
+			spec.ImagePullSecrets = component.ImagePullSecrets
+		}
+		if component.Tolerations != nil {
+			spec.Tolerations = component.Tolerations
+		}
+		spec.Ingress = component.Ingress
+		spec.Certificates = component.Certificates
+		spec.Endpoints = component.Endpoints
+		spec.Env = component.Env
+		spec.Command = component.Command
+		spec.Args = component.Args
+	}
+}
+
+// mergeAssemblerConfig merges common configuration with assembler-specific configuration
+func (r *OrdererGroupReconciler) mergeAssemblerConfig(spec *fabricxv1alpha1.OrdererAssemblerSpec, common *fabricxv1alpha1.CommonComponentConfig, component *fabricxv1alpha1.ComponentConfig) {
+	// Apply common configuration if specified
+	if common != nil {
+		if spec.Replicas == 0 {
+			spec.Replicas = common.Replicas
+		}
+		spec.Storage = common.Storage
+		spec.Resources = common.Resources
+		spec.SecurityContext = common.SecurityContext
+		spec.PodAnnotations = common.PodAnnotations
+		spec.PodLabels = common.PodLabels
+		spec.Volumes = common.Volumes
+		spec.Affinity = common.Affinity
+		spec.VolumeMounts = common.VolumeMounts
+		spec.ImagePullSecrets = common.ImagePullSecrets
+		spec.Tolerations = common.Tolerations
+	}
+
+	// Apply component-specific configuration
+	if component != nil {
+		if component.Replicas > 0 {
+			spec.Replicas = component.Replicas
+		}
+		if component.Storage != nil {
+			spec.Storage = component.Storage
+		}
+		if component.Resources != nil {
+			spec.Resources = component.Resources
+		}
+		if component.SecurityContext != nil {
+			spec.SecurityContext = component.SecurityContext
+		}
+		if component.PodAnnotations != nil {
+			spec.PodAnnotations = component.PodAnnotations
+		}
+		if component.PodLabels != nil {
+			spec.PodLabels = component.PodLabels
+		}
+		if component.Volumes != nil {
+			spec.Volumes = component.Volumes
+		}
+		if component.Affinity != nil {
+			spec.Affinity = component.Affinity
+		}
+		if component.VolumeMounts != nil {
+			spec.VolumeMounts = component.VolumeMounts
+		}
+		if component.ImagePullSecrets != nil {
+			spec.ImagePullSecrets = component.ImagePullSecrets
+		}
+		if component.Tolerations != nil {
+			spec.Tolerations = component.Tolerations
+		}
+		spec.Ingress = component.Ingress
+		spec.Certificates = component.Certificates
+		spec.Endpoints = component.Endpoints
+		spec.Env = component.Env
+		spec.Command = component.Command
+		spec.Args = component.Args
+	}
+}
+
+// mergeRouterConfig merges common configuration with router-specific configuration
+func (r *OrdererGroupReconciler) mergeRouterConfig(spec *fabricxv1alpha1.OrdererRouterSpec, common *fabricxv1alpha1.CommonComponentConfig, component *fabricxv1alpha1.ComponentConfig) {
+	// Apply common configuration if specified
+	if common != nil {
+		if spec.Replicas == 0 {
+			spec.Replicas = common.Replicas
+		}
+		spec.Storage = common.Storage
+		spec.Resources = common.Resources
+		spec.SecurityContext = common.SecurityContext
+		spec.PodAnnotations = common.PodAnnotations
+		spec.PodLabels = common.PodLabels
+		spec.Volumes = common.Volumes
+		spec.Affinity = common.Affinity
+		spec.VolumeMounts = common.VolumeMounts
+		spec.ImagePullSecrets = common.ImagePullSecrets
+		spec.Tolerations = common.Tolerations
+	}
+
+	// Apply component-specific configuration
+	if component != nil {
+		if component.Replicas > 0 {
+			spec.Replicas = component.Replicas
+		}
+		if component.Storage != nil {
+			spec.Storage = component.Storage
+		}
+		if component.Resources != nil {
+			spec.Resources = component.Resources
+		}
+		if component.SecurityContext != nil {
+			spec.SecurityContext = component.SecurityContext
+		}
+		if component.PodAnnotations != nil {
+			spec.PodAnnotations = component.PodAnnotations
+		}
+		if component.PodLabels != nil {
+			spec.PodLabels = component.PodLabels
+		}
+		if component.Volumes != nil {
+			spec.Volumes = component.Volumes
+		}
+		if component.Affinity != nil {
+			spec.Affinity = component.Affinity
+		}
+		if component.VolumeMounts != nil {
+			spec.VolumeMounts = component.VolumeMounts
+		}
+		if component.ImagePullSecrets != nil {
+			spec.ImagePullSecrets = component.ImagePullSecrets
+		}
+		if component.Tolerations != nil {
+			spec.Tolerations = component.Tolerations
+		}
+		spec.Ingress = component.Ingress
+		spec.Certificates = component.Certificates
+		spec.Endpoints = component.Endpoints
+		spec.Env = component.Env
+		spec.Command = component.Command
+		spec.Args = component.Args
+	}
+}
+
+// mergeBatcherConfig merges common configuration with batcher-specific configuration
+func (r *OrdererGroupReconciler) mergeBatcherConfig(spec *fabricxv1alpha1.OrdererBatcherSpec, common *fabricxv1alpha1.CommonComponentConfig, batcher *fabricxv1alpha1.BatcherInstance) {
+	// Apply common configuration if specified
+	if common != nil {
+		if spec.Replicas == 0 {
+			spec.Replicas = common.Replicas
+		}
+		spec.Storage = common.Storage
+		spec.Resources = common.Resources
+		spec.SecurityContext = common.SecurityContext
+		spec.PodAnnotations = common.PodAnnotations
+		spec.PodLabels = common.PodLabels
+		spec.Volumes = common.Volumes
+		spec.Affinity = common.Affinity
+		spec.VolumeMounts = common.VolumeMounts
+		spec.ImagePullSecrets = common.ImagePullSecrets
+		spec.Tolerations = common.Tolerations
+	}
+
+	// Apply batcher-specific configuration
+	if batcher != nil {
+		if batcher.Replicas > 0 {
+			spec.Replicas = batcher.Replicas
+		}
+		if batcher.Storage != nil {
+			spec.Storage = batcher.Storage
+		}
+		if batcher.Resources != nil {
+			spec.Resources = batcher.Resources
+		}
+		if batcher.SecurityContext != nil {
+			spec.SecurityContext = batcher.SecurityContext
+		}
+		if batcher.PodAnnotations != nil {
+			spec.PodAnnotations = batcher.PodAnnotations
+		}
+		if batcher.PodLabels != nil {
+			spec.PodLabels = batcher.PodLabels
+		}
+		if batcher.Volumes != nil {
+			spec.Volumes = batcher.Volumes
+		}
+		if batcher.Affinity != nil {
+			spec.Affinity = batcher.Affinity
+		}
+		if batcher.VolumeMounts != nil {
+			spec.VolumeMounts = batcher.VolumeMounts
+		}
+		if batcher.ImagePullSecrets != nil {
+			spec.ImagePullSecrets = batcher.ImagePullSecrets
+		}
+		if batcher.Tolerations != nil {
+			spec.Tolerations = batcher.Tolerations
+		}
+		spec.Ingress = batcher.Ingress
+		spec.Certificates = batcher.Certificates
+		spec.Endpoints = batcher.Endpoints
+		spec.Env = batcher.Env
+		spec.Command = batcher.Command
+		spec.Args = batcher.Args
+	}
 }
 
 // handleDeletion handles the deletion of an OrdererGroup
@@ -213,40 +636,8 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 	// Set status to indicate deletion
 	r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.PendingStatus, "Deleting OrdererGroup components")
 
-	// Get merged configurations for cleanup
-	consenterConfig := r.getMergedComponentConfig(ordererGroup, "consenter", ordererGroup.Spec.Components.Consenter)
-	assemblerConfig := r.getMergedComponentConfig(ordererGroup, "assembler", ordererGroup.Spec.Components.Assembler)
-	routerConfig := r.getMergedComponentConfig(ordererGroup, "router", ordererGroup.Spec.Components.Router)
-
-	// Clean up each component (certificates are handled by individual component controllers)
-	if err := r.ConsenterController.Cleanup(ctx, ordererGroup, consenterConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to cleanup consenter: %v", err)
-		log.Error(err, "Failed to cleanup Consenter")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup consenter: %w", err)
-	}
-
-	// Clean up batchers (multiple batcher instances)
-	if err := r.BatcherController.Cleanup(ctx, ordererGroup, nil); err != nil {
-		errorMsg := fmt.Sprintf("Failed to cleanup batchers: %v", err)
-		log.Error(err, "Failed to cleanup Batchers")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup batchers: %w", err)
-	}
-
-	if err := r.AssemblerController.Cleanup(ctx, ordererGroup, assemblerConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to cleanup assembler: %v", err)
-		log.Error(err, "Failed to cleanup Assembler")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup assembler: %w", err)
-	}
-
-	if err := r.RouterController.Cleanup(ctx, ordererGroup, routerConfig); err != nil {
-		errorMsg := fmt.Sprintf("Failed to cleanup router: %v", err)
-		log.Error(err, "Failed to cleanup Router")
-		r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.FailedStatus, errorMsg)
-		return ctrl.Result{}, fmt.Errorf("failed to cleanup router: %w", err)
-	}
+	// Child CRDs will be automatically deleted due to owner references
+	// No need to manually delete them
 
 	// Remove finalizer
 	if err := r.removeFinalizer(ctx, ordererGroup); err != nil {
@@ -319,121 +710,8 @@ func (r *OrdererGroupReconciler) updateStatus(ctx context.Context, ordererGroup 
 	return nil
 }
 
-// getMergedComponentConfig merges common configuration with component-specific configuration
-func (r *OrdererGroupReconciler) getMergedComponentConfig(
-	ordererGroup *fabricxv1alpha1.OrdererGroup,
-	componentName string,
-	componentConfig *fabricxv1alpha1.ComponentConfig,
-) *fabricxv1alpha1.ComponentConfig {
-
-	// Start with common configuration
-	merged := &fabricxv1alpha1.ComponentConfig{
-		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-			Replicas: 1, // Default replicas
-		},
-	}
-
-	// Apply common configuration if specified
-	if ordererGroup.Spec.Common != nil {
-		merged.CommonComponentConfig = *ordererGroup.Spec.Common
-	}
-
-	// Apply component-specific configuration if specified
-	if componentConfig != nil {
-		// Merge replicas (component-specific overrides common)
-		if componentConfig.Replicas > 0 {
-			merged.Replicas = componentConfig.Replicas
-		}
-
-		// Merge storage (component-specific overrides common)
-		if componentConfig.Storage != nil {
-			merged.Storage = componentConfig.Storage
-		}
-
-		// Merge resources (component-specific overrides common)
-		if componentConfig.Resources != nil {
-			merged.Resources = componentConfig.Resources
-		}
-
-		// Merge security context (component-specific overrides common)
-		if componentConfig.SecurityContext != nil {
-			merged.SecurityContext = componentConfig.SecurityContext
-		}
-
-		// Merge pod annotations (component-specific overrides common)
-		if componentConfig.PodAnnotations != nil {
-			merged.PodAnnotations = componentConfig.PodAnnotations
-		}
-
-		// Merge pod labels (component-specific overrides common)
-		if componentConfig.PodLabels != nil {
-			merged.PodLabels = componentConfig.PodLabels
-		}
-
-		// Merge volumes (component-specific overrides common)
-		if componentConfig.Volumes != nil {
-			merged.Volumes = componentConfig.Volumes
-		}
-
-		// Merge affinity (component-specific overrides common)
-		if componentConfig.Affinity != nil {
-			merged.Affinity = componentConfig.Affinity
-		}
-
-		// Merge volume mounts (component-specific overrides common)
-		if componentConfig.VolumeMounts != nil {
-			merged.VolumeMounts = componentConfig.VolumeMounts
-		}
-
-		// Merge image pull secrets (component-specific overrides common)
-		if componentConfig.ImagePullSecrets != nil {
-			merged.ImagePullSecrets = componentConfig.ImagePullSecrets
-		}
-
-		// Merge tolerations (component-specific overrides common)
-		if componentConfig.Tolerations != nil {
-			merged.Tolerations = componentConfig.Tolerations
-		}
-
-		// Copy component-specific fields
-		merged.Ingress = componentConfig.Ingress
-		merged.Certificates = componentConfig.Certificates
-		merged.Endpoints = componentConfig.Endpoints
-		merged.Env = componentConfig.Env
-		merged.Command = componentConfig.Command
-		merged.Args = componentConfig.Args
-	}
-
-	// Merge enrollment configuration
-	if ordererGroup.Spec.Enrollment != nil {
-		if merged.Certificates == nil {
-			merged.Certificates = &fabricxv1alpha1.CertificateConfig{}
-		}
-
-		// Apply global enrollment settings if component doesn't have specific ones
-		if merged.Certificates.CAHost == "" && ordererGroup.Spec.Enrollment.Sign != nil {
-			merged.Certificates.CAHost = ordererGroup.Spec.Enrollment.Sign.CAHost
-			merged.Certificates.CAPort = ordererGroup.Spec.Enrollment.Sign.CAPort
-			merged.Certificates.CATLS = ordererGroup.Spec.Enrollment.Sign.CATLS
-			merged.Certificates.EnrollID = ordererGroup.Spec.Enrollment.Sign.EnrollID
-			merged.Certificates.EnrollSecret = ordererGroup.Spec.Enrollment.Sign.EnrollSecret
-		}
-	}
-
-	return merged
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrdererGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Initialize component controllers
-	r.AssemblerController = ordgroup.NewAssemblerController(r.Client, r.Scheme)
-	r.BatcherController = ordgroup.NewBatcherController(r.Client, r.Scheme)
-	r.RouterController = ordgroup.NewRouterController(r.Client, r.Scheme)
-	r.ConsenterController = ordgroup.NewConsenterController(r.Client, r.Scheme)
-
-	// Initialize certificate service
-	r.CertService = certs.NewOrdererGroupCertService(r.Client, r.Scheme)
-
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.OrdererGroup{}).
 		Named("orderergroup").

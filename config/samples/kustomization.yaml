@@ -5,4 +5,8 @@ resources:
 - fabricx_v1alpha1_endorser.yaml
 - fabricx_v1alpha1_ca.yaml
 - fabricx_v1alpha1_genesis.yaml
+- fabricx_v1alpha1_ordererbatcher.yaml
+- fabricx_v1alpha1_ordererconsenter.yaml
+- fabricx_v1alpha1_ordererrouter.yaml
+- fabricx_v1alpha1_ordererassembler.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

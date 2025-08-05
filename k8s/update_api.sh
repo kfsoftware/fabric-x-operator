@@ -1,34 +1,29 @@
-#!/usr/bin/env bash
-
+#!/bin/bash
 # set -o errexit
 # set -o nounset
 # set -o pipefail
 
-SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-echo "SCRIPT_ROOT is ${SCRIPT_ROOT}"
-ROOT_PKG=github.com/kfsoftware/fabric-x-operator
-
-# Grab code-generator version from go.sum
-CODEGEN_VERSION=$(grep 'k8s.io/code-generator' go.mod | awk '{print $2}' | sed 's/\/go.mod//g' | head -1)
-echo "CODEGEN_VERSION is ${CODEGEN_VERSION}"
 GOPATH=$(go env GOPATH)
-CODEGEN_PKG="${GOPATH}/pkg/mod/k8s.io/code-generator@${CODEGEN_VERSION}"
+SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+CODEGEN_PKG=${CODEGEN_PKG:-$(
+	cd "${SCRIPT_ROOT}"
+	ls -d -1 ${SCRIPT_ROOT}/../code-generator 2>/dev/null || echo $GOPATH/pkg/mod/k8s.io/code-generator@v0.33.3
+)}
+OUTDIR="${SCRIPT_ROOT}/pkg/generated"
 
-if [[ ! -d ${CODEGEN_PKG} ]]; then
-    echo "${CODEGEN_PKG} is missing. Running 'go mod download'."
-    go mod download
-fi
+echo "Generating code under ${OUTDIR} using ${CODEGEN_PKG} ..."
 
-echo ">> Using ${CODEGEN_PKG}"
+source "${CODEGEN_PKG}/kube_codegen.sh"
 
-source ${CODEGEN_PKG}/kube_codegen.sh
-
-kube::codegen::gen_helpers $SCRIPT_ROOT/pkg/apis \
-    --boilerplate "k8s/boilerplate.go.txt"
-
-kube::codegen::gen_client $SCRIPT_ROOT/pkg/apis \
-    --with-watch \
-    --with-applyconfig \
-    --output-dir "./pkg/client" \
-    --output-pkg "$ROOT_PKG/pkg/client" \
-    --boilerplate "k8s/boilerplate.go.txt" || echo "Failed"
+# kube::codegen::gen_helpers \
+#     --input-pkg-root github.com/fission/fission/api \
+#     --output-base "${OUTDIR}" \
+#     --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.txt"
+echo "Generating client code... for ${SCRIPT_ROOT}/api"
+kube::codegen::gen_client \
+	--with-watch \
+	--with-applyconfig \
+	--output-pkg github.com/kfsoftware/fabric-x-operator/pkg/generated \
+	--output-dir "${OUTDIR}" \
+	--boilerplate "${SCRIPT_ROOT}/k8s/boilerplate.go.txt" \
+	"${SCRIPT_ROOT}/api"
