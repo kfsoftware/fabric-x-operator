@@ -238,34 +238,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Genesis")
 		os.Exit(1)
 	}
-	if err := (&controller.OrdererBatcherReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OrdererBatcher")
-		os.Exit(1)
-	}
-	if err := (&controller.OrdererConsenterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OrdererConsenter")
-		os.Exit(1)
-	}
-	if err := (&controller.OrdererRouterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OrdererRouter")
-		os.Exit(1)
-	}
-	if err := (&controller.OrdererAssemblerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OrdererAssembler")
-		os.Exit(1)
-	}
+
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

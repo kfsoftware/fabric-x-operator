@@ -74,6 +74,7 @@ type CommitterStatus struct {
 	Phase string `json:"phase,omitempty"`
 }
 
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=committer,singular=committer

@@ -13,7 +13,6 @@ require (
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.0
-	k8s.io/code-generator v0.33.3
 	sigs.k8s.io/controller-runtime v0.21.0
 )
 
@@ -66,9 +65,12 @@ require (
 	github.com/zmap/zcrypto v0.0.0-20190729165852-9051775e6a2e // indirect
 	github.com/zmap/zlint v0.0.0-20190806154020-fd021b4cfbeb // indirect
 	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/mod v0.21.0 // indirect
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ldap.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	k8s.io/code-generator v0.33.3 // indirect
+	k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 

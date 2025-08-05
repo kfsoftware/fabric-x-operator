@@ -23,7 +23,6 @@ rules:
   - apps
   resources:
   - deployments
-  - statefulsets
   verbs:
   - create
   - delete
@@ -55,7 +54,6 @@ rules:
   - committers/finalizers
   - endorsers/finalizers
   - geneses/finalizers
-  - orderergroups/finalizers
   verbs:
   - update
 - apiGroups:

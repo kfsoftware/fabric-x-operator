@@ -3805,7 +3805,7 @@ spec:
                     type: object
                 type: object
               enrollment:
-                description: Global enrollment configuration (inherited by components)C
+                description: Global enrollment configuration (inherited by components)
                 properties:
                   sign:
                     description: Sign certificate configuration
@@ -3910,6 +3910,12 @@ spec:
                 - secretKey
                 - secretName
                 type: object
+              manageChildCRDs:
+                description: |-
+                  Manage child CRDs automatically (default: true)
+                  When true, OrdererGroup will create/manage child OrdererBatcher, OrdererAssembler, OrdererConsenter, OrdererRouter CRDs
+                  When false, child CRDs must be created manually
+                type: boolean
               mspid:
                 description: MSP ID
                 type: string
@@ -3924,6 +3930,89 @@ spec:
           status:
             description: OrdererGroupStatus defines the observed state of OrdererGroup.
             properties:
+              childCRDStatuses:
+                description: Child CRD statuses
+                properties:
+                  assembler:
+                    description: Assembler status
+                    properties:
+                      lastUpdateTime:
+                        description: Last update time
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message describing the current state
+                        type: string
+                      name:
+                        description: Name of the child CRD
+                        type: string
+                      status:
+                        description: Status of the child CRD
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  batchers:
+                    description: Batcher statuses (multiple batcher instances)
+                    items:
+                      description: ChildCRDStatus defines the status of a child CRD
+                      properties:
+                        lastUpdateTime:
+                          description: Last update time
+                          format: date-time
+                          type: string
+                        message:
+                          description: Message describing the current state
+                          type: string
+                        name:
+                          description: Name of the child CRD
+                          type: string
+                        status:
+                          description: Status of the child CRD
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  consenter:
+                    description: Consenter status
+                    properties:
+                      lastUpdateTime:
+                        description: Last update time
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message describing the current state
+                        type: string
+                      name:
+                        description: Name of the child CRD
+                        type: string
+                      status:
+                        description: Status of the child CRD
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  router:
+                    description: Router status
+                    properties:
+                      lastUpdateTime:
+                        description: Last update time
+                        format: date-time
+                        type: string
+                      message:
+                        description: Message describing the current state
+                        type: string
+                      name:
+                        description: Name of the child CRD
+                        type: string
+                      status:
+                        description: Status of the child CRD
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
               componentStatuses:
                 additionalProperties:
                   description: ComponentStatus defines the status of a component

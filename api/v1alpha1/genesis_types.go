@@ -169,6 +169,7 @@ type GenesisStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=genesis,singular=genesis

@@ -103,6 +103,8 @@ type OrdererConsenterStatus struct {
 	Phase string `json:"phase,omitempty"`
 }
 
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=ordererconsenter,singular=ordererconsenter

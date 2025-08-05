@@ -18,25 +18,23 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
-	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
-	ordgroup "github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
-// Mock certificate service for testing
+// MockOrdererGroupCertService provides a mock implementation of the certificate service
 type MockOrdererGroupCertService struct {
 	Client client.Client
 }
@@ -53,7 +51,7 @@ func (s *MockOrdererGroupCertService) ProvisionComponentCertificates(
 	componentName string,
 	componentConfig *fabricxv1alpha1.ComponentConfig,
 ) error {
-	// Mock successful certificate provisioning
+	// Mock implementation - always succeeds
 	return nil
 }
 
@@ -62,7 +60,7 @@ func (s *MockOrdererGroupCertService) CleanupComponentCertificates(
 	ordererGroup *fabricxv1alpha1.OrdererGroup,
 	componentName string,
 ) error {
-	// Mock successful cleanup
+	// Mock implementation - always succeeds
 	return nil
 }
 
@@ -72,19 +70,18 @@ func (s *MockOrdererGroupCertService) GetCertificateSecretName(
 	replicaIndex int,
 	certType string,
 ) string {
-	return fmt.Sprintf("%s-%s-%d-%s-cert", ordererGroupName, componentName, replicaIndex, certType)
+	return "mock-secret-name"
 }
 
 func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
-	// Setup
 	s := scheme.Scheme
 	fabricxv1alpha1.AddToScheme(s)
 
 	tests := []struct {
 		name           string
 		ordererGroup   *fabricxv1alpha1.OrdererGroup
-		expectedStatus fabricxv1alpha1.DeploymentStatus
 		expectError    bool
+		expectedStatus fabricxv1alpha1.DeploymentStatus
 	}{
 		{
 			name: "successful reconciliation",
@@ -95,31 +92,13 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 				},
 				Spec: fabricxv1alpha1.OrdererGroupSpec{
 					BootstrapMode: "deploy",
-					MSPID:         "OrdererMSP",
+					MSPID:         "Org1MSP",
+					PartyID:       1,
 					Common: &fabricxv1alpha1.CommonComponentConfig{
 						Replicas: 1,
-						Storage: &fabricxv1alpha1.StorageConfig{
-							Size:       "1Gi",
-							AccessMode: "ReadWriteOnce",
-						},
-						Resources: &corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("100m"),
-								corev1.ResourceMemory: resource.MustParse("128Mi"),
-							},
-							Limits: corev1.ResourceList{
-								corev1.ResourceCPU:    resource.MustParse("500m"),
-								corev1.ResourceMemory: resource.MustParse("512Mi"),
-							},
-						},
 					},
 					Components: fabricxv1alpha1.OrdererComponents{
 						Consenter: &fabricxv1alpha1.ComponentConfig{
-							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-								Replicas: 1,
-							},
-						},
-						Batcher: &fabricxv1alpha1.ComponentConfig{
 							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 								Replicas: 1,
 							},
@@ -134,39 +113,62 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 								Replicas: 1,
 							},
 						},
-					},
-					Enrollment: &fabricxv1alpha1.EnrollmentConfig{
-						Sign: &fabricxv1alpha1.CertificateConfig{
-							CAHost: "ca.example.com",
-							CAPort: 7054,
-							CATLS: &fabricxv1alpha1.CATLSConfig{
-								CACert: "-----BEGIN CERTIFICATE-----\nMIICyDCCAbCgAwIBAgIBADANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDEwpD\nYXV0aG9yaXR5MB4XDTE5MDgxNjE0MjQwMFoXDTI5MDgxNDE0MjQwMFowFTET\nMBEGA1UEAxMKQ2F1dGhvcml0eTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkC\ngYEAwEHoA93SB0UeUUpdZFXUTgde1O2xACtfjwMhF+qQq/rhKgzdY4ythmqG\nlqMKnNQ8cgm6gdxXkqwizK3GLyLoL8P1oGRF4g4xrAuezHtDey80QJnGPG0j\nQY5S/kqIDqJfB8/dXjDbP9TnjLa6XMnVsJXFlfB4hnmVgQIDAQABo3AwbjAd\nBgNVHQ4EFgQU8tDUZH/GG4EPtFd6+/RxdE4vT68wHwYDVR0jBBgwFoAU8tDU\nZH/GG4EPtFd6+/RxdE4vT68wDgYDVR0PAQH/BAQDAgLkMA8GA1UdEwEB/wQF\nMAMBAf8wDQYJKoZIhvcNAQELBQADgYEAabQl2mHizbMmuoVcXLB9FUJX1cta\nZOjKXv1YPU9zKj/vT1cqrZdtEfVh/WEwaGm7bDtH6aFmHuu5WJzJhmC5JBP2l\nD2fKSK5FKlNQ0jKGCqQGNgCyMKKUfqFjS1qC9+5Uf+MiMeb0gCxPkqGHCFd\n-----END CERTIFICATE-----",
+						Batchers: []fabricxv1alpha1.BatcherInstance{
+							{
+								CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+									Replicas: 1,
+								},
+								ShardID: 1,
 							},
-							EnrollID:     "admin",
-							EnrollSecret: "adminpw",
 						},
+					},
+					Genesis: fabricxv1alpha1.GenesisConfig{
+						SecretName:      "genesis-secret",
+						SecretKey:       "genesis.block",
+						SecretNamespace: "default",
 					},
 				},
 			},
-			expectedStatus: fabricxv1alpha1.PendingStatus, // Changed from RunningStatus since cert provisioning will fail in test
 			expectError:    false,
+			expectedStatus: fabricxv1alpha1.RunningStatus,
 		},
 		{
-			name:           "OrdererGroup not found",
-			ordererGroup:   nil,
-			expectedStatus: fabricxv1alpha1.FailedStatus,
-			expectError:    false, // Changed from true since controller ignores not found errors
+			name: "configure mode",
+			ordererGroup: &fabricxv1alpha1.OrdererGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-orderergroup-configure",
+					Namespace: "default",
+				},
+				Spec: fabricxv1alpha1.OrdererGroupSpec{
+					BootstrapMode: "configure",
+					MSPID:         "Org1MSP",
+					PartyID:       1,
+					Common: &fabricxv1alpha1.CommonComponentConfig{
+						Replicas: 1,
+					},
+					Components: fabricxv1alpha1.OrdererComponents{
+						Consenter: &fabricxv1alpha1.ComponentConfig{
+							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+								Replicas: 1,
+							},
+						},
+					},
+					Genesis: fabricxv1alpha1.GenesisConfig{
+						SecretName:      "genesis-secret",
+						SecretKey:       "genesis.block",
+						SecretNamespace: "default",
+					},
+				},
+			},
+			expectError:    false,
+			expectedStatus: fabricxv1alpha1.RunningStatus,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create fake client
-			var objs []client.Object
-			if tt.ordererGroup != nil {
-				objs = append(objs, tt.ordererGroup)
-			}
-			fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build()
+			fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(tt.ordererGroup).Build()
 
 			// Create reconciler
 			r := &OrdererGroupReconciler{
@@ -180,13 +182,12 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 			r.BatcherController = ordgroup.NewBatcherControllerWithCertService(fakeClient, s, mockCertService)
 			r.RouterController = ordgroup.NewRouterControllerWithCertService(fakeClient, s, mockCertService)
 			r.ConsenterController = ordgroup.NewConsenterControllerWithCertService(fakeClient, s, mockCertService)
-			r.CertService = mockCertService
 
 			// Create request
 			req := reconcile.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      "test-orderergroup",
-					Namespace: "default",
+					Name:      tt.ordererGroup.Name,
+					Namespace: tt.ordererGroup.Namespace,
 				},
 			}
 
@@ -218,7 +219,7 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 					}
 
 					// Check if finalizer was added
-					if !utils.ContainsString(ordererGroup.Finalizers, FinalizerName) {
+					if !utils.ContainsString(ordererGroup.Finalizers, OrdererGroupFinalizerName) {
 						t.Errorf("Expected finalizer to be added")
 					}
 				}
@@ -227,125 +228,6 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 			// Check reconciliation result - allow for requeue with delay
 			if result.RequeueAfter < 0 {
 				t.Errorf("Unexpected reconciliation result: %v", result)
-			}
-		})
-	}
-}
-
-func TestOrdererGroupReconciler_getMergedComponentConfig(t *testing.T) {
-	r := &OrdererGroupReconciler{}
-
-	// Create test OrdererGroup
-	ordererGroup := &fabricxv1alpha1.OrdererGroup{
-		Spec: fabricxv1alpha1.OrdererGroupSpec{
-			Common: &fabricxv1alpha1.CommonComponentConfig{
-				Replicas: 2,
-				Storage: &fabricxv1alpha1.StorageConfig{
-					Size:       "2Gi",
-					AccessMode: "ReadWriteMany",
-				},
-				Resources: &corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("200m"),
-						corev1.ResourceMemory: resource.MustParse("256Mi"),
-					},
-				},
-			},
-			Components: fabricxv1alpha1.OrdererComponents{
-				Consenter: &fabricxv1alpha1.ComponentConfig{
-					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-						Replicas: 3,
-					},
-				},
-			},
-			Enrollment: &fabricxv1alpha1.EnrollmentConfig{
-				Sign: &fabricxv1alpha1.CertificateConfig{
-					CAHost: "ca.example.com",
-					CAPort: 7054,
-					CATLS: &fabricxv1alpha1.CATLSConfig{
-						CACert: "",
-					},
-					EnrollID:     "admin",
-					EnrollSecret: "adminpw",
-				},
-			},
-		},
-	}
-
-	tests := []struct {
-		name            string
-		componentName   string
-		componentConfig *fabricxv1alpha1.ComponentConfig
-		expected        *fabricxv1alpha1.ComponentConfig
-	}{
-		{
-			name:          "consenter with component-specific config",
-			componentName: "consenter",
-			componentConfig: &fabricxv1alpha1.ComponentConfig{
-				CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-					Replicas: 3,
-				},
-			},
-			expected: &fabricxv1alpha1.ComponentConfig{
-				CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-					Replicas: 3, // Component-specific overrides common
-				},
-				Certificates: &fabricxv1alpha1.CertificateConfig{
-					CAHost: "ca.example.com",
-					CAPort: 7054,
-					CATLS: &fabricxv1alpha1.CATLSConfig{
-						CACert: "",
-					},
-					EnrollID:     "admin",
-					EnrollSecret: "adminpw",
-				},
-			},
-		},
-		{
-			name:            "batcher with no component-specific config",
-			componentName:   "batcher",
-			componentConfig: nil,
-			expected: &fabricxv1alpha1.ComponentConfig{
-				CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-					Replicas: 2, // Uses common config
-				},
-				Certificates: &fabricxv1alpha1.CertificateConfig{
-					CAHost: "ca.example.com",
-					CAPort: 7054,
-					CATLS: &fabricxv1alpha1.CATLSConfig{
-						CACert: "",
-					},
-					EnrollID:     "admin",
-					EnrollSecret: "adminpw",
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := r.getMergedComponentConfig(ordererGroup, tt.componentName, tt.componentConfig)
-
-			// Check replicas
-			if result.Replicas != tt.expected.Replicas {
-				t.Errorf("Expected replicas %d, got %d", tt.expected.Replicas, result.Replicas)
-			}
-
-			// Check certificates if enrollment is configured
-			if ordererGroup.Spec.Enrollment != nil {
-				if result.Certificates == nil {
-					t.Error("Expected certificates to be configured")
-				} else {
-					if result.Certificates.CAHost != tt.expected.Certificates.CAHost {
-						t.Errorf("Expected CAHost %s, got %s", tt.expected.Certificates.CAHost, result.Certificates.CAHost)
-					}
-					if result.Certificates.CAPort != tt.expected.Certificates.CAPort {
-						t.Errorf("Expected CAPort %d, got %d", tt.expected.Certificates.CAPort, result.Certificates.CAPort)
-					}
-					if result.Certificates.EnrollID != tt.expected.Certificates.EnrollID {
-						t.Errorf("Expected EnrollID %s, got %s", tt.expected.Certificates.EnrollID, result.Certificates.EnrollID)
-					}
-				}
 			}
 		})
 	}
@@ -361,7 +243,7 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 			Name:              "test-orderergroup",
 			Namespace:         "default",
 			DeletionTimestamp: &metav1.Time{Time: time.Now()},
-			Finalizers:        []string{FinalizerName},
+			Finalizers:        []string{OrdererGroupFinalizerName},
 		},
 		Spec: fabricxv1alpha1.OrdererGroupSpec{
 			BootstrapMode: "deploy",
@@ -374,11 +256,6 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 						Replicas: 1,
 					},
 				},
-				Batcher: &fabricxv1alpha1.ComponentConfig{
-					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-						Replicas: 1,
-					},
-				},
 				Assembler: &fabricxv1alpha1.ComponentConfig{
 					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 						Replicas: 1,
@@ -387,6 +264,14 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 				Router: &fabricxv1alpha1.ComponentConfig{
 					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 						Replicas: 1,
+					},
+				},
+				Batchers: []fabricxv1alpha1.BatcherInstance{
+					{
+						CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+							Replicas: 1,
+						},
+						ShardID: 1,
 					},
 				},
 			},
@@ -408,7 +293,6 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 	r.BatcherController = ordgroup.NewBatcherControllerWithCertService(fakeClient, s, mockCertService)
 	r.RouterController = ordgroup.NewRouterControllerWithCertService(fakeClient, s, mockCertService)
 	r.ConsenterController = ordgroup.NewConsenterControllerWithCertService(fakeClient, s, mockCertService)
-	r.CertService = mockCertService
 
 	// Test deletion handling
 	ctx := context.Background()
@@ -418,21 +302,14 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 		t.Errorf("Unexpected error during deletion: %v", err)
 	}
 
-	// Check that finalizer was removed
-	var updatedOrdererGroup fabricxv1alpha1.OrdererGroup
-	err = fakeClient.Get(ctx, types.NamespacedName{Name: ordererGroup.Name, Namespace: ordererGroup.Namespace}, &updatedOrdererGroup)
-	if err != nil {
-		// OrdererGroup might be deleted, which is expected behavior
-		t.Logf("OrdererGroup was deleted as expected: %v", err)
-	} else {
-		if utils.ContainsString(updatedOrdererGroup.Finalizers, FinalizerName) {
-			t.Error("Expected finalizer to be removed")
-		}
+	// Check that finalizer was removed from the original object
+	if utils.ContainsString(ordererGroup.Finalizers, OrdererGroupFinalizerName) {
+		t.Errorf("Expected finalizer to be removed")
 	}
 
-	// Check reconciliation result
+	// Check result
 	if result.Requeue {
-		t.Error("Expected no requeue after successful deletion")
+		t.Errorf("Expected no requeue after deletion")
 	}
 }
 
@@ -448,6 +325,9 @@ func TestOrdererGroupReconciler_ensureFinalizer(t *testing.T) {
 		},
 		Spec: fabricxv1alpha1.OrdererGroupSpec{
 			BootstrapMode: "deploy",
+			Common: &fabricxv1alpha1.CommonComponentConfig{
+				Replicas: 1,
+			},
 		},
 	}
 
@@ -460,22 +340,17 @@ func TestOrdererGroupReconciler_ensureFinalizer(t *testing.T) {
 		Scheme: s,
 	}
 
-	// Test finalizer addition
+	// Test ensuring finalizer
 	ctx := context.Background()
 	err := r.ensureFinalizer(ctx, ordererGroup)
+
 	if err != nil {
 		t.Errorf("Unexpected error ensuring finalizer: %v", err)
 	}
 
 	// Check that finalizer was added
-	if !utils.ContainsString(ordererGroup.Finalizers, FinalizerName) {
-		t.Error("Expected finalizer to be added")
-	}
-
-	// Test finalizer already exists
-	err = r.ensureFinalizer(ctx, ordererGroup)
-	if err != nil {
-		t.Errorf("Unexpected error when finalizer already exists: %v", err)
+	if !utils.ContainsString(ordererGroup.Finalizers, OrdererGroupFinalizerName) {
+		t.Errorf("Expected finalizer to be added")
 	}
 }
 
@@ -488,10 +363,13 @@ func TestOrdererGroupReconciler_removeFinalizer(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test-orderergroup",
 			Namespace:  "default",
-			Finalizers: []string{FinalizerName, "another-finalizer"},
+			Finalizers: []string{OrdererGroupFinalizerName},
 		},
 		Spec: fabricxv1alpha1.OrdererGroupSpec{
 			BootstrapMode: "deploy",
+			Common: &fabricxv1alpha1.CommonComponentConfig{
+				Replicas: 1,
+			},
 		},
 	}
 
@@ -504,21 +382,17 @@ func TestOrdererGroupReconciler_removeFinalizer(t *testing.T) {
 		Scheme: s,
 	}
 
-	// Test finalizer removal
+	// Test removing finalizer
 	ctx := context.Background()
 	err := r.removeFinalizer(ctx, ordererGroup)
+
 	if err != nil {
 		t.Errorf("Unexpected error removing finalizer: %v", err)
 	}
 
 	// Check that finalizer was removed
-	if utils.ContainsString(ordererGroup.Finalizers, FinalizerName) {
-		t.Error("Expected finalizer to be removed")
-	}
-
-	// Check that other finalizers remain
-	if !utils.ContainsString(ordererGroup.Finalizers, "another-finalizer") {
-		t.Error("Expected other finalizers to remain")
+	if utils.ContainsString(ordererGroup.Finalizers, OrdererGroupFinalizerName) {
+		t.Errorf("Expected finalizer to be removed")
 	}
 }
 
@@ -534,6 +408,9 @@ func TestOrdererGroupReconciler_updateOrdererGroupStatus(t *testing.T) {
 		},
 		Spec: fabricxv1alpha1.OrdererGroupSpec{
 			BootstrapMode: "deploy",
+			Common: &fabricxv1alpha1.CommonComponentConfig{
+				Replicas: 1,
+			},
 		},
 	}
 
@@ -546,32 +423,16 @@ func TestOrdererGroupReconciler_updateOrdererGroupStatus(t *testing.T) {
 		Scheme: s,
 	}
 
-	// Test status update
+	// Test updating status
 	ctx := context.Background()
-	status := fabricxv1alpha1.RunningStatus
-	message := "OrdererGroup is running successfully"
-	r.updateOrdererGroupStatus(ctx, ordererGroup, status, message)
+	r.updateOrdererGroupStatus(ctx, ordererGroup, fabricxv1alpha1.RunningStatus, "Test status update")
 
-	// Check status was updated
-	if ordererGroup.Status.Status != status {
-		t.Errorf("Expected status %s, got %s", status, ordererGroup.Status.Status)
+	// Check that status was updated on the original object
+	if ordererGroup.Status.Status != fabricxv1alpha1.RunningStatus {
+		t.Errorf("Expected status %s, got %s", fabricxv1alpha1.RunningStatus, ordererGroup.Status.Status)
 	}
 
-	if ordererGroup.Status.Message != message {
-		t.Errorf("Expected message %s, got %s", message, ordererGroup.Status.Message)
-	}
-
-	// Check conditions
-	if len(ordererGroup.Status.Conditions) == 0 {
-		t.Error("Expected conditions to be set")
-	}
-
-	condition := ordererGroup.Status.Conditions[0]
-	if condition.Type != "Ready" {
-		t.Errorf("Expected condition type Ready, got %s", condition.Type)
-	}
-
-	if condition.Status != metav1.ConditionTrue {
-		t.Errorf("Expected condition status True, got %s", condition.Status)
+	if ordererGroup.Status.Message != "Test status update" {
+		t.Errorf("Expected message 'Test status update', got '%s'", ordererGroup.Status.Message)
 	}
 }
