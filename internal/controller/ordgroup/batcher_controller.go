@@ -36,6 +36,7 @@ import (
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
 // BatcherController handles reconciliation for the Batcher component
@@ -210,46 +211,21 @@ func (r *BatcherController) reconcileConfigMap(ctx context.Context, ordererGroup
 		},
 	}
 
-	// Generate batcher configuration based on the example provided
-	batcherConfig := fmt.Sprintf(`PartyID: %d
-General:
-    ListenAddress: 0.0.0.0
-    ListenPort: %d
-    TLS:
-        Enabled: false
-        PrivateKey: /%s/batcher-%d/tls/server.key
-        Certificate: /%s/batcher-%d/tls/server.crt
-        RootCAs:
-            - /%s/batcher-%d/tls/ca.crt
-        ClientAuthRequired: false
-    Keepalive:
-        ClientInterval: 1m0s
-        ClientTimeout: 20s
-        ServerInterval: 2h0m0s
-        ServerTimeout: 20s
-        ServerMinInterval: 1m0s
-    Backoff:
-        BaseDelay: 1s
-        Multiplier: 1.6
-        MaxDelay: 2m0s
-    MaxRecvMsgSize: 104857600
-    MaxSendMsgSize: 104857600
-    Bootstrap:
-        Method: block
-        File: /%s/batcher-%d/genesis.block
-    LocalMSPDir: /%s/batcher-%d/msp
-    LocalMSPID: %s
-    LogSpec: info
-FileStore:
-    Location: /%s/batcher-%d/store
-Batcher:
-    ShardID: %d
-    BatchSequenceGap: 12
-    MemPoolMaxSize: 1200000
-    SubmitTimeout: 600ms`,
-		ordererGroup.Spec.PartyID, 7151+instanceIndex, ordererGroup.Name, instanceIndex, ordererGroup.Name, instanceIndex, ordererGroup.Name, instanceIndex,
-		ordererGroup.Name, instanceIndex, ordererGroup.Name, instanceIndex, ordererGroup.Spec.MSPID,
-		ordererGroup.Name, instanceIndex, shardID)
+	// Prepare template data
+	templateData := utils.TemplateData{
+		Name:     fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, instanceIndex),
+		PartyID:  ordererGroup.Spec.PartyID,
+		MSPID:    ordererGroup.Spec.MSPID,
+		ShardID:  shardID,
+		Port:     7151 + int32(instanceIndex),
+		Instance: int32(instanceIndex),
+	}
+
+	// Execute the template using the shared utility
+	configContent, err := utils.ExecuteTemplateWithValidation(utils.BatcherConfigTemplate, templateData)
+	if err != nil {
+		return fmt.Errorf("failed to execute batcher config template: %w", err)
+	}
 
 	template := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -257,7 +233,7 @@ Batcher:
 			Namespace: ordererGroup.Namespace,
 		},
 		Data: map[string]string{
-			"node_config.yaml": batcherConfig,
+			"node_config.yaml": configContent,
 		},
 	}
 

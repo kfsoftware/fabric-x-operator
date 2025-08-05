@@ -32,6 +32,7 @@ import (
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
+	fakeclientset "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/fake"
 )
 
 // MockOrdererGroupCertService provides a mock implementation of the certificate service
@@ -246,7 +247,8 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 			Finalizers:        []string{OrdererGroupFinalizerName},
 		},
 		Spec: fabricxv1alpha1.OrdererGroupSpec{
-			BootstrapMode: "deploy",
+			BootstrapMode:   "deploy",
+			ManageChildCRDs: &[]bool{false}[0], // Use old behavior for test
 			Common: &fabricxv1alpha1.CommonComponentConfig{
 				Replicas: 1,
 			},
@@ -281,10 +283,14 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(ordererGroup).Build()
 
+	// Create fake clientset
+	fakeClientset := fakeclientset.NewSimpleClientset()
+
 	// Create reconciler
 	r := &OrdererGroupReconciler{
-		Client: fakeClient,
-		Scheme: s,
+		Client:    fakeClient,
+		Scheme:    s,
+		Clientset: fakeClientset,
 	}
 
 	// Initialize component controllers with mock certificate service

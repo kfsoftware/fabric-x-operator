@@ -3804,6 +3804,12 @@ spec:
                         type: array
                     type: object
                 type: object
+              deploymentMode:
+                description: |-
+                  Deployment mode: "configure" or "deploy"
+                  When set to "configure", only configuration resources are created for child CRDs
+                  When set to "deploy", full deployment resources are created for child CRDs
+                type: string
               enrollment:
                 description: Global enrollment configuration (inherited by components)
                 properties:

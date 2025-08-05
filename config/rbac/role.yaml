@@ -38,7 +38,11 @@ rules:
   - committers
   - endorsers
   - geneses
+  - ordererassemblers
+  - ordererbatchers
+  - ordererconsenters
   - orderergroups
+  - ordererrouters
   verbs:
   - create
   - delete
@@ -54,6 +58,10 @@ rules:
   - committers/finalizers
   - endorsers/finalizers
   - geneses/finalizers
+  - ordererassemblers/finalizers
+  - ordererbatchers/finalizers
+  - ordererconsenters/finalizers
+  - ordererrouters/finalizers
   verbs:
   - update
 - apiGroups:
@@ -63,7 +71,11 @@ rules:
   - committers/status
   - endorsers/status
   - geneses/status
+  - ordererassemblers/status
+  - ordererbatchers/status
+  - ordererconsenters/status
   - orderergroups/status
+  - ordererrouters/status
   verbs:
   - get
   - patch

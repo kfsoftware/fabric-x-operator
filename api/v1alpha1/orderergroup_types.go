@@ -487,6 +487,11 @@ type OrdererGroupSpec struct {
 	// Bootstrap mode: "configure" or "deploy"
 	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
+	// Deployment mode: "configure" or "deploy"
+	// When set to "configure", only configuration resources are created for child CRDs
+	// When set to "deploy", full deployment resources are created for child CRDs
+	DeploymentMode string `json:"deploymentMode,omitempty"`
+
 	// MSP ID
 	MSPID string `json:"mspid,omitempty"`
 
