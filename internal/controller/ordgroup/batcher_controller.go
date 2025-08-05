@@ -87,6 +87,14 @@ func (r *BatcherController) Reconcile(ctx context.Context, ordererGroup *fabricx
 
 	case "deploy":
 		// In deploy mode, create all resources for each batcher instance
+		// First, get the current number of batchers in the spec
+		currentBatcherCount := len(ordererGroup.Spec.Components.Batchers)
+
+		// Clean up resources for batchers that are no longer in the spec (downsizing)
+		if err := r.cleanupRemovedBatchers(ctx, ordererGroup, currentBatcherCount); err != nil {
+			log.Error(err, "Failed to cleanup removed batchers")
+		}
+
 		for i, batcher := range ordererGroup.Spec.Components.Batchers {
 			batcherName := fmt.Sprintf("batcher-%d", i)
 			log.Info("Reconciling batcher instance",
@@ -180,6 +188,11 @@ func (r *BatcherController) Cleanup(ctx context.Context, ordererGroup *fabricxv1
 		if err := r.cleanupConfigMap(ctx, ordererGroup); err != nil {
 			log.Error(err, "Failed to cleanup batcher configmap")
 		}
+
+		// 5. Delete PVCs
+		if err := r.cleanupPVCs(ctx, ordererGroup); err != nil {
+			log.Error(err, "Failed to cleanup batcher PVCs")
+		}
 	}
 
 	log.Info("Batcher component cleanup completed")
@@ -204,10 +217,10 @@ General:
     ListenPort: %d
     TLS:
         Enabled: false
-        PrivateKey: %s/batcher-%d/tls/server.key
-        Certificate: %s/batcher-%d/tls/server.crt
+        PrivateKey: /%s/batcher-%d/tls/server.key
+        Certificate: /%s/batcher-%d/tls/server.crt
         RootCAs:
-            - %s/batcher-%d/tls/ca.crt
+            - /%s/batcher-%d/tls/ca.crt
         ClientAuthRequired: false
     Keepalive:
         ClientInterval: 1m0s
@@ -223,12 +236,12 @@ General:
     MaxSendMsgSize: 104857600
     Bootstrap:
         Method: block
-        File: %s/batcher-%d/genesis.block
-    LocalMSPDir: %s/batcher-%d/msp
+        File: /%s/batcher-%d/genesis.block
+    LocalMSPDir: /%s/batcher-%d/msp
     LocalMSPID: %s
     LogSpec: info
 FileStore:
-    Location: %s/batcher-%d/store
+    Location: /%s/batcher-%d/store
 Batcher:
     ShardID: %d
     BatchSequenceGap: 12
@@ -357,63 +370,264 @@ func (r *BatcherController) reconcileIngress(ctx context.Context, ordererGroup *
 	return nil
 }
 
-// cleanupDeployment deletes the Batcher Deployment
+// cleanupDeployment deletes all Batcher Deployments
 func (r *BatcherController) cleanupDeployment(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	// Clean up all batcher deployments by checking for instances
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := 0; i < maxBatchersToCheck; i++ {
+		if err := r.cleanupDeploymentInstance(ctx, ordererGroup, i); err != nil {
+			// Log error but continue with other instances
+			logf.FromContext(ctx).Error(err, "Failed to cleanup deployment instance", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupService deletes all Batcher Services
+func (r *BatcherController) cleanupService(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	// Clean up all batcher services by checking for instances
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := 0; i < maxBatchersToCheck; i++ {
+		if err := r.cleanupServiceInstance(ctx, ordererGroup, i); err != nil {
+			// Log error but continue with other instances
+			logf.FromContext(ctx).Error(err, "Failed to cleanup service instance", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupIngress deletes all Batcher Ingresses
+func (r *BatcherController) cleanupIngress(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	// Clean up all batcher ingresses by checking for instances
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := 0; i < maxBatchersToCheck; i++ {
+		if err := r.cleanupIngressInstance(ctx, ordererGroup, i); err != nil {
+			// Log error but continue with other instances
+			logf.FromContext(ctx).Error(err, "Failed to cleanup ingress instance", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupConfigMap deletes all Batcher ConfigMaps
+func (r *BatcherController) cleanupConfigMap(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	// Clean up all batcher configmaps by checking for instances
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := 0; i < maxBatchersToCheck; i++ {
+		if err := r.cleanupConfigMapInstance(ctx, ordererGroup, i); err != nil {
+			// Log error but continue with other instances
+			logf.FromContext(ctx).Error(err, "Failed to cleanup configmap instance", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupPVCs deletes all Batcher PVCs
+func (r *BatcherController) cleanupPVCs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+	// Clean up all batcher PVCs by checking for instances
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := 0; i < maxBatchersToCheck; i++ {
+		if err := r.cleanupPVCInstance(ctx, ordererGroup, i); err != nil {
+			// Log error but continue with other instances
+			logf.FromContext(ctx).Error(err, "Failed to cleanup PVC instance", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupRemovedBatchers cleans up resources for batcher instances that are no longer in the spec
+func (r *BatcherController) cleanupRemovedBatchers(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, currentBatcherCount int) error {
+	log := logf.FromContext(ctx)
+
+	// Start from a reasonable maximum number of batchers to check for cleanup
+	// This could be made configurable or determined by checking existing resources
+	maxBatchersToCheck := 20 // Adjust based on your expected maximum
+
+	for i := currentBatcherCount; i < maxBatchersToCheck; i++ {
+		// Check if deployment exists for this instance
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, i),
+				Namespace: ordererGroup.Namespace,
+			},
+		}
+
+		if err := r.Client.Get(ctx, client.ObjectKeyFromObject(deployment), deployment); err != nil {
+			if errors.IsNotFound(err) {
+				// No deployment found for this instance, continue to next
+				continue
+			}
+			log.Error(err, "Failed to check deployment existence", "instance", i)
+			continue
+		}
+
+		// Deployment exists but is no longer in spec, clean it up
+		log.Info("Cleaning up removed batcher instance", "instance", i)
+
+		// Clean up deployment
+		if err := r.cleanupDeploymentInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup deployment", "instance", i)
+		}
+
+		// Clean up service
+		if err := r.cleanupServiceInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup service", "instance", i)
+		}
+
+		// Clean up ingress
+		if err := r.cleanupIngressInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup ingress", "instance", i)
+		}
+
+		// Clean up configmap
+		if err := r.cleanupConfigMapInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup configmap", "instance", i)
+		}
+
+		// Clean up PVC
+		if err := r.cleanupPVCInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup PVC", "instance", i)
+		}
+
+		// Clean up certificates
+		if err := r.cleanupCertificatesInstance(ctx, ordererGroup, i); err != nil {
+			log.Error(err, "Failed to cleanup certificates", "instance", i)
+		}
+	}
+
+	return nil
+}
+
+// cleanupDeploymentInstance deletes a specific batcher deployment instance
+func (r *BatcherController) cleanupDeploymentInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-batcher", ordererGroup.Name),
+			Name:      fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, instanceIndex),
 			Namespace: ordererGroup.Namespace,
 		},
 	}
 
 	if err := r.Client.Delete(ctx, deployment); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete batcher deployment: %w", err)
+			return fmt.Errorf("failed to delete batcher-%d deployment: %w", instanceIndex, err)
 		}
 	}
 
 	return nil
 }
 
-// cleanupService deletes the Batcher Service
-func (r *BatcherController) cleanupService(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+// cleanupServiceInstance deletes a specific batcher service instance
+func (r *BatcherController) cleanupServiceInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-batcher", ordererGroup.Name),
+			Name:      fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, instanceIndex),
 			Namespace: ordererGroup.Namespace,
 		},
 	}
 
 	if err := r.Client.Delete(ctx, service); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete batcher service: %w", err)
+			return fmt.Errorf("failed to delete batcher-%d service: %w", instanceIndex, err)
 		}
 	}
 
 	return nil
 }
 
-// cleanupIngress deletes the Batcher Ingress
-func (r *BatcherController) cleanupIngress(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
+// cleanupIngressInstance deletes a specific batcher ingress instance
+func (r *BatcherController) cleanupIngressInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-batcher", ordererGroup.Name),
+			Name:      fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, instanceIndex),
 			Namespace: ordererGroup.Namespace,
 		},
 	}
 
 	if err := r.Client.Delete(ctx, ingress); err != nil {
 		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete batcher ingress: %w", err)
+			return fmt.Errorf("failed to delete batcher-%d ingress: %w", instanceIndex, err)
 		}
 	}
 
 	return nil
 }
 
-// cleanupConfigMap deletes the Batcher ConfigMap
-func (r *BatcherController) cleanupConfigMap(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
-	// TODO: Implement ConfigMap cleanup
+// cleanupConfigMapInstance deletes a specific batcher configmap instance
+func (r *BatcherController) cleanupConfigMapInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-batcher-%d-config", ordererGroup.Name, instanceIndex),
+			Namespace: ordererGroup.Namespace,
+		},
+	}
+
+	if err := r.Client.Delete(ctx, configMap); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete batcher-%d configmap: %w", instanceIndex, err)
+		}
+	}
+
+	return nil
+}
+
+// cleanupPVCInstance deletes a specific batcher PVC instance
+func (r *BatcherController) cleanupPVCInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-batcher-%d-store-pvc", ordererGroup.Name, instanceIndex),
+			Namespace: ordererGroup.Namespace,
+		},
+	}
+
+	if err := r.Client.Delete(ctx, pvc); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete batcher-%d PVC: %w", instanceIndex, err)
+		}
+	}
+
+	return nil
+}
+
+// cleanupCertificatesInstance deletes certificates for a specific batcher instance
+func (r *BatcherController) cleanupCertificatesInstance(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, instanceIndex int) error {
+	// Clean up sign certificates
+	signCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-batcher-%d-sign-cert", ordererGroup.Name, instanceIndex),
+			Namespace: ordererGroup.Namespace,
+		},
+	}
+
+	if err := r.Client.Delete(ctx, signCertSecret); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete batcher-%d sign certificates: %w", instanceIndex, err)
+		}
+	}
+
+	// Clean up TLS certificates
+	tlsCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-batcher-%d-tls-cert", ordererGroup.Name, instanceIndex),
+			Namespace: ordererGroup.Namespace,
+		},
+	}
+
+	if err := r.Client.Delete(ctx, tlsCertSecret); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete batcher-%d TLS certificates: %w", instanceIndex, err)
+		}
+	}
+
 	return nil
 }
 
@@ -459,13 +673,58 @@ func (r *BatcherController) getDeploymentTemplate(ctx context.Context, ordererGr
 					}(),
 				},
 				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:  fmt.Sprintf("setup-msp-%d", instanceIndex),
+							Image: "busybox:1.35",
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								fmt.Sprintf(
+									`mkdir -p /%s/batcher-%d/msp/signcerts && `+
+										"mkdir -p /%s/batcher-%d/msp/keystore && "+
+										"mkdir -p /%s/batcher-%d/msp/cacerts && "+
+										"mkdir -p /%s/batcher-%d/tls && "+
+										"cp /sign-certs/cert.pem /%s/batcher-%d/msp/signcerts/ && "+
+										"cp /sign-certs/key.pem /%s/batcher-%d/msp/keystore/sign-privateKey.pem && "+
+										"cp /sign-certs/ca.pem /%s/batcher-%d/msp/cacerts/ && "+
+										"cp /tls-certs/cert.pem /%s/batcher-%d/tls/server.crt && "+
+										"cp /tls-certs/key.pem /%s/batcher-%d/tls/server.key && "+
+										"cp /tls-certs/ca.pem /%s/batcher-%d/tls/ca.crt",
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+									ordererGroup.Name, instanceIndex,
+								),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "sign-certs",
+									ReadOnly:  true,
+									MountPath: "/sign-certs",
+								},
+								{
+									Name:      "tls-certs",
+									ReadOnly:  true,
+									MountPath: "/tls-certs",
+								},
+								{
+									Name:      "shared-msp",
+									MountPath: fmt.Sprintf("/%s", ordererGroup.Name),
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:  fmt.Sprintf("batcher-%d", instanceIndex),
-							Image: "hyperledger/fabric-x-committer:0.1.4",
-							Command: []string{
-								"arma",
-							},
+							Image: "hyperledger/fabric-x-orderer:0.0.17",
 							Args: []string{
 								"batcher",
 								"--config=/config/node_config.yaml",
@@ -485,13 +744,12 @@ func (r *BatcherController) getDeploymentTemplate(ctx context.Context, ordererGr
 										MountPath: "/config",
 									},
 									{
-										Name:      "certs",
-										ReadOnly:  true,
-										MountPath: fmt.Sprintf("%s/batcher-%d", ordererGroup.Name, instanceIndex),
+										Name:      "shared-msp",
+										MountPath: fmt.Sprintf("/%s", ordererGroup.Name),
 									},
 									{
 										Name:      "store",
-										MountPath: fmt.Sprintf("%s/batcher-%d/store", ordererGroup.Name, instanceIndex),
+										MountPath: fmt.Sprintf("/%s/batcher-%d/store", ordererGroup.Name, instanceIndex),
 									},
 								}
 
@@ -500,7 +758,7 @@ func (r *BatcherController) getDeploymentTemplate(ctx context.Context, ordererGr
 									volumeMounts = append(volumeMounts, corev1.VolumeMount{
 										Name:      "genesis-block",
 										ReadOnly:  true,
-										MountPath: fmt.Sprintf("%s/batcher-%d/genesis.block", ordererGroup.Name, instanceIndex),
+										MountPath: fmt.Sprintf("/%s/batcher-%d/genesis.block", ordererGroup.Name, instanceIndex),
 										SubPath:   ordererGroup.Spec.Genesis.SecretKey,
 									})
 								}
@@ -537,11 +795,25 @@ func (r *BatcherController) getDeploymentTemplate(ctx context.Context, ordererGr
 								},
 							},
 							{
-								Name: "certs",
+								Name: "sign-certs",
 								VolumeSource: corev1.VolumeSource{
 									Secret: &corev1.SecretVolumeSource{
-										SecretName: fmt.Sprintf("%s-batcher-sign-cert", ordererGroup.Name),
+										SecretName: fmt.Sprintf("%s-batcher-%d-sign-cert", ordererGroup.Name, instanceIndex),
 									},
+								},
+							},
+							{
+								Name: "tls-certs",
+								VolumeSource: corev1.VolumeSource{
+									Secret: &corev1.SecretVolumeSource{
+										SecretName: fmt.Sprintf("%s-batcher-%d-tls-cert", ordererGroup.Name, instanceIndex),
+									},
+								},
+							},
+							{
+								Name: "shared-msp",
+								VolumeSource: corev1.VolumeSource{
+									EmptyDir: &corev1.EmptyDirVolumeSource{},
 								},
 							},
 							{

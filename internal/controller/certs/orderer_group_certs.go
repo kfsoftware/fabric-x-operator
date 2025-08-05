@@ -209,6 +209,17 @@ func (s *OrdererGroupCertService) GetCertificateSecretName(
 
 // generateCertificateSecretName generates a consistent secret name for certificates
 func generateCertificateSecretName(ordererGroupName, componentName, certType string) string {
+	// Check if componentName contains an instance index (e.g., "batcher-0", "batcher-1")
+	if strings.Contains(componentName, "-") {
+		// Extract the base component name and instance index
+		parts := strings.SplitN(componentName, "-", 2)
+		if len(parts) == 2 {
+			baseComponent := parts[0]
+			instanceIndex := parts[1]
+			return fmt.Sprintf("%s-%s-%s-%s-cert", ordererGroupName, baseComponent, instanceIndex, certType)
+		}
+	}
+	// Fallback to original format for backward compatibility
 	return fmt.Sprintf("%s-%s-%s-cert", ordererGroupName, componentName, certType)
 }
 
