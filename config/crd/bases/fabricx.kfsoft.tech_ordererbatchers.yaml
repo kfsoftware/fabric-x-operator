@@ -500,6 +500,22 @@ spec:
                   - name
                   type: object
                 type: array
+              genesis:
+                description: Genesis block configuration
+                properties:
+                  secretKey:
+                    description: Secret key containing genesis block
+                    type: string
+                  secretName:
+                    description: Secret name containing genesis block
+                    type: string
+                  secretNamespace:
+                    description: Secret namespace
+                    type: string
+                required:
+                - secretKey
+                - secretName
+                type: object
               imagePullSecrets:
                 description: Image pull secrets
                 items:
@@ -827,6 +843,7 @@ spec:
                   type: object
                 type: array
             required:
+            - genesis
             - shardID
             type: object
           status:

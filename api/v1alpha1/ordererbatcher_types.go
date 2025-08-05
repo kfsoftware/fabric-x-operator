@@ -37,6 +37,9 @@ type OrdererBatcherSpec struct {
 	// Shard ID for this batcher instance
 	ShardID int32 `json:"shardID"`
 
+	// Genesis block configuration
+	Genesis GenesisConfig `json:"genesis"`
+
 	// Replicas for this batcher
 	Replicas int32 `json:"replicas,omitempty"`
 

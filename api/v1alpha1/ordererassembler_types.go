@@ -34,6 +34,9 @@ type OrdererAssemblerSpec struct {
 	// Party ID for this assembler
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Genesis block configuration
+	Genesis GenesisConfig `json:"genesis"`
+
 	// Replicas for this assembler
 	Replicas int32 `json:"replicas,omitempty"`
 

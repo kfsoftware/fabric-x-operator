@@ -34,6 +34,9 @@ type OrdererConsenterSpec struct {
 	// Party ID for this consenter
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Genesis block configuration
+	Genesis GenesisConfig `json:"genesis"`
+
 	// Replicas for this consenter
 	Replicas int32 `json:"replicas,omitempty"`
 

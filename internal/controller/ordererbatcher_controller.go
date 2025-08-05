@@ -36,6 +36,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
@@ -183,11 +184,17 @@ func (r *OrdererBatcherReconciler) reconcileConfigureMode(ctx context.Context, o
 		"name", ordererBatcher.Name,
 		"namespace", ordererBatcher.Namespace)
 
-	// In configure mode, only create certificates
+	// In configure mode, create certificates and verify genesis block
 	if err := r.reconcileCertificates(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile certificates: %w", err)
 	}
 	log.Info("OrdererBatcher certificates created in configure mode")
+
+	// Verify genesis block secret exists
+	if err := r.reconcileGenesisBlock(ctx, ordererBatcher); err != nil {
+		return fmt.Errorf("failed to reconcile genesis block: %w", err)
+	}
+	log.Info("OrdererBatcher genesis block verified in configure mode")
 
 	log.Info("OrdererBatcher configure mode reconciliation completed")
 	return nil
@@ -197,94 +204,120 @@ func (r *OrdererBatcherReconciler) reconcileConfigureMode(ctx context.Context, o
 func (r *OrdererBatcherReconciler) reconcileCertificates(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	log := logf.FromContext(ctx)
 
-	// For individual OrdererBatcher instances, we'll create a simple certificate approach
-	// that doesn't rely on the OrdererGroup certificate service
-
 	// Check if certificates are configured
 	if ordererBatcher.Spec.Certificates == nil {
 		log.Info("No certificate configuration found, skipping certificate creation")
 		return nil
 	}
 
-	// Create sign certificate secret
-	signSecretName := fmt.Sprintf("%s-sign-cert", ordererBatcher.Name)
-	if err := r.createCertificateSecret(ctx, ordererBatcher, signSecretName, "sign"); err != nil {
-		return fmt.Errorf("failed to create sign certificate secret: %w", err)
+	// Create certificate request for this batcher instance
+	request := certs.OrdererGroupCertificateRequest{
+		ComponentName:    ordererBatcher.Name,
+		ComponentType:    "batcher",
+		Namespace:        ordererBatcher.Namespace,
+		OrdererGroupName: ordererBatcher.Name, // Using batcher name as orderer group name for individual instances
+		CertConfig:       convertToCertConfig(ordererBatcher.Spec.MSPID, ordererBatcher.Spec.Certificates),
+		EnrollmentConfig: nil, // Individual batchers don't have global enrollment config
+		CertTypes:        []string{"sign", "tls"},
+		EnrollID:         ordererBatcher.Spec.Certificates.EnrollID,
+		EnrollSecret:     ordererBatcher.Spec.Certificates.EnrollSecret,
 	}
 
-	// Create TLS certificate secret
-	tlsSecretName := fmt.Sprintf("%s-tls-cert", ordererBatcher.Name)
-	if err := r.createCertificateSecret(ctx, ordererBatcher, tlsSecretName, "tls"); err != nil {
-		return fmt.Errorf("failed to create TLS certificate secret: %w", err)
+	// Provision certificates using the certificate service
+	certificates, err := certs.ProvisionOrdererGroupCertificatesWithClient(ctx, r.Client, request)
+	if err != nil {
+		return fmt.Errorf("failed to provision certificates: %w", err)
+	}
+
+	// Create Kubernetes secrets for the certificates
+	if err := r.createCertificateSecrets(ctx, ordererBatcher, certificates); err != nil {
+		return fmt.Errorf("failed to create certificate secrets: %w", err)
 	}
 
 	log.Info("Certificates reconciled successfully", "batcher", ordererBatcher.Name)
 	return nil
 }
 
-// createCertificateSecret creates a certificate secret for the OrdererBatcher
-func (r *OrdererBatcherReconciler) createCertificateSecret(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher, secretName, certType string) error {
+// convertToCertConfig converts API certificate config to internal format
+func convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+	if apiConfig == nil {
+		return nil
+	}
+
+	config := &certs.CertificateConfig{
+		CAHost:       apiConfig.CAHost,
+		CAName:       apiConfig.CAName,
+		CAPort:       apiConfig.CAPort,
+		EnrollID:     apiConfig.EnrollID,
+		EnrollSecret: apiConfig.EnrollSecret,
+		MSPID:        mspID,
+	}
+
+	if apiConfig.CATLS != nil {
+		config.CATLS = &certs.CATLSConfig{
+			CACert: apiConfig.CATLS.CACert,
+		}
+
+		if apiConfig.CATLS.SecretRef != nil {
+			config.CATLS.SecretRef = &certs.SecretRef{
+				Name:      apiConfig.CATLS.SecretRef.Name,
+				Key:       apiConfig.CATLS.SecretRef.Key,
+				Namespace: apiConfig.CATLS.SecretRef.Namespace,
+			}
+		}
+	}
+
+	return config
+}
+
+// createCertificateSecrets creates Kubernetes secrets for certificate data
+func (r *OrdererBatcherReconciler) createCertificateSecrets(
+	ctx context.Context,
+	ordererBatcher *fabricxv1alpha1.OrdererBatcher,
+	certificates []certs.ComponentCertificateData,
+) error {
 	log := logf.FromContext(ctx)
 
-	// Check if secret already exists
-	existingSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
-		Namespace: ordererBatcher.Namespace,
-		Name:      secretName,
-	}, existingSecret)
-
-	if err == nil {
-		// Secret exists, check if it has the required data
-		if existingSecret.Data != nil {
-			if _, hasCert := existingSecret.Data["cert.pem"]; hasCert {
-				if _, hasKey := existingSecret.Data["key.pem"]; hasKey {
-					if _, hasCA := existingSecret.Data["ca.pem"]; hasCA {
-						log.Info("Certificate secret already exists, skipping creation",
-							"secret", secretName, "certType", certType)
-						return nil
-					}
-				}
-			}
-		}
-	}
-
-	// Create a simple certificate secret with placeholder data
-	// In a real implementation, this would call the actual certificate service
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: ordererBatcher.Namespace,
-			Labels: map[string]string{
-				"app":                      "fabric-x",
-				"ordererbatcher":           ordererBatcher.Name,
-				"certificate-type":         certType,
-				"fabricx.kfsoft.tech/type": "certificate",
+	// Process each certificate in the slice
+	for _, certData := range certificates {
+		secretName := fmt.Sprintf("%s-%s-cert", ordererBatcher.Name, certData.CertType)
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: ordererBatcher.Namespace,
+				Labels: map[string]string{
+					"app":                      "fabric-x",
+					"ordererbatcher":           ordererBatcher.Name,
+					"certificate-type":         certData.CertType,
+					"fabricx.kfsoft.tech/type": "certificate",
+				},
 			},
-		},
-		Data: map[string][]byte{
-			"cert.pem": []byte("placeholder-certificate-data"),
-			"key.pem":  []byte("placeholder-key-data"),
-			"ca.pem":   []byte("placeholder-ca-data"),
-		},
-	}
-
-	// Set the controller reference
-	if err := controllerutil.SetControllerReference(ordererBatcher, secret, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
-	}
-
-	if err := r.Client.Create(ctx, secret); err != nil {
-		// If secret already exists, update it
-		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, secret); err != nil {
-				return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
-			}
-		} else {
-			return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+			Data: map[string][]byte{
+				"cert.pem": certData.Cert,
+				"key.pem":  certData.Key,
+				"ca.pem":   certData.CACert,
+			},
 		}
+
+		// Set the controller reference
+		if err := controllerutil.SetControllerReference(ordererBatcher, secret, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
+		}
+
+		if err := r.Client.Create(ctx, secret); err != nil {
+			// If secret already exists, update it
+			if strings.Contains(err.Error(), "already exists") {
+				if err := r.Client.Update(ctx, secret); err != nil {
+					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
+				}
+			} else {
+				return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+			}
+		}
+
+		log.Info("Created certificate secret", "secret", secretName, "certType", certData.CertType)
 	}
 
-	log.Info("Created certificate secret", "secret", secretName, "certType", certType)
 	return nil
 }
 
@@ -426,6 +459,63 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 	return nil
 }
 
+// reconcileGenesisBlock creates or updates the genesis block secret for the OrdererBatcher
+func (r *OrdererBatcherReconciler) reconcileGenesisBlock(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	log := logf.FromContext(ctx)
+
+	// Check if genesis configuration is provided
+	if ordererBatcher.Spec.Genesis.SecretName == "" {
+		log.Info("No genesis block configuration found, skipping genesis block reconciliation")
+		return nil
+	}
+
+	// Verify that the genesis block secret exists
+	genesisSecret := &corev1.Secret{}
+	err := r.Client.Get(ctx, client.ObjectKey{
+		Namespace: func() string {
+			if ordererBatcher.Spec.Genesis.SecretNamespace != "" {
+				return ordererBatcher.Spec.Genesis.SecretNamespace
+			}
+			return ordererBatcher.Namespace
+		}(),
+		Name: ordererBatcher.Spec.Genesis.SecretName,
+	}, genesisSecret)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Error(err, "Genesis block secret not found",
+				"secretName", ordererBatcher.Spec.Genesis.SecretName,
+				"secretNamespace", func() string {
+					if ordererBatcher.Spec.Genesis.SecretNamespace != "" {
+						return ordererBatcher.Spec.Genesis.SecretNamespace
+					}
+					return ordererBatcher.Namespace
+				}())
+			return fmt.Errorf("genesis block secret not found: %w", err)
+		}
+		return fmt.Errorf("failed to get genesis block secret: %w", err)
+	}
+
+	// Check if the genesis block data exists in the secret
+	genesisKey := ordererBatcher.Spec.Genesis.SecretKey
+	if genesisKey == "" {
+		genesisKey = "genesis.block" // Default key name
+	}
+
+	if _, exists := genesisSecret.Data[genesisKey]; !exists {
+		log.Error(fmt.Errorf("genesis block data not found in secret"),
+			"Genesis block data not found in secret",
+			"secretName", ordererBatcher.Spec.Genesis.SecretName,
+			"secretKey", genesisKey)
+		return fmt.Errorf("genesis block data not found in secret %s with key %s", ordererBatcher.Spec.Genesis.SecretName, genesisKey)
+	}
+
+	log.Info("Genesis block secret verified successfully",
+		"secretName", ordererBatcher.Spec.Genesis.SecretName,
+		"secretKey", genesisKey)
+	return nil
+}
+
 // reconcileIngress creates or updates the Ingress for Batcher
 func (r *OrdererBatcherReconciler) reconcileIngress(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	// TODO: Implement Ingress reconciliation
@@ -447,27 +537,32 @@ func (r *OrdererBatcherReconciler) reconcileDeployMode(ctx context.Context, orde
 		return fmt.Errorf("failed to reconcile certificates: %w", err)
 	}
 
-	// 2. Create/Update ConfigMap for Batcher configuration
+	// 2. Create/Update genesis block secret
+	if err := r.reconcileGenesisBlock(ctx, ordererBatcher); err != nil {
+		return fmt.Errorf("failed to reconcile genesis block: %w", err)
+	}
+
+	// 3. Create/Update ConfigMap for Batcher configuration
 	if err := r.reconcileConfigMap(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile configmap: %w", err)
 	}
 
-	// 3. Create/Update Service for Batcher
+	// 4. Create/Update Service for Batcher
 	if err := r.reconcileService(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile service: %w", err)
 	}
 
-	// 4. Create/Update Deployment for Batcher
+	// 5. Create/Update Deployment for Batcher
 	if err := r.reconcileDeployment(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile deployment: %w", err)
 	}
 
-	// 5. Create/Update PVC for Batcher
+	// 6. Create/Update PVC for Batcher
 	if err := r.reconcilePVC(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile PVC: %w", err)
 	}
 
-	// 6. Create/Update Ingress for Batcher (if configured)
+	// 7. Create/Update Ingress for Batcher (if configured)
 	if ordererBatcher.Spec.Ingress != nil {
 		if err := r.reconcileIngress(ctx, ordererBatcher); err != nil {
 			return fmt.Errorf("failed to reconcile ingress: %w", err)
@@ -741,6 +836,29 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 								},
 							},
 						},
+						{
+							Name:  "setup-genesis",
+							Image: "busybox:1.35",
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								fmt.Sprintf(
+									"cp /genesis-block/genesis.block /%s/genesis.block",
+									ordererBatcher.Name,
+								),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "genesis-block",
+									ReadOnly:  true,
+									MountPath: "/genesis-block",
+								},
+								{
+									Name:      "shared-msp",
+									MountPath: fmt.Sprintf("/%s", ordererBatcher.Name),
+								},
+							},
+						},
 					},
 					Containers: []corev1.Container{
 						{
@@ -827,6 +945,25 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: fmt.Sprintf("%s-store-pvc", ordererBatcher.Name),
+								},
+							},
+						},
+						{
+							Name: "genesis-block",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: ordererBatcher.Spec.Genesis.SecretName,
+									Items: []corev1.KeyToPath{
+										{
+											Key: func() string {
+												if ordererBatcher.Spec.Genesis.SecretKey != "" {
+													return ordererBatcher.Spec.Genesis.SecretKey
+												}
+												return "genesis.block"
+											}(),
+											Path: "genesis.block",
+										},
+									},
 								},
 							},
 						},

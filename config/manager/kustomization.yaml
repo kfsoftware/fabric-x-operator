@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: kfsoftware/fabric-x-operator
-  newTag: dev-1754424545
+  newTag: dev-1754429870

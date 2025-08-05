@@ -415,6 +415,7 @@ func (r *OrdererGroupReconciler) buildConsenterSpec(ordererGroup *fabricxv1alpha
 		DeploymentMode: deploymentMode,
 		MSPID:          ordererGroup.Spec.MSPID,
 		PartyID:        ordererGroup.Spec.PartyID,
+		Genesis:        ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -490,6 +491,7 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 		DeploymentMode: deploymentMode,
 		MSPID:          ordererGroup.Spec.MSPID,
 		PartyID:        ordererGroup.Spec.PartyID,
+		Genesis:        ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -565,6 +567,7 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 		DeploymentMode: deploymentMode,
 		MSPID:          ordererGroup.Spec.MSPID,
 		PartyID:        ordererGroup.Spec.PartyID,
+		Genesis:        ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -636,11 +639,15 @@ func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.
 		deploymentMode = "deploy" // Default to deploy mode
 	}
 
+	// Determine PartyID - use BatcherInstance PartyID if set, otherwise use OrdererGroup PartyID
+	partyID := ordererGroup.Spec.PartyID
+
 	spec := fabricxv1alpha1.OrdererBatcherSpec{
 		DeploymentMode: deploymentMode,
 		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        ordererGroup.Spec.PartyID,
+		PartyID:        partyID,
 		ShardID:        config.ShardID,
+		Genesis:        ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration

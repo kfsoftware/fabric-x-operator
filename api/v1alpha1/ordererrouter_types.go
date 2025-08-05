@@ -34,6 +34,9 @@ type OrdererRouterSpec struct {
 	// Party ID for this router
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Genesis block configuration
+	Genesis GenesisConfig `json:"genesis"`
+
 	// Replicas for this router
 	Replicas int32 `json:"replicas,omitempty"`
 
