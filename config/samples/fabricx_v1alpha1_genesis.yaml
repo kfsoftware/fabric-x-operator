@@ -24,7 +24,7 @@ spec:
         key: cert.pem
         name: orderergroup-sample-consenter-0-tls-cert
         namespace: default
-      host: orderer1.org1.example.com
+      host: orderer1-org1.localho.st
       id: 1
       identityRef:
         key: cert.pem
@@ -40,7 +40,7 @@ spec:
         key: cert.pem
         name: orderergroup-sample-consenter-1-tls-cert
         namespace: default
-      host: orderer2.org1.example.com
+      host: orderer2-org1.localho.st
       id: 2
       identityRef:
         key: cert.pem
@@ -56,7 +56,7 @@ spec:
         key: cert.pem
         name: orderergroup-sample-consenter-2-tls-cert
         namespace: default
-      host: orderer3.org1.example.com
+      host: orderer3-org1.localho.st
       id: 3
       identityRef:
         key: cert.pem
@@ -72,7 +72,7 @@ spec:
         key: cert.pem
         name: orderergroup-sample-consenter-3-tls-cert
         namespace: default
-      host: orderer4.org1.example.com
+      host: orderer4-org1.localho.st
       id: 4
       identityRef:
         key: cert.pem

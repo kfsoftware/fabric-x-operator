@@ -5,6 +5,7 @@ metadata:
   namespace: default
 
 spec:
+  partyID: 1
   bootstrapMode: configure
   mspid: OrdererMSP
   common:
@@ -15,7 +16,7 @@ spec:
       prometheus.io/scrape: 'true'
     podLabels:
       app.kubernetes.io/component: fabric-x
-      app.kubernetes.io/part-of: orderergroup
+      app.kubernetes.io/part-of: admingroup
     replicas: 1
     securityContext:
       readOnlyRootFilesystem: true
@@ -64,8 +65,8 @@ spec:
             key: tls.crt
             name: test-ca2-tls-crypto
             namespace: default
-        enrollid: orderer
-        enrollsecret: ordererpw
+        enrollid: admin
+        enrollsecret: adminpw
       env:
         - name: ASSEMBLER_MAX_MESSAGE_COUNT
           value: '500'
@@ -86,8 +87,8 @@ spec:
               key: tls.crt
               name: test-ca2-tls-crypto
               namespace: default
-          enrollid: orderer
-          enrollsecret: ordererpw
+          enrollid: admin
+          enrollsecret: adminpw
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -116,45 +117,6 @@ spec:
             volumeSource:
               persistentVolumeClaim:
                 claimName: batcher-1-store-pvc
-      - shardID: 2
-        certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-          enrollid: orderer
-          enrollsecret: ordererpw
-        env:
-          - name: BATCHER_TIMEOUT
-            value: 2s
-          - name: BATCHER_PREFERRED_MAX_BYTES
-            value: '2097152'
-        ingress:
-          istio:
-            hosts:
-              - batcher-2-org1.localho.st
-            ingressGateway: istio-ingressgateway
-            port: 443
-        podLabels:
-          fabric-x/batcher-type: high-throughput
-          fabric-x/shard-id: '2'
-        replicas: 1
-        tolerations:
-          - effect: NoSchedule
-            key: dedicated
-            operator: Equal
-            value: batcher
-        volumeMounts:
-          - name: batcher-2-store
-            mountPath: /orderergroup-sample/batcher-2/store
-        volumes:
-          - name: batcher-2-store
-            volumeSource:
-              persistentVolumeClaim:
-                claimName: batcher-2-store-pvc
     consenter:
       affinity:
         nodeAffinity:
@@ -171,8 +133,8 @@ spec:
             key: tls.crt
             name: test-ca2-tls-crypto
             namespace: default
-        enrollid: orderer
-        enrollsecret: ordererpw
+        enrollid: admin
+        enrollsecret: adminpw
       endpoints:
         - consenter-org1.localho.st:7050
       env:
@@ -207,8 +169,8 @@ spec:
             key: tls.crt
             name: test-ca2-tls-crypto
             namespace: default
-        enrollid: orderer
-        enrollsecret: ordererpw
+        enrollid: admin
+        enrollsecret: adminpw
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
@@ -237,8 +199,8 @@ spec:
           key: tls.crt
           name: test-ca2-tls-crypto
           namespace: default
-      enrollid: orderer
-      enrollsecret: ordererpw
+      enrollid: admin
+      enrollsecret: adminpw
     tls:
       cahost: test-ca2.default
       caport: 7054
@@ -247,8 +209,8 @@ spec:
           key: tls.crt
           name: test-ca2-tls-crypto
           namespace: default
-      enrollid: orderer
-      enrollsecret: ordererpw
+      enrollid: admin
+      enrollsecret: adminpw
   genesis:
     secretKey: genesis.block
     secretName: fabricx-shared-genesis

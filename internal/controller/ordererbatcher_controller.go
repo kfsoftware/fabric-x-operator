@@ -18,9 +18,13 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 
+	v1alpha3 "istio.io/api/networking/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,6 +39,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
+	// Istio imports
+	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
@@ -44,6 +52,33 @@ const (
 	// OrdererBatcherFinalizerName is the name of the finalizer used by OrdererBatcher
 	OrdererBatcherFinalizerName = "ordererbatcher.fabricx.kfsoft.tech/finalizer"
 )
+
+// computeConfigMapHash computes a hash of the ConfigMap data to trigger deployment updates
+func (r *OrdererBatcherReconciler) computeConfigMapHash(ctx context.Context, configMapName, namespace string) (string, error) {
+	configMap := &corev1.ConfigMap{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      configMapName,
+		Namespace: namespace,
+	}, configMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
+	}
+
+	// Create a deterministic string representation of the ConfigMap data
+	var dataStrings []string
+	for key, value := range configMap.Data {
+		dataStrings = append(dataStrings, fmt.Sprintf("%s=%s", key, value))
+	}
+	// Sort to ensure deterministic ordering
+	sort.Strings(dataStrings)
+
+	// Concatenate all data
+	dataString := strings.Join(dataStrings, "|")
+
+	// Compute SHA256 hash
+	hash := sha256.Sum256([]byte(dataString))
+	return hex.EncodeToString(hash[:]), nil
+}
 
 // OrdererBatcherReconciler reconciles a OrdererBatcher object
 type OrdererBatcherReconciler struct {
@@ -59,6 +94,8 @@ type OrdererBatcherReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -523,6 +560,225 @@ func (r *OrdererBatcherReconciler) reconcileIngress(ctx context.Context, orderer
 	return nil
 }
 
+// reconcileIstioGateway creates or updates the Istio Gateway for Batcher
+func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Gateway creation")
+		return nil
+	}
+
+	istioConfig := ordererBatcher.Spec.Ingress.Istio
+	gatewayName := fmt.Sprintf("%s-gateway", ordererBatcher.Name)
+
+	// Create Gateway resource
+	gateway := &istionetworkingv1beta1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gatewayName,
+			Namespace: ordererBatcher.Namespace,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererbatcher":           ordererBatcher.Name,
+				"fabricx.kfsoft.tech/type": "gateway",
+			},
+		},
+		Spec: istioapinetworkingv1alpha3.Gateway{
+			Selector: map[string]string{
+				"istio": istioConfig.IngressGateway,
+			},
+			Servers: []*istioapinetworkingv1alpha3.Server{
+				{
+					Port: &istioapinetworkingv1alpha3.Port{
+						Number:   uint32(istioConfig.Port),
+						Name:     "http2",
+						Protocol: "HTTP2",
+					},
+					Hosts: istioConfig.Hosts,
+					Tls: func() *istioapinetworkingv1alpha3.ServerTLSSettings {
+						if istioConfig.TLS != nil && istioConfig.TLS.Enabled {
+							return &istioapinetworkingv1alpha3.ServerTLSSettings{
+								Mode:              istioapinetworkingv1alpha3.ServerTLSSettings_SIMPLE,
+								CredentialName:    istioConfig.TLS.SecretName,
+								PrivateKey:        "/etc/istio/ingressgateway-certs/tls.key",
+								ServerCertificate: "/etc/istio/ingressgateway-certs/tls.crt",
+							}
+						}
+						return nil
+					}(),
+				},
+			},
+		},
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(ordererBatcher, gateway, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for Gateway: %w", err)
+	}
+
+	// Create or update Gateway
+	if err := r.Client.Create(ctx, gateway); err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Update existing Gateway
+			existingGateway := &istionetworkingv1beta1.Gateway{}
+			if err := r.Client.Get(ctx, types.NamespacedName{
+				Name:      gatewayName,
+				Namespace: ordererBatcher.Namespace,
+			}, existingGateway); err != nil {
+				return fmt.Errorf("failed to get existing Gateway: %w", err)
+			}
+			existingGateway.Spec = gateway.Spec
+			if err := r.Client.Update(ctx, existingGateway); err != nil {
+				return fmt.Errorf("failed to update Gateway: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create Gateway: %w", err)
+		}
+	}
+
+	log.Info("Istio Gateway reconciled successfully", "gateway", gatewayName)
+	return nil
+}
+
+// reconcileIstioVirtualService creates or updates the Istio VirtualService for Batcher
+func (r *OrdererBatcherReconciler) reconcileIstioVirtualService(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping VirtualService creation")
+		return nil
+	}
+
+	istioConfig := ordererBatcher.Spec.Ingress.Istio
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererBatcher.Name)
+	gatewayName := fmt.Sprintf("%s-gateway", ordererBatcher.Name)
+
+	// Create VirtualService resource
+	virtualService := &istionetworkingv1beta1.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      virtualServiceName,
+			Namespace: ordererBatcher.Namespace,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererbatcher":           ordererBatcher.Name,
+				"fabricx.kfsoft.tech/type": "virtualservice",
+			},
+		},
+		Spec: v1alpha3.VirtualService{
+			Hosts:    istioConfig.Hosts,
+			Gateways: []string{gatewayName},
+			Http: []*v1alpha3.HTTPRoute{
+				{
+					Route: []*v1alpha3.HTTPRouteDestination{
+						{
+							Destination: &v1alpha3.Destination{
+								Host: fmt.Sprintf("%s.%s.svc.cluster.local", ordererBatcher.Name, ordererBatcher.Namespace),
+								Port: &v1alpha3.PortSelector{
+									Number: 7151, // Batcher port
+								},
+							},
+							Weight: 100,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(ordererBatcher, virtualService, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for VirtualService: %w", err)
+	}
+
+	// Create or update VirtualService
+	if err := r.Client.Create(ctx, virtualService); err != nil {
+		if errors.IsAlreadyExists(err) {
+			// Update existing VirtualService
+			existingVirtualService := &istionetworkingv1beta1.VirtualService{}
+			if err := r.Client.Get(ctx, types.NamespacedName{
+				Name:      virtualServiceName,
+				Namespace: ordererBatcher.Namespace,
+			}, existingVirtualService); err != nil {
+				return fmt.Errorf("failed to get existing VirtualService: %w", err)
+			}
+			existingVirtualService.Spec = virtualService.Spec
+			if err := r.Client.Update(ctx, existingVirtualService); err != nil {
+				return fmt.Errorf("failed to update VirtualService: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create VirtualService: %w", err)
+		}
+	}
+
+	log.Info("Istio VirtualService reconciled successfully", "virtualService", virtualServiceName)
+	return nil
+}
+
+// reconcileIstioResources creates or updates Istio Gateway and VirtualService resources
+func (r *OrdererBatcherReconciler) reconcileIstioResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Istio resources")
+		return nil
+	}
+
+	// Reconcile Gateway
+	if err := r.reconcileIstioGateway(ctx, ordererBatcher); err != nil {
+		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
+	}
+
+	// Reconcile VirtualService
+	if err := r.reconcileIstioVirtualService(ctx, ordererBatcher); err != nil {
+		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
+	}
+
+	log.Info("Istio resources reconciled successfully")
+	return nil
+}
+
+// cleanupIstioResources cleans up Istio Gateway and VirtualService resources
+func (r *OrdererBatcherReconciler) cleanupIstioResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Istio resources cleanup")
+		return nil
+	}
+
+	gatewayName := fmt.Sprintf("%s-gateway", ordererBatcher.Name)
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererBatcher.Name)
+
+	// Delete Gateway
+	gateway := &istionetworkingv1beta1.Gateway{}
+	gateway.SetName(gatewayName)
+	gateway.SetNamespace(ordererBatcher.Namespace)
+
+	if err := r.Client.Delete(ctx, gateway); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete Istio Gateway", "name", gatewayName)
+	} else {
+		log.Info("Deleted Istio Gateway", "name", gatewayName)
+	}
+
+	// Delete VirtualService
+	virtualService := &istionetworkingv1beta1.VirtualService{}
+	virtualService.SetName(virtualServiceName)
+	virtualService.SetNamespace(ordererBatcher.Namespace)
+
+	if err := r.Client.Delete(ctx, virtualService); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete Istio VirtualService", "name", virtualServiceName)
+	} else {
+		log.Info("Deleted Istio VirtualService", "name", virtualServiceName)
+	}
+
+	log.Info("Istio resources cleanup completed")
+	return nil
+}
+
 // reconcileDeployMode handles reconciliation in deploy mode (full deployment)
 func (r *OrdererBatcherReconciler) reconcileDeployMode(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	log := logf.FromContext(ctx)
@@ -569,6 +825,13 @@ func (r *OrdererBatcherReconciler) reconcileDeployMode(ctx context.Context, orde
 		}
 	}
 
+	// 8. Create/Update Istio Gateway and VirtualService (if Istio is configured)
+	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Istio != nil {
+		if err := r.reconcileIstioResources(ctx, ordererBatcher); err != nil {
+			return fmt.Errorf("failed to reconcile Istio resources: %w", err)
+		}
+	}
+
 	log.Info("OrdererBatcher deploy mode reconciliation completed")
 	return nil
 }
@@ -595,6 +858,13 @@ func (r *OrdererBatcherReconciler) handleDeletion(ctx context.Context, ordererBa
 
 	// Set status to indicate deletion
 	r.updateOrdererBatcherStatus(ctx, ordererBatcher, fabricxv1alpha1.PendingStatus, "Deleting OrdererBatcher resources")
+
+	// Clean up Istio resources if they exist
+	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Istio != nil {
+		if err := r.cleanupIstioResources(ctx, ordererBatcher); err != nil {
+			log.Error(err, "Failed to cleanup Istio resources")
+		}
+	}
 
 	// TODO: Clean up resources based on deployment mode
 	// - Delete Deployments/StatefulSets
@@ -756,6 +1026,20 @@ func (r *OrdererBatcherReconciler) updateService(ctx context.Context, ordererBat
 
 // getDeploymentTemplate returns a deployment template for the Batcher component
 func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) *appsv1.Deployment {
+	// Compute ConfigMap hash to trigger deployment updates when config changes
+	configMapHash := ""
+	configMapName := fmt.Sprintf("%s-config", ordererBatcher.Name)
+	hash, err := r.computeConfigMapHash(ctx, configMapName, ordererBatcher.Namespace)
+	if err != nil {
+		// Log the error but continue with empty hash
+		log := logf.FromContext(ctx)
+		log.Error(err, "Failed to compute ConfigMap hash, continuing without hash",
+			"configMapName", configMapName,
+			"namespace", ordererBatcher.Namespace)
+	} else {
+		configMapHash = hash
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ordererBatcher.Name,
@@ -768,6 +1052,9 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 					"app":     "batcher",
 					"release": ordererBatcher.Name,
 				},
+			},
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RecreateDeploymentStrategyType,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
@@ -791,6 +1078,10 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 							for k, v := range ordererBatcher.Spec.PodAnnotations {
 								annotations[k] = v
 							}
+						}
+						// Add ConfigMap hash annotation to trigger pod restarts when config changes
+						if configMapHash != "" {
+							annotations["fabricx.kfsoft.tech/config-hash"] = configMapHash
 						}
 						return annotations
 					}(),
@@ -1009,6 +1300,11 @@ func (r *OrdererBatcherReconciler) updateDeployment(ctx context.Context, orderer
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrdererBatcherReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Register Istio types with the scheme
+	if err := istionetworkingv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("failed to add Istio networking v1beta1 to scheme: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.OrdererBatcher{}).
 		Named("ordererbatcher").
