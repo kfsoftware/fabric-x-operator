@@ -245,8 +245,8 @@ func GenerateExternalOrganization(name, mspID string) (*v1alpha1.OrdererOrganiza
 	return externalOrg, certBundle, nil
 }
 
-// GenerateOrdererNodes creates orderer nodes with certificates
-func GenerateOrdererNodes(mspID string, count int, baseHost string, basePort int) ([]v1alpha1.OrdererNode, *CertificateBundle, error) {
+// GenerateConsenters creates consenter nodes with certificates
+func GenerateConsenters(mspID string, count int, baseHost string, basePort int) ([]v1alpha1.OrdererNode, *CertificateBundle, error) {
 	config := DefaultOrganizationConfig("OrdererOrg", mspID)
 	certBundle, err := GenerateOrganizationCertificates(config)
 	if err != nil {

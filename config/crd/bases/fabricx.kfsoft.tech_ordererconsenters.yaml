@@ -409,6 +409,12 @@ spec:
                 items:
                   type: string
                 type: array
+              bootstrapMode:
+                description: |-
+                  Bootstrap mode: "configure" or "deploy"
+                  When set to "configure", only configuration resources are created
+                  When set to "deploy", full deployment resources are created
+                type: string
               certificates:
                 description: Component-specific certificates
                 properties:
@@ -457,6 +463,10 @@ spec:
                 items:
                   type: string
                 type: array
+              consenterID:
+                description: Consenter ID for this consenter instance
+                format: int32
+                type: integer
               deploymentMode:
                 description: |-
                   Deployment mode: "configure" or "deploy"
@@ -579,6 +589,14 @@ spec:
                   type: string
                 description: Pod labels
                 type: object
+              pvcAccessModes:
+                description: PVC access modes
+                items:
+                  type: string
+                type: array
+              pvcStorageSize:
+                description: PVC storage size
+                type: string
               replicas:
                 description: Replicas for this consenter
                 format: int32
@@ -676,6 +694,9 @@ spec:
                 required:
                 - size
                 type: object
+              storageClassName:
+                description: Storage class name for PVC
+                type: string
               tolerations:
                 description: Tolerations
                 items:

@@ -7,14 +7,14 @@
 
 package v1alpha1
 
-// GenesisSpecApplyConfiguration represents a declarative configuration of the GenesisSpec type for use
+// GenesisSpecApplyConfiguration represents an declarative configuration of the GenesisSpec type for use
 // with apply.
 type GenesisSpecApplyConfiguration struct {
 	ChannelID            *string                                     `json:"channelID,omitempty"`
 	ConfigTemplate       *ConfigTemplateReferenceApplyConfiguration  `json:"configTemplate,omitempty"`
 	OrdererOrganizations []OrdererOrganizationApplyConfiguration     `json:"ordererOrganizations,omitempty"`
 	ApplicationOrgs      []ApplicationOrganizationApplyConfiguration `json:"applicationOrgs,omitempty"`
-	OrdererNodes         []OrdererNodeApplyConfiguration             `json:"ordererNodes,omitempty"`
+	Consenters           []OrdererNodeApplyConfiguration             `json:"consenters,omitempty"`
 	Output               *GenesisOutputApplyConfiguration            `json:"output,omitempty"`
 }
 
@@ -66,15 +66,15 @@ func (b *GenesisSpecApplyConfiguration) WithApplicationOrgs(values ...*Applicati
 	return b
 }
 
-// WithOrdererNodes adds the given value to the OrdererNodes field in the declarative configuration
+// WithConsenters adds the given value to the Consenters field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
-// If called multiple times, values provided by each call will be appended to the OrdererNodes field.
-func (b *GenesisSpecApplyConfiguration) WithOrdererNodes(values ...*OrdererNodeApplyConfiguration) *GenesisSpecApplyConfiguration {
+// If called multiple times, values provided by each call will be appended to the Consenters field.
+func (b *GenesisSpecApplyConfiguration) WithConsenters(values ...*OrdererNodeApplyConfiguration) *GenesisSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
-			panic("nil value passed to WithOrdererNodes")
+			panic("nil value passed to WithConsenters")
 		}
-		b.OrdererNodes = append(b.OrdererNodes, *values[i])
+		b.Consenters = append(b.Consenters, *values[i])
 	}
 	return b
 }

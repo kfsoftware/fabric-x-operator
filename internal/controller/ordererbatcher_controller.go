@@ -21,8 +21,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	v1alpha3 "istio.io/api/networking/v1alpha3"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -370,7 +372,7 @@ func (r *OrdererBatcherReconciler) reconcileConfigMap(ctx context.Context, order
 	}
 
 	// Prepare template data
-	templateData := utils.TemplateData{
+	templateData := utils.BatcherTemplateData{
 		Name:    ordererBatcher.Name,
 		PartyID: ordererBatcher.Spec.PartyID,
 		MSPID:   ordererBatcher.Spec.MSPID,
@@ -463,17 +465,44 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// PVC doesn't exist, create it
-			storageClassName := "fast-ssd"
+			storageClassName := ""
+			if ordererBatcher.Spec.StorageClassName != "" {
+				storageClassName = ordererBatcher.Spec.StorageClassName
+			}
+
+			accessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+			if len(ordererBatcher.Spec.PVCAccessModes) > 0 {
+				accessModes = []corev1.PersistentVolumeAccessMode{}
+				for _, mode := range ordererBatcher.Spec.PVCAccessModes {
+					switch mode {
+					case "ReadWriteOnce":
+						accessModes = append(accessModes, corev1.ReadWriteOnce)
+					case "ReadOnlyMany":
+						accessModes = append(accessModes, corev1.ReadOnlyMany)
+					case "ReadWriteMany":
+						accessModes = append(accessModes, corev1.ReadWriteMany)
+					}
+				}
+			}
+
+			storageSize := "10Gi"
+			if ordererBatcher.Spec.PVCStorageSize != "" {
+				storageSize = ordererBatcher.Spec.PVCStorageSize
+			}
+
 			pvc.Spec = corev1.PersistentVolumeClaimSpec{
-				AccessModes: []corev1.PersistentVolumeAccessMode{
-					corev1.ReadWriteOnce,
-				},
+				AccessModes: accessModes,
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse("10Gi"),
+						corev1.ResourceStorage: resource.MustParse(storageSize),
 					},
 				},
-				StorageClassName: &storageClassName,
+				StorageClassName: func() *string {
+					if storageClassName != "" {
+						return &storageClassName
+					}
+					return nil
+				}(),
 			}
 
 			// Set controller reference
@@ -481,7 +510,8 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 				return fmt.Errorf("failed to set controller reference for PVC: %w", err)
 			}
 
-			if err := r.Client.Create(ctx, pvc); err != nil {
+			// Use Create with retry logic for conflict resolution
+			if err := r.createPVCWithRetry(ctx, pvc); err != nil {
 				return fmt.Errorf("failed to create PVC: %w", err)
 			}
 
@@ -490,10 +520,125 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 			return fmt.Errorf("failed to get PVC: %w", err)
 		}
 	} else {
-		log.Info("PVC already exists", "name", pvc.Name, "namespace", pvc.Namespace)
+		// PVC exists, check if it needs to be updated
+		needsUpdate := false
+		updatedPVC := pvc.DeepCopy()
+
+		// Check storage class
+		if ordererBatcher.Spec.StorageClassName != "" {
+			expectedStorageClass := ordererBatcher.Spec.StorageClassName
+			if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != expectedStorageClass {
+				updatedPVC.Spec.StorageClassName = &expectedStorageClass
+				needsUpdate = true
+			}
+		}
+
+		// Check access modes
+		expectedAccessModes := []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+		if len(ordererBatcher.Spec.PVCAccessModes) > 0 {
+			expectedAccessModes = []corev1.PersistentVolumeAccessMode{}
+			for _, mode := range ordererBatcher.Spec.PVCAccessModes {
+				switch mode {
+				case "ReadWriteOnce":
+					expectedAccessModes = append(expectedAccessModes, corev1.ReadWriteOnce)
+				case "ReadOnlyMany":
+					expectedAccessModes = append(expectedAccessModes, corev1.ReadOnlyMany)
+				case "ReadWriteMany":
+					expectedAccessModes = append(expectedAccessModes, corev1.ReadWriteMany)
+				}
+			}
+		}
+
+		if !reflect.DeepEqual(pvc.Spec.AccessModes, expectedAccessModes) {
+			updatedPVC.Spec.AccessModes = expectedAccessModes
+			needsUpdate = true
+		}
+
+		// Check storage size
+		expectedStorageSize := "10Gi"
+		if ordererBatcher.Spec.PVCStorageSize != "" {
+			expectedStorageSize = ordererBatcher.Spec.PVCStorageSize
+		}
+
+		currentStorageSize := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		expectedStorageQuantity := resource.MustParse(expectedStorageSize)
+		if !currentStorageSize.Equal(expectedStorageQuantity) {
+			updatedPVC.Spec.Resources.Requests[corev1.ResourceStorage] = expectedStorageQuantity
+			needsUpdate = true
+		}
+
+		if needsUpdate {
+			// Use Update with retry logic for conflict resolution
+			if err := r.updatePVCWithRetry(ctx, updatedPVC); err != nil {
+				return fmt.Errorf("failed to update PVC: %w", err)
+			}
+			log.Info("Updated PVC", "name", pvc.Name, "namespace", pvc.Namespace)
+		} else {
+			log.Info("PVC already exists and is up to date", "name", pvc.Name, "namespace", pvc.Namespace)
+		}
 	}
 
 	return nil
+}
+
+// createPVCWithRetry creates a PVC with retry logic for conflict resolution
+func (r *OrdererBatcherReconciler) createPVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		err := r.Client.Create(ctx, pvc)
+		if err == nil {
+			return nil
+		}
+
+		// If it's a conflict error, retry
+		if errors.IsConflict(err) {
+			log := logf.FromContext(ctx)
+			log.Info("PVC creation conflict, retrying", "name", pvc.Name, "attempt", i+1)
+			time.Sleep(time.Duration(i+1) * time.Second)
+			continue
+		}
+
+		// For other errors, return immediately
+		return err
+	}
+
+	return fmt.Errorf("failed to create PVC after %d retries", maxRetries)
+}
+
+// updatePVCWithRetry updates a PVC with retry logic for conflict resolution
+func (r *OrdererBatcherReconciler) updatePVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		err := r.Client.Update(ctx, pvc)
+		if err == nil {
+			return nil
+		}
+
+		// If it's a conflict error, get the latest version and retry
+		if errors.IsConflict(err) {
+			log := logf.FromContext(ctx)
+			log.Info("PVC update conflict, getting latest version and retrying", "name", pvc.Name, "attempt", i+1)
+
+			// Get the latest version
+			latestPVC := &corev1.PersistentVolumeClaim{}
+			if err := r.Client.Get(ctx, types.NamespacedName{
+				Name:      pvc.Name,
+				Namespace: pvc.Namespace,
+			}, latestPVC); err != nil {
+				return fmt.Errorf("failed to get latest PVC version: %w", err)
+			}
+
+			// Update the resource version
+			pvc.ResourceVersion = latestPVC.ResourceVersion
+			time.Sleep(time.Duration(i+1) * time.Second)
+			continue
+		}
+
+		// For other errors, return immediately
+		return err
+	}
+
+	return fmt.Errorf("failed to update PVC after %d retries", maxRetries)
 }
 
 // reconcileGenesisBlock creates or updates the genesis block secret for the OrdererBatcher

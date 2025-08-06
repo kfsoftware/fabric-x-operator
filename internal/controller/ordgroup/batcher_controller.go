@@ -212,13 +212,12 @@ func (r *BatcherController) reconcileConfigMap(ctx context.Context, ordererGroup
 	}
 
 	// Prepare template data
-	templateData := utils.TemplateData{
-		Name:     fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, instanceIndex),
-		PartyID:  ordererGroup.Spec.PartyID,
-		MSPID:    ordererGroup.Spec.MSPID,
-		ShardID:  shardID,
-		Port:     7151 + int32(instanceIndex),
-		Instance: int32(instanceIndex),
+	templateData := utils.BatcherTemplateData{
+		Name:    ordererGroup.Name,
+		PartyID: ordererGroup.Spec.PartyID,
+		MSPID:   ordererGroup.Spec.MSPID,
+		ShardID: shardID,
+		Port:    7151,
 	}
 
 	// Execute the template using the shared utility

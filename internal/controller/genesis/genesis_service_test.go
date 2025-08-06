@@ -49,7 +49,8 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 	externalOrg, _, err := GenerateExternalOrganization("ExternalOrg", "ExternalOrgMSP")
 	require.NoError(t, err)
 
-	ordererNodes, _, err := GenerateOrdererNodes("OrdererOrgMSP", 2, "orderer", 7050)
+	// Generate orderer nodes
+	consenters, _, err := GenerateConsenters("OrdererOrgMSP", 2, "orderer", 7050)
 	require.NoError(t, err)
 
 	// Create mock CA resources with correct names
@@ -261,7 +262,7 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:         ordererNodes,
+			Consenters:           consenters,
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -339,7 +340,8 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 	ordererOrg, certBundle, err := GenerateOrdererOrganization("OrdererOrg", "OrdererOrgMSP")
 	require.NoError(t, err)
 
-	ordererNodes, _, err := GenerateOrdererNodes("ExternalOrg1MSP", 1, "orderer", 7050)
+	// Generate orderer nodes for the orderer organization
+	consenters, _, err := GenerateConsenters("ExternalOrg1MSP", 1, "orderer", 7050)
 	require.NoError(t, err)
 
 	// Create mock CA resource for orderer organization
@@ -470,7 +472,7 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		},
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg1, *externalOrg2},
-			OrdererNodes:         ordererNodes,
+			Consenters:           consenters,
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -508,7 +510,7 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate orderer nodes for the orderer organization
-	ordererNodes, _, err := GenerateOrdererNodes("OrdererOrgMSP", 2, "orderer", 7050)
+	consenters, _, err := GenerateConsenters("OrdererOrgMSP", 2, "orderer", 7050)
 	require.NoError(t, err)
 
 	// Create mock CA resource for orderer organization
@@ -640,7 +642,7 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg}, // Add orderer org
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:         ordererNodes, // Add orderer nodes
+			Consenters:           consenters, // Add consenters
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -760,7 +762,7 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 	require.NoError(t, err)
 
 	// Generate orderer nodes for the orderer organization
-	ordererNodes, _, err := GenerateOrdererNodes("OrdererOrgMSP", 2, "orderer", 7050)
+	consenters, _, err := GenerateConsenters("OrdererOrgMSP", 2, "orderer", 7050)
 	require.NoError(t, err)
 
 	// Create mock CA resource
@@ -829,7 +831,7 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		},
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
-			OrdererNodes:         ordererNodes, // Add orderer nodes
+			Consenters:           consenters, // Add consenters
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",

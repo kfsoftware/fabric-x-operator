@@ -132,8 +132,8 @@ type GenesisSpec struct {
 	// Application organizations (can be internal or external)
 	ApplicationOrgs []ApplicationOrganization `json:"applicationOrgs,omitempty"`
 
-	// Specific orderer nodes for consensus
-	OrdererNodes []OrdererNode `json:"ordererNodes,omitempty"`
+	// Specific consenter nodes for consensus
+	Consenters []OrdererNode `json:"consenters,omitempty"`
 
 	// Output configuration
 	Output GenesisOutput `json:"output"`

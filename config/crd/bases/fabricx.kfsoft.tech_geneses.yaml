@@ -136,8 +136,8 @@ spec:
                 - configMapName
                 - key
                 type: object
-              ordererNodes:
-                description: Specific orderer nodes for consensus
+              consenters:
+                description: Specific consenter nodes for consensus
                 items:
                   description: OrdererNode represents a specific orderer node for
                     consensus

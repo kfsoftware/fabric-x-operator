@@ -9,8 +9,7 @@ spec:
   bootstrapMode: configure
   mspid: OrdererMSP
   common:
-    imagePullSecrets:
-      - name: fabric-x-registry
+    imagePullSecrets: []
     podAnnotations:
       prometheus.io/port: '8080'
       prometheus.io/scrape: 'true'
@@ -18,18 +17,10 @@ spec:
       app.kubernetes.io/component: fabric-x
       app.kubernetes.io/part-of: admingroup
     replicas: 1
-    securityContext:
-      readOnlyRootFilesystem: true
-      runAsGroup: 1000
-      runAsUser: 1000
     storage:
       accessMode: ReadWriteOnce
       size: 10Gi
       storageClass: fast-ssd
-    tolerations:
-      - effect: NoSchedule
-        key: node-role.kubernetes.io/master
-        operator: Exists
     volumeMounts:
       - mountPath: /etc/fabric-x/config
         name: shared-config
@@ -48,15 +39,7 @@ spec:
             secretName: fabric-x-certs
   components:
     assembler:
-      affinity:
-        podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - podAffinityTerm:
-                labelSelector:
-                  matchLabels:
-                    app.kubernetes.io/component: assembler
-                topologyKey: kubernetes.io/hostname
-              weight: 100
+
       certificates:
         cahost: test-ca2.default
         caport: 7054
@@ -109,57 +92,127 @@ spec:
             key: dedicated
             operator: Equal
             value: batcher
-        volumeMounts:
-          - name: batcher-1-store
-            mountPath: /orderergroup-sample/batcher-1/store
-        volumes:
-          - name: batcher-1-store
-            volumeSource:
-              persistentVolumeClaim:
-                claimName: batcher-1-store-pvc
-    consenter:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/worker
-                    operator: Exists
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-      endpoints:
-        - consenter-org1.localho.st:7050
-      env:
-        - name: CONSENTER_TYPE
-          value: raft
-        - name: CONSENTER_BATCH_SIZE
-          value: '500'
-      ingress:
-        istio:
-          hosts:
-            - consenter-org1.localho.st
-          ingressGateway: istio-ingressgateway
-          port: 443
-      podAnnotations:
-        fabric-x/consenter-batch-size: '500'
-        fabric-x/consenter-type: raft
-      replicas: 4
-      volumeMounts:
-        - mountPath: /var/fabric-x/consenter
-          name: consenter-data
-      volumes:
-        - name: consenter-data
-          volumeSource:
-            persistentVolumeClaim:
-              claimName: consenter-pvc
+    consenters:
+      - consenterID: 1
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: admin
+          enrollsecret: adminpw
+        endpoints:
+          - consenter-1-org1.localho.st:7050
+        env:
+          - name: CONSENTER_TYPE
+            value: raft
+          - name: CONSENTER_BATCH_SIZE
+            value: '500'
+        ingress:
+          istio:
+            hosts:
+              - consenter-1-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podAnnotations:
+          fabric-x/consenter-batch-size: '500'
+          fabric-x/consenter-type: raft
+        replicas: 1
+        volumeMounts: []
+        volumes: []
+      - consenterID: 2
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: admin
+          enrollsecret: adminpw
+        endpoints:
+          - consenter-2-org1.localho.st:7050
+        env:
+          - name: CONSENTER_TYPE
+            value: raft
+          - name: CONSENTER_BATCH_SIZE
+            value: '500'
+        ingress:
+          istio:
+            hosts:
+              - consenter-2-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podAnnotations:
+          fabric-x/consenter-batch-size: '500'
+          fabric-x/consenter-type: raft
+        replicas: 1
+        volumeMounts: []
+        volumes: []
+      - consenterID: 3
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: admin
+          enrollsecret: adminpw
+        endpoints:
+          - consenter-3-org1.localho.st:7050
+        env:
+          - name: CONSENTER_TYPE
+            value: raft
+          - name: CONSENTER_BATCH_SIZE
+            value: '500'
+        ingress:
+          istio:
+            hosts:
+              - consenter-3-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podAnnotations:
+          fabric-x/consenter-batch-size: '500'
+          fabric-x/consenter-type: raft
+        replicas: 1
+        volumeMounts: []
+        volumes: []
+      - consenterID: 4
+        certificates:
+          cahost: test-ca2.default
+          caport: 7054
+          catls:
+            secretRef:
+              key: tls.crt
+              name: test-ca2-tls-crypto
+              namespace: default
+          enrollid: admin
+          enrollsecret: adminpw
+        endpoints:
+          - consenter-4-org1.localho.st:7050
+        env:
+          - name: CONSENTER_TYPE
+            value: raft
+          - name: CONSENTER_BATCH_SIZE
+            value: '500'
+        ingress:
+          istio:
+            hosts:
+              - consenter-4-org1.localho.st
+            ingressGateway: istio-ingressgateway
+            port: 443
+        podAnnotations:
+          fabric-x/consenter-batch-size: '500'
+          fabric-x/consenter-type: raft
+        replicas: 1
+        volumeMounts: []
+        volumes: []
     router:
       certificates:
         cahost: test-ca2.default
@@ -174,9 +227,7 @@ spec:
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
-      imagePullSecrets:
-        - name: router-registry
-        - name: fabric-x-registry
+      imagePullSecrets: []
       ingress:
         istio:
           hosts:

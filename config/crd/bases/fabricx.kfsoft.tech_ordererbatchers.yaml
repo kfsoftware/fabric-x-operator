@@ -579,6 +579,14 @@ spec:
                   type: string
                 description: Pod labels
                 type: object
+              pvcAccessModes:
+                description: PVC access modes
+                items:
+                  type: string
+                type: array
+              pvcStorageSize:
+                description: PVC storage size
+                type: string
               replicas:
                 description: Replicas for this batcher
                 format: int32
@@ -680,6 +688,9 @@ spec:
                 required:
                 - size
                 type: object
+              storageClassName:
+                description: Storage class name for PVC
+                type: string
               tolerations:
                 description: Tolerations
                 items:

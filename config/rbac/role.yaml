@@ -83,6 +83,7 @@ rules:
 - apiGroups:
   - networking.istio.io
   resources:
+  - destinationrules
   - gateways
   - virtualservices
   verbs:

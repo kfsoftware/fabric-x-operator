@@ -288,8 +288,8 @@ func (r *GenesisReconciler) validateGenesisSpec(genesisCR *fabricxv1alpha1.Genes
 		}
 	}
 
-	// Validate orderer nodes
-	for i, node := range genesisCR.Spec.OrdererNodes {
+	// Process orderer nodes
+	for i, node := range genesisCR.Spec.Consenters {
 		if node.Host == "" {
 			return fmt.Errorf("orderer node %d: host is required", i)
 		}

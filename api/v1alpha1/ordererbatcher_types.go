@@ -46,6 +46,15 @@ type OrdererBatcherSpec struct {
 	// Storage configuration
 	Storage *StorageConfig `json:"storage,omitempty"`
 
+	// Storage class name for PVC
+	StorageClassName string `json:"storageClassName,omitempty"`
+
+	// PVC access modes
+	PVCAccessModes []string `json:"pvcAccessModes,omitempty"`
+
+	// PVC storage size
+	PVCStorageSize string `json:"pvcStorageSize,omitempty"`
+
 	// Resources configuration
 	// +kubebuilder:validation:Optional
 	// +nullable

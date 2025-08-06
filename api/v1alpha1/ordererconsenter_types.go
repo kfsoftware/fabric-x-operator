@@ -28,11 +28,19 @@ type OrdererConsenterSpec struct {
 	// When set to "deploy", full deployment resources are created
 	DeploymentMode string `json:"deploymentMode,omitempty"`
 
+	// Bootstrap mode: "configure" or "deploy"
+	// When set to "configure", only configuration resources are created
+	// When set to "deploy", full deployment resources are created
+	BootstrapMode string `json:"bootstrapMode,omitempty"`
+
 	// MSP ID for this consenter
 	MSPID string `json:"mspid,omitempty"`
 
 	// Party ID for this consenter
 	PartyID int32 `json:"partyID,omitempty"`
+
+	// Consenter ID for this consenter instance
+	ConsenterID int32 `json:"consenterID,omitempty"`
 
 	// Genesis block configuration
 	Genesis GenesisConfig `json:"genesis"`
@@ -42,6 +50,15 @@ type OrdererConsenterSpec struct {
 
 	// Storage configuration
 	Storage *StorageConfig `json:"storage,omitempty"`
+
+	// Storage class name for PVC
+	StorageClassName string `json:"storageClassName,omitempty"`
+
+	// PVC access modes
+	PVCAccessModes []string `json:"pvcAccessModes,omitempty"`
+
+	// PVC storage size
+	PVCStorageSize string `json:"pvcStorageSize,omitempty"`
 
 	// Resources configuration
 	// +kubebuilder:validation:Optional

@@ -218,7 +218,7 @@ var _ = Describe("Genesis Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Generate orderer nodes for orderer organization
-				ordererNodes, _, err := genesisutils.GenerateOrdererNodes("OrdererOrgMSP", 2, "orderer", 7050)
+				consenters, _, err := genesisutils.GenerateConsenters("OrdererOrgMSP", 2, "orderer", 7050)
 				Expect(err).NotTo(HaveOccurred())
 
 				resource := &fabricxv1alpha1.Genesis{
@@ -237,7 +237,7 @@ var _ = Describe("Genesis Controller", func() {
 						// Add application organization
 						ApplicationOrgs: []fabricxv1alpha1.ApplicationOrganization{*appOrg},
 						// Add orderer nodes for orderer organization
-						OrdererNodes: ordererNodes,
+						Consenters: consenters,
 						Output: fabricxv1alpha1.GenesisOutput{
 							SecretName: "test-genesis-secret",
 							BlockKey:   "genesis.block",

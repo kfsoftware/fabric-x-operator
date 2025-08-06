@@ -134,8 +134,8 @@ func TestGenerateExternalOrganization(t *testing.T) {
 	assert.NotEmpty(t, certBundle.Orderer)
 }
 
-func TestGenerateOrdererNodes(t *testing.T) {
-	nodes, certBundle, err := GenerateOrdererNodes("OrdererOrgMSP", 3, "orderer", 7050)
+func TestGenerateConsenters(t *testing.T) {
+	nodes, certBundle, err := GenerateConsenters("OrdererOrgMSP", 3, "orderer", 7050)
 
 	require.NoError(t, err)
 	assert.NotNil(t, nodes)
@@ -173,67 +173,53 @@ func TestDefaultOrganizationConfig(t *testing.T) {
 	assert.Equal(t, 365, config.ValidDays)
 }
 
-func TestGenerateCompleteGenesis(t *testing.T) {
-	// Generate application organizations
-	appOrg1, _, err := GenerateApplicationOrganization("AppOrg1", "AppOrg1MSP", "internal")
-	require.NoError(t, err)
-
-	appOrg2, _, err := GenerateApplicationOrganization("AppOrg2", "AppOrg2MSP", "external")
-	require.NoError(t, err)
-
-	// Generate orderer organization
-	ordererOrg, _, err := GenerateOrdererOrganization("OrdererOrg", "OrdererOrgMSP")
-	require.NoError(t, err)
-
-	// Generate external organization
-	externalOrg, _, err := GenerateExternalOrganization("ExternalOrg", "ExternalOrgMSP")
-	require.NoError(t, err)
-
+func TestGenerateGenesisSpec(t *testing.T) {
 	// Generate orderer nodes
-	ordererNodes, _, err := GenerateOrdererNodes("OrdererOrgMSP", 2, "orderer", 7050)
+	consenters, _, err := GenerateConsenters("OrdererOrgMSP", 2, "orderer", 7050)
 	require.NoError(t, err)
 
-	// Create complete genesis
+	// Create genesis spec
 	genesis := &v1alpha1.Genesis{
 		Spec: v1alpha1.GenesisSpec{
-			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
-			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			OrdererNodes:         ordererNodes,
+			ChannelID: "mychannel",
+			ConfigTemplate: v1alpha1.ConfigTemplateReference{
+				ConfigMapName: "config-template",
+				Key:           "configtx.yaml",
+			},
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{
+				{
+					Name:  "OrdererOrg",
+					MSPID: "OrdererOrgMSP",
+					SignCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "orderer-ca-crypto",
+						Key:       "certfile",
+						Namespace: "default",
+					},
+					TLSCACertRef: v1alpha1.SecretKeyNSSelector{
+						Name:      "orderer-tlsca-crypto",
+						Key:       "certfile",
+						Namespace: "default",
+					},
+				},
+			},
+			Consenters: consenters,
 			Output: v1alpha1.GenesisOutput{
-				SecretName: "genesis-block-secret",
+				SecretName: "genesis-block",
 				BlockKey:   "genesis.block",
 			},
 		},
 	}
 
-	// Verify genesis structure
-	assert.Len(t, genesis.Spec.OrdererOrganizations, 2)
-	assert.Len(t, genesis.Spec.ApplicationOrgs, 2)
-	assert.Len(t, genesis.Spec.OrdererNodes, 2)
-
-	// Verify orderer orgs
-	assert.Equal(t, "OrdererOrg", genesis.Spec.OrdererOrganizations[0].Name)
-	assert.Equal(t, "OrdererOrgMSP", genesis.Spec.OrdererOrganizations[0].MSPID)
-
-	// Verify external orgs
-	assert.Equal(t, "ExternalOrg", genesis.Spec.OrdererOrganizations[1].Name)
-	assert.Equal(t, "ExternalOrgMSP", genesis.Spec.OrdererOrganizations[1].MSPID)
-
-	// Verify application orgs
-	assert.Equal(t, "AppOrg1", genesis.Spec.ApplicationOrgs[0].Name)
-	assert.Equal(t, "AppOrg1MSP", genesis.Spec.ApplicationOrgs[0].MSPID)
-
-	assert.Equal(t, "AppOrg2", genesis.Spec.ApplicationOrgs[1].Name)
-	assert.Equal(t, "AppOrg2MSP", genesis.Spec.ApplicationOrgs[1].MSPID)
-
-	// Verify orderer nodes
-	assert.Equal(t, 1, genesis.Spec.OrdererNodes[0].ID)
-	assert.Equal(t, "orderer1", genesis.Spec.OrdererNodes[0].Host)
-	assert.Equal(t, 7050, genesis.Spec.OrdererNodes[0].Port)
-
-	assert.Equal(t, 2, genesis.Spec.OrdererNodes[1].ID)
-	assert.Equal(t, "orderer2", genesis.Spec.OrdererNodes[1].Host)
-	assert.Equal(t, 7051, genesis.Spec.OrdererNodes[1].Port)
+	// Verify the genesis spec
+	assert.Len(t, genesis.Spec.Consenters, 2)
+	assert.Equal(t, "OrdererOrgMSP", genesis.Spec.Consenters[0].MSPID)
+	assert.Equal(t, 1, genesis.Spec.Consenters[0].ID)
+	assert.Equal(t, "orderer1", genesis.Spec.Consenters[0].Host)
+	assert.Equal(t, 7050, genesis.Spec.Consenters[0].Port)
+	assert.Equal(t, "OrdererOrgMSP", genesis.Spec.Consenters[1].MSPID)
+	assert.Equal(t, 2, genesis.Spec.Consenters[1].ID)
+	assert.Equal(t, "orderer2", genesis.Spec.Consenters[1].Host)
+	assert.Equal(t, 7051, genesis.Spec.Consenters[1].Port)
 }
 
 // verifyPEMCertificate verifies that a certificate is valid PEM format

@@ -552,10 +552,37 @@ type BatcherInstance struct {
 	Args []string `json:"args,omitempty"`
 }
 
+// ConsenterInstance defines a single consenter instance configuration
+type ConsenterInstance struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Consenter ID for this consenter instance
+	ConsenterID int32 `json:"consenterID"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific certificates
+	Certificates *CertificateConfig `json:"certificates,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+}
+
 // OrdererComponents defines configurations for each component
 type OrdererComponents struct {
-	// Consenter configuration
-	Consenter *ComponentConfig `json:"consenter,omitempty"`
+	// Consenter configurations - can have multiple consenter instances
+	Consenters []ConsenterInstance `json:"consenters,omitempty"`
 
 	// Batcher configurations - can have multiple batcher instances
 	Batchers []BatcherInstance `json:"batchers,omitempty"`
@@ -590,8 +617,8 @@ type OrdererGroupStatus struct {
 
 // ChildCRDStatuses tracks the status of child CRDs
 type ChildCRDStatuses struct {
-	// Consenter status
-	Consenter *ChildCRDStatus `json:"consenter,omitempty"`
+	// Consenter statuses (multiple consenter instances)
+	Consenters []ChildCRDStatus `json:"consenters,omitempty"`
 
 	// Assembler status
 	Assembler *ChildCRDStatus `json:"assembler,omitempty"`
