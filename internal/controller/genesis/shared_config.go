@@ -18,7 +18,6 @@ package genesis
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hyperledger/fabric-x-orderer/config/protos"
 
@@ -134,137 +133,139 @@ func (s *SharedConfigService) GenerateSharedConfig(ctx context.Context, req *Sha
 	return sharedConfig, nil
 }
 
-// generatePartiesConfig generates PartyConfig for each organization
+// generatePartiesConfig generates PartyConfig for each party
 func (s *SharedConfigService) generatePartiesConfig(ctx context.Context, genesis *v1alpha1.Genesis) ([]*protos.PartyConfig, error) {
 	var partiesConfig []*protos.PartyConfig
-	partyID := uint32(1) // Start with party ID 1
 
-	s.logger.Infof("Processing %d organizations", len(genesis.Spec.OrdererOrganizations))
-	// Process organizations
-	for _, org := range genesis.Spec.OrdererOrganizations {
-		partyConfig, err := s.createPartyConfigFromOrg(ctx, org, partyID)
+	s.logger.Infof("Processing %d parties", len(genesis.Spec.Parties))
+
+	// Process parties directly from the Parties configuration
+	for _, party := range genesis.Spec.Parties {
+		partyConfig, err := s.createPartyConfigFromParty(ctx, party)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to create party config for org %s", org.Name)
+			return nil, errors.Wrapf(err, "failed to create party config for party %d", party.PartyID)
 		}
 		partiesConfig = append(partiesConfig, partyConfig)
-		partyID++
-	}
-
-	s.logger.Infof("Processing %d application organizations", len(genesis.Spec.ApplicationOrgs))
-	// Process application organizations
-	for _, org := range genesis.Spec.ApplicationOrgs {
-		partyConfig, err := s.createPartyConfigFromApplicationOrg(ctx, org, partyID)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to create party config for application org %s", org.Name)
-		}
-		partiesConfig = append(partiesConfig, partyConfig)
-		partyID++
 	}
 
 	s.logger.Infof("Generated %d party configurations", len(partiesConfig))
-	// Return empty slice instead of nil if no organizations
+	// Return empty slice instead of nil if no parties
 	if len(partiesConfig) == 0 {
 		return make([]*protos.PartyConfig, 0), nil
 	}
 	return partiesConfig, nil
 }
 
-// createPartyConfigFromOrg creates PartyConfig from organization
-func (s *SharedConfigService) createPartyConfigFromOrg(ctx context.Context, org v1alpha1.OrdererOrganization, partyID uint32) (*protos.PartyConfig, error) {
-	// Fetch signing CA certificate from secret
-	signCACert, err := s.fetchCertificateFromSecret(ctx, org.SignCACertRef)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to fetch signing CA certificate for org %s", org.Name)
+// createPartyConfigFromParty creates PartyConfig from party configuration
+func (s *SharedConfigService) createPartyConfigFromParty(ctx context.Context, party v1alpha1.PartyConfig) (*protos.PartyConfig, error) {
+	// Fetch CA certificates
+	var caCerts [][]byte
+	for _, caCertRef := range party.CACerts {
+		caCert, err := s.fetchCertificateFromSecret(ctx, caCertRef)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to fetch CA certificate for party %d", party.PartyID)
+		}
+		caCerts = append(caCerts, caCert)
 	}
 
-	// Fetch TLS CA certificate from secret
-	tlsCACert, err := s.fetchCertificateFromSecret(ctx, org.TLSCACertRef)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to fetch TLS CA certificate for org %s", org.Name)
+	// Fetch TLS CA certificates
+	var tlsCACerts [][]byte
+	for _, tlsCACertRef := range party.TLSCACerts {
+		tlsCACert, err := s.fetchCertificateFromSecret(ctx, tlsCACertRef)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to fetch TLS CA certificate for party %d", party.PartyID)
+		}
+		tlsCACerts = append(tlsCACerts, tlsCACert)
 	}
 
-	caCerts := [][]byte{signCACert}
-	tlsCACerts := [][]byte{tlsCACert}
+	// Validate router configuration is provided
+	if party.RouterConfig == nil {
+		return nil, errors.Errorf("router configuration is required for party %d", party.PartyID)
+	}
+
+	// Fetch router TLS certificate
+	routerTlsCert, err := s.fetchCertificateFromSecret(ctx, party.RouterConfig.TLSCert)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to fetch router TLS certificate for party %d", party.PartyID)
+	}
+
+	// Validate batchers configuration is provided
+	if len(party.BatchersConfig) == 0 {
+		return nil, errors.Errorf("at least one batcher configuration is required for party %d", party.PartyID)
+	}
+
+	// Process batchers
+	var batchersConfig []*protos.BatcherNodeConfig
+	for _, batcher := range party.BatchersConfig {
+		// Fetch batcher signing certificate
+		batcherSignCert, err := s.fetchCertificateFromSecret(ctx, batcher.SignCert)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to fetch batcher signing certificate for party %d", party.PartyID)
+		}
+
+		// Fetch batcher TLS certificate
+		batcherTlsCert, err := s.fetchCertificateFromSecret(ctx, batcher.TLSCert)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to fetch batcher TLS certificate for party %d", party.PartyID)
+		}
+
+		batchersConfig = append(batchersConfig, &protos.BatcherNodeConfig{
+			ShardID:  uint32(batcher.ShardID),
+			Host:     batcher.Host,
+			Port:     uint32(batcher.Port),
+			SignCert: batcherSignCert,
+			TlsCert:  batcherTlsCert,
+		})
+	}
+
+	// Validate consenter configuration is provided
+	if party.ConsenterConfig == nil {
+		return nil, errors.Errorf("consenter configuration is required for party %d", party.PartyID)
+	}
+
+	// Fetch consenter signing certificate
+	consenterSignCert, err := s.fetchCertificateFromSecret(ctx, party.ConsenterConfig.SignCert)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to fetch consenter signing certificate for party %d", party.PartyID)
+	}
+
+	// Fetch consenter TLS certificate
+	consenterTlsCert, err := s.fetchCertificateFromSecret(ctx, party.ConsenterConfig.TLSCert)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to fetch consenter TLS certificate for party %d", party.PartyID)
+	}
+
+	// Validate assembler configuration is provided
+	if party.AssemblerConfig == nil {
+		return nil, errors.Errorf("assembler configuration is required for party %d", party.PartyID)
+	}
+
+	// Fetch assembler TLS certificate
+	assemblerTlsCert, err := s.fetchCertificateFromSecret(ctx, party.AssemblerConfig.TLSCert)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to fetch assembler TLS certificate for party %d", party.PartyID)
+	}
 
 	partyConfig := &protos.PartyConfig{
-		PartyID:    partyID,
+		PartyID:    uint32(party.PartyID),
 		CACerts:    caCerts,
 		TLSCACerts: tlsCACerts,
 		RouterConfig: &protos.RouterNodeConfig{
-			Host:    fmt.Sprintf("router.%s.example.com", org.Name),
-			Port:    7050,
-			TlsCert: tlsCACert, // Use TLS CA cert for router TLS
+			Host:    party.RouterConfig.Host,
+			Port:    uint32(party.RouterConfig.Port),
+			TlsCert: routerTlsCert,
 		},
-		BatchersConfig: []*protos.BatcherNodeConfig{
-			{
-				ShardID:  1,
-				Host:     fmt.Sprintf("batcher1.%s.example.com", org.Name),
-				Port:     7051,
-				SignCert: signCACert, // Use signing CA cert for batcher signing
-				TlsCert:  tlsCACert,  // Use TLS CA cert for batcher TLS
-			},
-		},
+		BatchersConfig: batchersConfig,
 		ConsenterConfig: &protos.ConsenterNodeConfig{
-			Host:     fmt.Sprintf("consenter.%s.example.com", org.Name),
-			Port:     7052,
-			SignCert: signCACert, // Use signing CA cert for consenter signing
-			TlsCert:  tlsCACert,  // Use TLS CA cert for consenter TLS
+			Host:     party.ConsenterConfig.Host,
+			Port:     uint32(party.ConsenterConfig.Port),
+			SignCert: consenterSignCert,
+			TlsCert:  consenterTlsCert,
 		},
 		AssemblerConfig: &protos.AssemblerNodeConfig{
-			Host:    fmt.Sprintf("assembler.%s.example.com", org.Name),
-			Port:    7053,
-			TlsCert: tlsCACert, // Use TLS CA cert for assembler TLS
-		},
-	}
-
-	return partyConfig, nil
-}
-
-// createPartyConfigFromApplicationOrg creates PartyConfig from application organization
-func (s *SharedConfigService) createPartyConfigFromApplicationOrg(ctx context.Context, org v1alpha1.ApplicationOrganization, partyID uint32) (*protos.PartyConfig, error) {
-	// Fetch signing CA certificate from secret
-	signCACert, err := s.fetchCertificateFromSecret(ctx, org.SignCACertRef)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to fetch signing CA certificate for app org %s", org.Name)
-	}
-
-	// Fetch TLS CA certificate from secret
-	tlsCACert, err := s.fetchCertificateFromSecret(ctx, org.TLSCACertRef)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to fetch TLS CA certificate for app org %s", org.Name)
-	}
-
-	caCerts := [][]byte{signCACert}
-	tlsCACerts := [][]byte{tlsCACert}
-
-	partyConfig := &protos.PartyConfig{
-		PartyID:    partyID,
-		CACerts:    caCerts,
-		TLSCACerts: tlsCACerts,
-		RouterConfig: &protos.RouterNodeConfig{
-			Host:    fmt.Sprintf("router.%s.example.com", org.Name),
-			Port:    7050,
-			TlsCert: tlsCACert, // Use TLS CA cert for router TLS
-		},
-		BatchersConfig: []*protos.BatcherNodeConfig{
-			{
-				ShardID:  1,
-				Host:     fmt.Sprintf("batcher1.%s.example.com", org.Name),
-				Port:     7051,
-				SignCert: signCACert, // Use signing CA cert for batcher signing
-				TlsCert:  tlsCACert,  // Use TLS CA cert for batcher TLS
-			},
-		},
-		ConsenterConfig: &protos.ConsenterNodeConfig{
-			Host:     fmt.Sprintf("consenter.%s.example.com", org.Name),
-			Port:     7052,
-			SignCert: signCACert, // Use signing CA cert for consenter signing
-			TlsCert:  tlsCACert,  // Use TLS CA cert for consenter TLS
-		},
-		AssemblerConfig: &protos.AssemblerNodeConfig{
-			Host:    fmt.Sprintf("assembler.%s.example.com", org.Name),
-			Port:    7053,
-			TlsCert: tlsCACert, // Use TLS CA cert for assembler TLS
+			Host:    party.AssemblerConfig.Host,
+			Port:    uint32(party.AssemblerConfig.Port),
+			TlsCert: assemblerTlsCert,
 		},
 	}
 
@@ -273,7 +274,40 @@ func (s *SharedConfigService) createPartyConfigFromApplicationOrg(ctx context.Co
 
 // generateConsensusConfig generates ConsensusConfig
 func (s *SharedConfigService) generateConsensusConfig(genesis *v1alpha1.Genesis) (*protos.ConsensusConfig, error) {
-	// TODO: Configure SmartBFT parameters based on genesis configuration
+	// Use the consensus configuration from Genesis spec if provided
+	if genesis.Spec.ConsensusConfig != nil && genesis.Spec.ConsensusConfig.SmartBFT != nil {
+		smartBFT := genesis.Spec.ConsensusConfig.SmartBFT
+		smartBFTConfig := &protos.SmartBFTConfig{
+			RequestBatchMaxCount:          uint64(smartBFT.RequestBatchMaxCount),
+			RequestBatchMaxBytes:          uint64(smartBFT.RequestBatchMaxBytes),
+			RequestBatchMaxInterval:       smartBFT.RequestBatchMaxInterval,
+			IncomingMessageBufferSize:     uint64(smartBFT.IncomingMessageBufferSize),
+			RequestPoolSize:               uint64(smartBFT.RequestPoolSize),
+			RequestForwardTimeout:         smartBFT.RequestForwardTimeout,
+			RequestComplainTimeout:        smartBFT.RequestComplainTimeout,
+			RequestAutoRemoveTimeout:      smartBFT.RequestAutoRemoveTimeout,
+			ViewChangeResendInterval:      smartBFT.ViewChangeResendInterval,
+			ViewChangeTimeout:             smartBFT.ViewChangeTimeout,
+			LeaderHeartbeatTimeout:        smartBFT.LeaderHeartbeatTimeout,
+			LeaderHeartbeatCount:          uint64(smartBFT.LeaderHeartbeatCount),
+			NumOfTicksBehindBeforeSyncing: uint64(smartBFT.NumOfTicksBehindBeforeSyncing),
+			CollectTimeout:                smartBFT.CollectTimeout,
+			SyncOnStart:                   smartBFT.SyncOnStart,
+			SpeedUpViewChange:             smartBFT.SpeedUpViewChange,
+			LeaderRotation:                smartBFT.LeaderRotation,
+			DecisionsPerLeader:            uint64(smartBFT.DecisionsPerLeader),
+			RequestMaxBytes:               uint64(smartBFT.RequestMaxBytes),
+			RequestPoolSubmitTimeout:      smartBFT.RequestPoolSubmitTimeout,
+		}
+
+		consensusConfig := &protos.ConsensusConfig{
+			SmartBFTConfig: smartBFTConfig,
+		}
+
+		return consensusConfig, nil
+	}
+
+	// Fallback to default configuration
 	smartBFTConfig := &protos.SmartBFTConfig{
 		RequestBatchMaxCount:          500,
 		RequestBatchMaxBytes:          10 * 1024 * 1024, // 10MB
@@ -306,7 +340,35 @@ func (s *SharedConfigService) generateConsensusConfig(genesis *v1alpha1.Genesis)
 
 // generateBatchingConfig generates BatchingConfig
 func (s *SharedConfigService) generateBatchingConfig(genesis *v1alpha1.Genesis) (*protos.BatchingConfig, error) {
-	// TODO: Configure batching parameters based on genesis configuration
+	// Use the batching configuration from Genesis spec if provided
+	if genesis.Spec.BatchingConfig != nil {
+		batchingConfig := &protos.BatchingConfig{
+			RequestMaxBytes: uint64(genesis.Spec.BatchingConfig.RequestMaxBytes),
+		}
+
+		if genesis.Spec.BatchingConfig.BatchTimeouts != nil {
+			batchTimeouts := &protos.BatchTimeouts{
+				BatchCreationTimeout:  genesis.Spec.BatchingConfig.BatchTimeouts.BatchCreationTimeout,
+				FirstStrikeThreshold:  genesis.Spec.BatchingConfig.BatchTimeouts.FirstStrikeThreshold,
+				SecondStrikeThreshold: genesis.Spec.BatchingConfig.BatchTimeouts.SecondStrikeThreshold,
+				AutoRemoveTimeout:     genesis.Spec.BatchingConfig.BatchTimeouts.AutoRemoveTimeout,
+			}
+			batchingConfig.BatchTimeouts = batchTimeouts
+		}
+
+		if genesis.Spec.BatchingConfig.BatchSize != nil {
+			batchSize := &protos.BatchSize{
+				MaxMessageCount:   uint32(genesis.Spec.BatchingConfig.BatchSize.MaxMessageCount),
+				AbsoluteMaxBytes:  uint32(genesis.Spec.BatchingConfig.BatchSize.AbsoluteMaxBytes),
+				PreferredMaxBytes: uint32(genesis.Spec.BatchingConfig.BatchSize.PreferredMaxBytes),
+			}
+			batchingConfig.BatchSize = batchSize
+		}
+
+		return batchingConfig, nil
+	}
+
+	// Fallback to default configuration
 	batchTimeouts := &protos.BatchTimeouts{
 		BatchCreationTimeout:  "2s",
 		FirstStrikeThreshold:  "5s",

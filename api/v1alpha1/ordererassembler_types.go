@@ -23,10 +23,11 @@ import (
 
 // OrdererAssemblerSpec defines the desired state of OrdererAssembler.
 type OrdererAssemblerSpec struct {
-	// Deployment mode: "configure" or "deploy"
+
+	// Bootstrap mode: "configure" or "deploy"
 	// When set to "configure", only configuration resources are created
 	// When set to "deploy", full deployment resources are created
-	DeploymentMode string `json:"deploymentMode,omitempty"`
+	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
 	// MSP ID for this assembler
 	MSPID string `json:"mspid,omitempty"`

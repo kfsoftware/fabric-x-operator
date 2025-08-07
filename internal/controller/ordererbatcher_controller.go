@@ -26,7 +26,8 @@ import (
 	"strings"
 	"time"
 
-	v1alpha3 "istio.io/api/networking/v1alpha3"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,9 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 
 	// Istio imports
 	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
@@ -176,17 +174,17 @@ func (r *OrdererBatcherReconciler) reconcileOrdererBatcher(ctx context.Context, 
 	log.Info("Starting OrdererBatcher reconciliation",
 		"name", ordererBatcher.Name,
 		"namespace", ordererBatcher.Namespace,
-		"deploymentMode", ordererBatcher.Spec.DeploymentMode,
+		"bootstrapMode", ordererBatcher.Spec.BootstrapMode,
 		"shardID", ordererBatcher.Spec.ShardID)
 
-	// Determine deployment mode
-	deploymentMode := ordererBatcher.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Check bootstrap mode - only deploy when bootstrapMode is "deploy"
+	bootstrapMode := ordererBatcher.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	// Reconcile based on deployment mode
-	switch deploymentMode {
+	switch ordererBatcher.Spec.BootstrapMode {
 	case "configure":
 		if err := r.reconcileConfigureMode(ctx, ordererBatcher); err != nil {
 			errorMsg := fmt.Sprintf("Failed to reconcile in configure mode: %v", err)
@@ -202,8 +200,8 @@ func (r *OrdererBatcherReconciler) reconcileOrdererBatcher(ctx context.Context, 
 			return fmt.Errorf("failed to reconcile in deploy mode: %w", err)
 		}
 	default:
-		errorMsg := fmt.Sprintf("Invalid deployment mode: %s", deploymentMode)
-		log.Error(fmt.Errorf("%s", errorMsg), "Invalid deployment mode")
+		errorMsg := fmt.Sprintf("Invalid bootstrap mode: %s", ordererBatcher.Spec.BootstrapMode)
+		log.Error(fmt.Errorf("%s", errorMsg), "Invalid bootstrap mode")
 		r.updateOrdererBatcherStatus(ctx, ordererBatcher, fabricxv1alpha1.FailedStatus, errorMsg)
 		return fmt.Errorf("%s", errorMsg)
 	}
@@ -718,8 +716,8 @@ func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, or
 	istioConfig := ordererBatcher.Spec.Ingress.Istio
 	gatewayName := fmt.Sprintf("%s-gateway", ordererBatcher.Name)
 
-	// Create Gateway resource
-	gateway := &istionetworkingv1beta1.Gateway{
+	// Create Gateway resource template
+	gatewayTemplate := &istionetworkingv1beta1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gatewayName,
 			Namespace: ordererBatcher.Namespace,
@@ -737,49 +735,48 @@ func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, or
 				{
 					Port: &istioapinetworkingv1alpha3.Port{
 						Number:   uint32(istioConfig.Port),
-						Name:     "http2",
-						Protocol: "HTTP2",
+						Name:     "tls",
+						Protocol: "TLS",
 					},
 					Hosts: istioConfig.Hosts,
-					Tls: func() *istioapinetworkingv1alpha3.ServerTLSSettings {
-						if istioConfig.TLS != nil && istioConfig.TLS.Enabled {
-							return &istioapinetworkingv1alpha3.ServerTLSSettings{
-								Mode:              istioapinetworkingv1alpha3.ServerTLSSettings_SIMPLE,
-								CredentialName:    istioConfig.TLS.SecretName,
-								PrivateKey:        "/etc/istio/ingressgateway-certs/tls.key",
-								ServerCertificate: "/etc/istio/ingressgateway-certs/tls.crt",
-							}
-						}
-						return nil
-					}(),
+					Tls: &istioapinetworkingv1alpha3.ServerTLSSettings{
+						Mode: istioapinetworkingv1alpha3.ServerTLSSettings_PASSTHROUGH,
+					},
 				},
 			},
 		},
 	}
 
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererBatcher, gateway, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(ordererBatcher, gatewayTemplate, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference for Gateway: %w", err)
 	}
 
-	// Create or update Gateway
-	if err := r.Client.Create(ctx, gateway); err != nil {
-		if errors.IsAlreadyExists(err) {
-			// Update existing Gateway
-			existingGateway := &istionetworkingv1beta1.Gateway{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
-				Name:      gatewayName,
-				Namespace: ordererBatcher.Namespace,
-			}, existingGateway); err != nil {
-				return fmt.Errorf("failed to get existing Gateway: %w", err)
+	// Check if Gateway already exists
+	existingGateway := &istionetworkingv1beta1.Gateway{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      gatewayName,
+		Namespace: ordererBatcher.Namespace,
+	}, existingGateway)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new Gateway
+			if err := r.Client.Create(ctx, gatewayTemplate); err != nil {
+				return fmt.Errorf("failed to create Gateway: %w", err)
 			}
-			existingGateway.Spec = gateway.Spec
-			if err := r.Client.Update(ctx, existingGateway); err != nil {
-				return fmt.Errorf("failed to update Gateway: %w", err)
-			}
+			log.Info("Created Istio Gateway", "gateway", gatewayName)
 		} else {
-			return fmt.Errorf("failed to create Gateway: %w", err)
+			return fmt.Errorf("failed to get existing Gateway: %w", err)
 		}
+	} else {
+		// Update existing Gateway - always update to ensure it's current
+		existingGateway.Spec = gatewayTemplate.Spec
+		existingGateway.Labels = gatewayTemplate.Labels
+		if err := r.Client.Update(ctx, existingGateway); err != nil {
+			return fmt.Errorf("failed to update Gateway: %w", err)
+		}
+		log.Info("Updated Istio Gateway", "gateway", gatewayName)
 	}
 
 	log.Info("Istio Gateway reconciled successfully", "gateway", gatewayName)
@@ -800,8 +797,8 @@ func (r *OrdererBatcherReconciler) reconcileIstioVirtualService(ctx context.Cont
 	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererBatcher.Name)
 	gatewayName := fmt.Sprintf("%s-gateway", ordererBatcher.Name)
 
-	// Create VirtualService resource
-	virtualService := &istionetworkingv1beta1.VirtualService{
+	// Create VirtualService resource template
+	virtualServiceTemplate := &istionetworkingv1beta1.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      virtualServiceName,
 			Namespace: ordererBatcher.Namespace,
@@ -811,16 +808,22 @@ func (r *OrdererBatcherReconciler) reconcileIstioVirtualService(ctx context.Cont
 				"fabricx.kfsoft.tech/type": "virtualservice",
 			},
 		},
-		Spec: v1alpha3.VirtualService{
+		Spec: istioapinetworkingv1alpha3.VirtualService{
 			Hosts:    istioConfig.Hosts,
 			Gateways: []string{gatewayName},
-			Http: []*v1alpha3.HTTPRoute{
+			Tls: []*istioapinetworkingv1alpha3.TLSRoute{
 				{
-					Route: []*v1alpha3.HTTPRouteDestination{
+					Match: []*istioapinetworkingv1alpha3.TLSMatchAttributes{
 						{
-							Destination: &v1alpha3.Destination{
-								Host: fmt.Sprintf("%s.%s.svc.cluster.local", ordererBatcher.Name, ordererBatcher.Namespace),
-								Port: &v1alpha3.PortSelector{
+							Port:     uint32(istioConfig.Port),
+							SniHosts: istioConfig.Hosts,
+						},
+					},
+					Route: []*istioapinetworkingv1alpha3.RouteDestination{
+						{
+							Destination: &istioapinetworkingv1alpha3.Destination{
+								Host: fmt.Sprintf("%s-service.%s.svc.cluster.local", ordererBatcher.Name, ordererBatcher.Namespace),
+								Port: &istioapinetworkingv1alpha3.PortSelector{
 									Number: 7151, // Batcher port
 								},
 							},
@@ -833,28 +836,35 @@ func (r *OrdererBatcherReconciler) reconcileIstioVirtualService(ctx context.Cont
 	}
 
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererBatcher, virtualService, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(ordererBatcher, virtualServiceTemplate, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference for VirtualService: %w", err)
 	}
 
-	// Create or update VirtualService
-	if err := r.Client.Create(ctx, virtualService); err != nil {
-		if errors.IsAlreadyExists(err) {
-			// Update existing VirtualService
-			existingVirtualService := &istionetworkingv1beta1.VirtualService{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
-				Name:      virtualServiceName,
-				Namespace: ordererBatcher.Namespace,
-			}, existingVirtualService); err != nil {
-				return fmt.Errorf("failed to get existing VirtualService: %w", err)
+	// Check if VirtualService already exists
+	existingVirtualService := &istionetworkingv1beta1.VirtualService{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      virtualServiceName,
+		Namespace: ordererBatcher.Namespace,
+	}, existingVirtualService)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new VirtualService
+			if err := r.Client.Create(ctx, virtualServiceTemplate); err != nil {
+				return fmt.Errorf("failed to create VirtualService: %w", err)
 			}
-			existingVirtualService.Spec = virtualService.Spec
-			if err := r.Client.Update(ctx, existingVirtualService); err != nil {
-				return fmt.Errorf("failed to update VirtualService: %w", err)
-			}
+			log.Info("Created Istio VirtualService", "virtualService", virtualServiceName)
 		} else {
-			return fmt.Errorf("failed to create VirtualService: %w", err)
+			return fmt.Errorf("failed to get existing VirtualService: %w", err)
 		}
+	} else {
+		// Update existing VirtualService - always update to ensure it's current
+		existingVirtualService.Spec = virtualServiceTemplate.Spec
+		existingVirtualService.Labels = virtualServiceTemplate.Labels
+		if err := r.Client.Update(ctx, existingVirtualService); err != nil {
+			return fmt.Errorf("failed to update VirtualService: %w", err)
+		}
+		log.Info("Updated Istio VirtualService", "virtualService", virtualServiceName)
 	}
 
 	log.Info("Istio VirtualService reconciled successfully", "virtualService", virtualServiceName)

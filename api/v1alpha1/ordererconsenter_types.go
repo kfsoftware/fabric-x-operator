@@ -23,11 +23,6 @@ import (
 
 // OrdererConsenterSpec defines the desired state of OrdererConsenter.
 type OrdererConsenterSpec struct {
-	// Deployment mode: "configure" or "deploy"
-	// When set to "configure", only configuration resources are created
-	// When set to "deploy", full deployment resources are created
-	DeploymentMode string `json:"deploymentMode,omitempty"`
-
 	// Bootstrap mode: "configure" or "deploy"
 	// When set to "configure", only configuration resources are created
 	// When set to "deploy", full deployment resources are created

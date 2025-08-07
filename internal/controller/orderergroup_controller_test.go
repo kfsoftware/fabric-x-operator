@@ -99,13 +99,11 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 						Replicas: 1,
 					},
 					Components: fabricxv1alpha1.OrdererComponents{
-						Consenters: []fabricxv1alpha1.ConsenterInstance{
-							{
-								CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-									Replicas: 1,
-								},
-								ConsenterID: 1,
+						Consenter: &fabricxv1alpha1.ConsenterInstance{
+							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+								Replicas: 1,
 							},
+							ConsenterID: 1,
 						},
 						Assembler: &fabricxv1alpha1.ComponentConfig{
 							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
@@ -151,13 +149,11 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 						Replicas: 1,
 					},
 					Components: fabricxv1alpha1.OrdererComponents{
-						Consenters: []fabricxv1alpha1.ConsenterInstance{
-							{
-								CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-									Replicas: 1,
-								},
-								ConsenterID: 1,
+						Consenter: &fabricxv1alpha1.ConsenterInstance{
+							CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+								Replicas: 1,
 							},
+							ConsenterID: 1,
 						},
 					},
 					Genesis: fabricxv1alpha1.GenesisConfig{
@@ -259,13 +255,11 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 				Replicas: 1,
 			},
 			Components: fabricxv1alpha1.OrdererComponents{
-				Consenters: []fabricxv1alpha1.ConsenterInstance{
-					{
-						CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
-							Replicas: 1,
-						},
-						ConsenterID: 1,
+				Consenter: &fabricxv1alpha1.ConsenterInstance{
+					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
+						Replicas: 1,
 					},
+					ConsenterID: 1,
 				},
 				Assembler: &fabricxv1alpha1.ComponentConfig{
 					CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{

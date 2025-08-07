@@ -177,13 +177,13 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 func (r *OrdererGroupReconciler) reconcileChildComponents(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
 
-	// Reconcile Consenters (multiple consenter instances)
-	if len(ordererGroup.Spec.Components.Consenters) > 0 {
-		// The consenter controller handles multiple instances internally
+	// Reconcile Consenter (single consenter instance)
+	if ordererGroup.Spec.Components.Consenter != nil {
+		// The consenter controller handles single instance internally
 		if err := r.ConsenterController.Reconcile(ctx, ordererGroup, nil); err != nil {
-			return fmt.Errorf("failed to reconcile consenters: %w", err)
+			return fmt.Errorf("failed to reconcile consenter: %w", err)
 		}
-		log.Info("Consenter components reconciled successfully")
+		log.Info("Consenter component reconciled successfully")
 	}
 
 	// Reconcile Assembler
@@ -219,12 +219,12 @@ func (r *OrdererGroupReconciler) reconcileChildComponents(ctx context.Context, o
 func (r *OrdererGroupReconciler) reconcileChildCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
 
-	// Reconcile Consenters (multiple consenter instances)
-	if len(ordererGroup.Spec.Components.Consenters) > 0 {
+	// Reconcile Consenter (single consenter instance)
+	if ordererGroup.Spec.Components.Consenter != nil {
 		if err := r.reconcileConsenterCRDs(ctx, ordererGroup); err != nil {
-			return fmt.Errorf("failed to reconcile consenter CRDs: %w", err)
+			return fmt.Errorf("failed to reconcile consenter CRD: %w", err)
 		}
-		log.Info("Consenter CRDs reconciled successfully")
+		log.Info("Consenter CRD reconciled successfully")
 	}
 
 	// Reconcile Assembler
@@ -371,43 +371,46 @@ func (r *OrdererGroupReconciler) reconcileBatcherCRDs(ctx context.Context, order
 
 // reconcileConsenterCRDs creates or updates the Consenter CRDs
 func (r *OrdererGroupReconciler) reconcileConsenterCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
-	for i, consenterInstance := range ordererGroup.Spec.Components.Consenters {
-		consenterName := fmt.Sprintf("%s-consenter-%d", ordererGroup.Name, i)
+	// Check if consenter is configured
+	if ordererGroup.Spec.Components.Consenter == nil {
+		return nil // No consenter configured
+	}
 
-		// Check if the CRD already exists
-		existingConsenter, err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Get(ctx, consenterName, metav1.GetOptions{})
-		if err == nil {
-			// Update existing CRD
-			existingConsenter.Spec = r.buildConsenterSpecFromInstance(ordererGroup, &consenterInstance)
-			_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Update(ctx, existingConsenter, metav1.UpdateOptions{})
-			if err != nil {
-				return fmt.Errorf("failed to update consenter CRD %s: %w", consenterName, err)
-			}
-			continue
+	consenterName := fmt.Sprintf("%s-consenter", ordererGroup.Name)
+
+	// Check if the CRD already exists
+	existingConsenter, err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Get(ctx, consenterName, metav1.GetOptions{})
+	if err == nil {
+		// Update existing CRD
+		existingConsenter.Spec = r.buildConsenterSpecFromInstance(ordererGroup, ordererGroup.Spec.Components.Consenter)
+		_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Update(ctx, existingConsenter, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update consenter CRD %s: %w", consenterName, err)
 		}
+		return nil
+	}
 
-		// Create new CRD
-		consenter := &fabricxv1alpha1.OrdererConsenter{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      consenterName,
-				Namespace: ordererGroup.Namespace,
-				OwnerReferences: []metav1.OwnerReference{
-					{
-						APIVersion: ordererGroup.APIVersion,
-						Kind:       ordererGroup.Kind,
-						Name:       ordererGroup.Name,
-						UID:        ordererGroup.UID,
-						Controller: &[]bool{true}[0],
-					},
+	// Create new CRD
+	consenter := &fabricxv1alpha1.OrdererConsenter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consenterName,
+			Namespace: ordererGroup.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: ordererGroup.APIVersion,
+					Kind:       ordererGroup.Kind,
+					Name:       ordererGroup.Name,
+					UID:        ordererGroup.UID,
+					Controller: &[]bool{true}[0],
 				},
 			},
-			Spec: r.buildConsenterSpecFromInstance(ordererGroup, &consenterInstance),
-		}
+		},
+		Spec: r.buildConsenterSpecFromInstance(ordererGroup, ordererGroup.Spec.Components.Consenter),
+	}
 
-		_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Create(ctx, consenter, metav1.CreateOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to create consenter CRD %s: %w", consenterName, err)
-		}
+	_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Create(ctx, consenter, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to create consenter CRD %s: %w", consenterName, err)
 	}
 
 	return nil
@@ -415,17 +418,17 @@ func (r *OrdererGroupReconciler) reconcileConsenterCRDs(ctx context.Context, ord
 
 // buildConsenterSpec builds the Consenter spec from OrdererGroup configuration
 func (r *OrdererGroupReconciler) buildConsenterSpec(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ComponentConfig) fabricxv1alpha1.OrdererConsenterSpec {
-	// Determine deployment mode
-	deploymentMode := ordererGroup.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Determine bootstrap mode
+	bootstrapMode := ordererGroup.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	spec := fabricxv1alpha1.OrdererConsenterSpec{
-		DeploymentMode: deploymentMode,
-		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        ordererGroup.Spec.PartyID,
-		Genesis:        ordererGroup.Spec.Genesis,
+		BootstrapMode: bootstrapMode,
+		MSPID:         ordererGroup.Spec.MSPID,
+		PartyID:       ordererGroup.Spec.PartyID,
+		Genesis:       ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -491,18 +494,18 @@ func (r *OrdererGroupReconciler) buildConsenterSpec(ordererGroup *fabricxv1alpha
 
 // buildConsenterSpecFromInstance builds the Consenter spec from OrdererGroup configuration with ConsenterInstance
 func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ConsenterInstance) fabricxv1alpha1.OrdererConsenterSpec {
-	// Determine deployment mode
-	deploymentMode := ordererGroup.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Determine bootstrap mode
+	bootstrapMode := ordererGroup.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	spec := fabricxv1alpha1.OrdererConsenterSpec{
-		DeploymentMode: deploymentMode,
-		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        ordererGroup.Spec.PartyID,
-		ConsenterID:    config.ConsenterID,
-		Genesis:        ordererGroup.Spec.Genesis,
+		BootstrapMode: bootstrapMode,
+		MSPID:         ordererGroup.Spec.MSPID,
+		PartyID:       ordererGroup.Spec.PartyID,
+		ConsenterID:   config.ConsenterID,
+		Genesis:       ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -568,17 +571,17 @@ func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fa
 
 // buildAssemblerSpec builds the Assembler spec from OrdererGroup configuration
 func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ComponentConfig) fabricxv1alpha1.OrdererAssemblerSpec {
-	// Determine deployment mode
-	deploymentMode := ordererGroup.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Determine bootstrap mode
+	bootstrapMode := ordererGroup.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	spec := fabricxv1alpha1.OrdererAssemblerSpec{
-		DeploymentMode: deploymentMode,
-		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        ordererGroup.Spec.PartyID,
-		Genesis:        ordererGroup.Spec.Genesis,
+		BootstrapMode: bootstrapMode,
+		MSPID:         ordererGroup.Spec.MSPID,
+		PartyID:       ordererGroup.Spec.PartyID,
+		Genesis:       ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -644,17 +647,17 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 
 // buildRouterSpec builds the Router spec from OrdererGroup configuration
 func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ComponentConfig) fabricxv1alpha1.OrdererRouterSpec {
-	// Determine deployment mode
-	deploymentMode := ordererGroup.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Determine bootstrap mode
+	bootstrapMode := ordererGroup.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	spec := fabricxv1alpha1.OrdererRouterSpec{
-		DeploymentMode: deploymentMode,
-		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        ordererGroup.Spec.PartyID,
-		Genesis:        ordererGroup.Spec.Genesis,
+		BootstrapMode: bootstrapMode,
+		MSPID:         ordererGroup.Spec.MSPID,
+		PartyID:       ordererGroup.Spec.PartyID,
+		Genesis:       ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -720,21 +723,21 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 
 // buildBatcherSpec builds the Batcher spec from OrdererGroup configuration
 func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.BatcherInstance) fabricxv1alpha1.OrdererBatcherSpec {
-	// Determine deployment mode
-	deploymentMode := ordererGroup.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Determine bootstrap mode
+	bootstrapMode := ordererGroup.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	// Determine PartyID - use BatcherInstance PartyID if set, otherwise use OrdererGroup PartyID
 	partyID := ordererGroup.Spec.PartyID
 
 	spec := fabricxv1alpha1.OrdererBatcherSpec{
-		DeploymentMode: deploymentMode,
-		MSPID:          ordererGroup.Spec.MSPID,
-		PartyID:        partyID,
-		ShardID:        config.ShardID,
-		Genesis:        ordererGroup.Spec.Genesis,
+		BootstrapMode: bootstrapMode,
+		MSPID:         ordererGroup.Spec.MSPID,
+		PartyID:       partyID,
+		ShardID:       config.ShardID,
+		Genesis:       ordererGroup.Spec.Genesis,
 	}
 
 	// Merge common configuration
@@ -861,10 +864,10 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 func (r *OrdererGroupReconciler) cleanupChildComponents(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
 
-	// Cleanup Consenters (multiple consenter instances)
-	if len(ordererGroup.Spec.Components.Consenters) > 0 {
+	// Cleanup Consenter (single consenter instance)
+	if ordererGroup.Spec.Components.Consenter != nil {
 		if err := r.ConsenterController.Cleanup(ctx, ordererGroup, nil); err != nil {
-			log.Error(err, "Failed to cleanup consenters")
+			log.Error(err, "Failed to cleanup consenter")
 		}
 	}
 
@@ -897,10 +900,10 @@ func (r *OrdererGroupReconciler) cleanupChildComponents(ctx context.Context, ord
 func (r *OrdererGroupReconciler) cleanupChildCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
 
-	// Cleanup Consenter CRDs (multiple consenter instances)
-	if len(ordererGroup.Spec.Components.Consenters) > 0 {
+	// Cleanup Consenter CRD (single consenter instance)
+	if ordererGroup.Spec.Components.Consenter != nil {
 		if err := r.cleanupConsenterCRDs(ctx, ordererGroup); err != nil {
-			log.Error(err, "Failed to cleanup consenter CRDs")
+			log.Error(err, "Failed to cleanup consenter CRD")
 		}
 	}
 
@@ -929,13 +932,11 @@ func (r *OrdererGroupReconciler) cleanupChildCRDs(ctx context.Context, ordererGr
 	return nil
 }
 
-// cleanupConsenterCRDs deletes all Consenter CRDs
+// cleanupConsenterCRDs deletes the Consenter CRD
 func (r *OrdererGroupReconciler) cleanupConsenterCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
-	for i := range ordererGroup.Spec.Components.Consenters {
-		consenterName := fmt.Sprintf("%s-consenter-%d", ordererGroup.Name, i)
-		if err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Delete(ctx, consenterName, metav1.DeleteOptions{}); err != nil {
-			return fmt.Errorf("failed to delete consenter CRD %s: %w", consenterName, err)
-		}
+	consenterName := fmt.Sprintf("%s-consenter", ordererGroup.Name)
+	if err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Delete(ctx, consenterName, metav1.DeleteOptions{}); err != nil {
+		return fmt.Errorf("failed to delete consenter CRD %s: %w", consenterName, err)
 	}
 	return nil
 }

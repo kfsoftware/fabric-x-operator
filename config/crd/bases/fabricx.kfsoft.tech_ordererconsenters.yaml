@@ -467,12 +467,6 @@ spec:
                 description: Consenter ID for this consenter instance
                 format: int32
                 type: integer
-              deploymentMode:
-                description: |-
-                  Deployment mode: "configure" or "deploy"
-                  When set to "configure", only configuration resources are created
-                  When set to "deploy", full deployment resources are created
-                type: string
               endpoints:
                 description: Component-specific endpoints
                 items:

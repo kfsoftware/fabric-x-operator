@@ -57,6 +57,7 @@ type ConsenterTemplateData struct {
 	MSPID       string
 	ConsenterID int32
 	Port        int32
+	DataDir     string
 }
 
 // AssemblerTemplateData represents data specific to assembler templates
@@ -146,10 +147,10 @@ General:
     ListenPort: {{.Port}}
     TLS:
         Enabled: false
-        PrivateKey: /{{.Name}}/tls/server.key
-        Certificate: /{{.Name}}/tls/server.crt
+        PrivateKey: /etc/hyperledger/fabricx/router/tls/server.key
+        Certificate: /etc/hyperledger/fabricx/router/tls/server.crt
         RootCAs:
-            - /{{.Name}}/tls/ca.crt
+            - /etc/hyperledger/fabricx/router/tls/ca.crt
         ClientAuthRequired: false
     Keepalive:
         ClientInterval: 1m0s
@@ -165,23 +166,14 @@ General:
     MaxSendMsgSize: 104857600
     Bootstrap:
         Method: block
-        File: /{{.Name}}/genesis.block
-    LocalMSPDir: /{{.Name}}/msp
+        File: /etc/hyperledger/fabricx/router/genesis/genesis.block
+    LocalMSPDir: /etc/hyperledger/fabricx/router/msp
     LocalMSPID: {{.MSPID}}
     LogSpec: info
 FileStore:
-    Location: /{{.Name}}/store
 Router:
-    RoutingTable:
-        UpdateInterval: 30s
-        MaxRoutes: 1000
-    LoadBalancing:
-        Algorithm: round_robin
-        HealthCheckInterval: 10s
-    CircuitBreaker:
-        Enabled: true
-        FailureThreshold: 5
-        RecoveryTimeout: 30s
+    NumberOfConnectionsPerBatcher: 12
+    NumberOfStreamsPerConnection: 6
 `
 
 	// ConsenterConfigTemplate is the Go template for consenter configuration
@@ -192,10 +184,10 @@ General:
     ListenPort: {{.Port}}
     TLS:
         Enabled: false
-        PrivateKey: ./tls/server.key
-        Certificate: ./tls/server.crt
+        PrivateKey: /etc/hyperledger/fabricx/consenter/tls/server.key
+        Certificate: /etc/hyperledger/fabricx/consenter/tls/server.crt
         RootCAs:
-            - ./tls/ca.crt
+            - /etc/hyperledger/fabricx/consenter/tls/ca.crt
         ClientAuthRequired: false
     Keepalive:
         ClientInterval: 1m0s
@@ -211,18 +203,18 @@ General:
     MaxSendMsgSize: 104857600
     Bootstrap:
         Method: block
-        File: ./genesis.block
+        File: /etc/hyperledger/fabricx/consenter/genesis/genesis.block
     Cluster:
         SendBufferSize: 2000
-        ClientCertificate: ./tls/server.crt
-        ClientPrivateKey: ./tls/server.key
-    LocalMSPDir: ./msp
+        ClientCertificate: /etc/hyperledger/fabricx/consenter/tls/server.crt
+        ClientPrivateKey: /etc/hyperledger/fabricx/consenter/tls/server.key
+    LocalMSPDir: /etc/hyperledger/fabricx/consenter/msp
     LocalMSPID: {{.MSPID}}
     LogSpec: info
 FileStore:
-    Location: ./store
+    Location: {{.DataDir}}/store
 Consensus:
-    WALDir: ./wal
+    WALDir: {{.DataDir}}/wal
     ConsensusType: pbft
     BatchTimeout: 2s
     BatchSize:
@@ -238,10 +230,10 @@ General:
     ListenPort: {{.Port}}
     TLS:
         Enabled: false
-        PrivateKey: /{{.Name}}/tls/server.key
-        Certificate: /{{.Name}}/tls/server.crt
+        PrivateKey: /etc/hyperledger/fabricx/assembler/tls/server.key
+        Certificate: /etc/hyperledger/fabricx/assembler/tls/server.crt
         RootCAs:
-            - /{{.Name}}/tls/ca.crt
+            - /etc/hyperledger/fabricx/assembler/tls/ca.crt
         ClientAuthRequired: false
     Keepalive:
         ClientInterval: 1m0s
@@ -257,21 +249,17 @@ General:
     MaxSendMsgSize: 104857600
     Bootstrap:
         Method: block
-        File: /{{.Name}}/genesis.block
-    LocalMSPDir: /{{.Name}}/msp
+        File: /etc/hyperledger/fabricx/assembler/genesis/genesis.block
+    LocalMSPDir: /etc/hyperledger/fabricx/assembler/msp
     LocalMSPID: {{.MSPID}}
     LogSpec: info
 FileStore:
-    Location: /{{.Name}}/store
+    Location: /etc/hyperledger/fabricx/assembler/store
 Assembler:
-    BatchTimeout: 2s
-    BatchSize:
-        MaxMessageCount: 500
-        AbsoluteMaxBytes: 10MB
-        PreferredMaxBytes: 2MB
-    AssemblyRules:
-        MaxAssemblyTime: 5s
-        MinBatchSize: 10
-        MaxBatchSize: 1000
+    PrefetchBufferMemoryBytes: 1342177280
+    RestartLedgerScanTimeout: 6s
+    PrefetchEvictionTtl: 1h30m0s
+    ReplicationChannelSize: 120
+    BatchRequestsChannelSize: 1200
 `
 )

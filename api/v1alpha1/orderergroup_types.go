@@ -487,11 +487,6 @@ type OrdererGroupSpec struct {
 	// Bootstrap mode: "configure" or "deploy"
 	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
-	// Deployment mode: "configure" or "deploy"
-	// When set to "configure", only configuration resources are created for child CRDs
-	// When set to "deploy", full deployment resources are created for child CRDs
-	DeploymentMode string `json:"deploymentMode,omitempty"`
-
 	// MSP ID
 	MSPID string `json:"mspid,omitempty"`
 
@@ -581,8 +576,8 @@ type ConsenterInstance struct {
 
 // OrdererComponents defines configurations for each component
 type OrdererComponents struct {
-	// Consenter configurations - can have multiple consenter instances
-	Consenters []ConsenterInstance `json:"consenters,omitempty"`
+	// Consenter configuration - only one consenter instance
+	Consenter *ConsenterInstance `json:"consenter,omitempty"`
 
 	// Batcher configurations - can have multiple batcher instances
 	Batchers []BatcherInstance `json:"batchers,omitempty"`
@@ -617,8 +612,8 @@ type OrdererGroupStatus struct {
 
 // ChildCRDStatuses tracks the status of child CRDs
 type ChildCRDStatuses struct {
-	// Consenter statuses (multiple consenter instances)
-	Consenters []ChildCRDStatus `json:"consenters,omitempty"`
+	// Consenter status (single consenter instance)
+	Consenter *ChildCRDStatus `json:"consenter,omitempty"`
 
 	// Assembler status
 	Assembler *ChildCRDStatus `json:"assembler,omitempty"`

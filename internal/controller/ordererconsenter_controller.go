@@ -26,9 +26,8 @@ import (
 	"strings"
 	"time"
 
-	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
-	v1alpha3 "istio.io/api/networking/v1alpha3"
-	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,19 +39,57 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-
 	// Istio imports
+	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
 const (
 	// OrdererConsenterFinalizerName is the name of the finalizer used by OrdererConsenter
 	OrdererConsenterFinalizerName = "ordererconsenter.fabricx.kfsoft.tech/finalizer"
+
+	// Volume mount paths
+	ConsenterDataDir    = "/etc/hyperledger/fabricx/consenter/data"
+	ConsenterMSPDir     = "/etc/hyperledger/fabricx/consenter/msp"
+	ConsenterTLSDir     = "/etc/hyperledger/fabricx/consenter/tls"
+	ConsenterGenesisDir = "/etc/hyperledger/fabricx/consenter/genesis"
+	ConsenterConfigDir  = "/etc/hyperledger/fabricx/consenter/config"
+
+	// Service and deployment constants
+	ConsenterServicePort = 7052
+	ConsenterTargetPort  = 7052
 )
+
+// Helper functions for consistent naming and port configuration
+
+// getServiceName returns the service name for the consenter
+func (r *OrdererConsenterReconciler) getServiceName(ordererConsenter *fabricxv1alpha1.OrdererConsenter) string {
+	return ordererConsenter.Name
+}
+
+// getDeploymentName returns the deployment name for the consenter
+func (r *OrdererConsenterReconciler) getDeploymentName(ordererConsenter *fabricxv1alpha1.OrdererConsenter) string {
+	return ordererConsenter.Name
+}
+
+// getServicePort returns the service port for the consenter
+func (r *OrdererConsenterReconciler) getServicePort() int32 {
+	return ConsenterServicePort
+}
+
+// getTargetPort returns the target port for the consenter
+func (r *OrdererConsenterReconciler) getTargetPort() int {
+	return ConsenterTargetPort
+}
+
+// getServiceFQDN returns the fully qualified domain name for the service
+func (r *OrdererConsenterReconciler) getServiceFQDN(ordererConsenter *fabricxv1alpha1.OrdererConsenter) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", r.getServiceName(ordererConsenter), ordererConsenter.Namespace)
+}
 
 // computeConfigMapHash computes a hash of the ConfigMap data to trigger deployment updates
 func (r *OrdererConsenterReconciler) computeConfigMapHash(ctx context.Context, configMapName, namespace string) (string, error) {
@@ -176,16 +213,16 @@ func (r *OrdererConsenterReconciler) reconcileOrdererConsenter(ctx context.Conte
 	log.Info("Starting OrdererConsenter reconciliation",
 		"name", ordererConsenter.Name,
 		"namespace", ordererConsenter.Namespace,
-		"deploymentMode", ordererConsenter.Spec.DeploymentMode)
+		"bootstrapMode", ordererConsenter.Spec.BootstrapMode)
 
-	// Determine deployment mode
-	deploymentMode := ordererConsenter.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Check bootstrap mode - only deploy when bootstrapMode is "deploy"
+	bootstrapMode := ordererConsenter.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	// Reconcile based on deployment mode
-	switch deploymentMode {
+	switch ordererConsenter.Spec.BootstrapMode {
 	case "configure":
 		if err := r.reconcileConfigureMode(ctx, ordererConsenter); err != nil {
 			errorMsg := fmt.Sprintf("Failed to reconcile in configure mode: %v", err)
@@ -201,8 +238,8 @@ func (r *OrdererConsenterReconciler) reconcileOrdererConsenter(ctx context.Conte
 			return fmt.Errorf("failed to reconcile in deploy mode: %w", err)
 		}
 	default:
-		errorMsg := fmt.Sprintf("Invalid deployment mode: %s", deploymentMode)
-		log.Error(fmt.Errorf("%s", errorMsg), "Invalid deployment mode")
+		errorMsg := fmt.Sprintf("Invalid bootstrap mode: %s", ordererConsenter.Spec.BootstrapMode)
+		log.Error(fmt.Errorf("%s", errorMsg), "Invalid bootstrap mode")
 		r.updateOrdererConsenterStatus(ctx, ordererConsenter, fabricxv1alpha1.FailedStatus, errorMsg)
 		return fmt.Errorf("%s", errorMsg)
 	}
@@ -293,28 +330,88 @@ func (r *OrdererConsenterReconciler) reconcileGenesisBlock(ctx context.Context, 
 func (r *OrdererConsenterReconciler) reconcileCertificates(ctx context.Context, ordererConsenter *fabricxv1alpha1.OrdererConsenter) error {
 	log := logf.FromContext(ctx)
 
-	// For individual OrdererConsenter instances, we'll create a simple certificate approach
-	// that doesn't rely on the OrdererGroup certificate service
-
 	// Check if certificates are configured
 	if ordererConsenter.Spec.Certificates == nil {
 		log.Info("No certificate configuration found, skipping certificate creation")
 		return nil
 	}
 
-	// Create sign certificate secret
-	signSecretName := fmt.Sprintf("%s-sign-cert", ordererConsenter.Name)
-	if err := r.createCertificateSecret(ctx, ordererConsenter, signSecretName, "sign"); err != nil {
-		return fmt.Errorf("failed to create sign certificate secret: %w", err)
+	// Create certificate request for this consenter instance
+	request := certs.OrdererGroupCertificateRequest{
+		ComponentName:    ordererConsenter.Name,
+		ComponentType:    "consenter",
+		Namespace:        ordererConsenter.Namespace,
+		OrdererGroupName: ordererConsenter.Name, // Using consenter name as orderer group name for individual instances
+		CertConfig:       convertToCertConfig(ordererConsenter.Spec.MSPID, ordererConsenter.Spec.Certificates),
+		EnrollmentConfig: nil, // Individual consenters don't have global enrollment config
+		CertTypes:        []string{"sign", "tls"},
+		EnrollID:         ordererConsenter.Spec.Certificates.EnrollID,
+		EnrollSecret:     ordererConsenter.Spec.Certificates.EnrollSecret,
 	}
 
-	// Create TLS certificate secret
-	tlsSecretName := fmt.Sprintf("%s-tls-cert", ordererConsenter.Name)
-	if err := r.createCertificateSecret(ctx, ordererConsenter, tlsSecretName, "tls"); err != nil {
-		return fmt.Errorf("failed to create TLS certificate secret: %w", err)
+	// Provision certificates using the certificate service
+	certificates, err := certs.ProvisionOrdererGroupCertificatesWithClient(ctx, r.Client, request)
+	if err != nil {
+		return fmt.Errorf("failed to provision certificates: %w", err)
+	}
+
+	// Create Kubernetes secrets for the certificates
+	if err := r.createCertificateSecrets(ctx, ordererConsenter, certificates); err != nil {
+		return fmt.Errorf("failed to create certificate secrets: %w", err)
 	}
 
 	log.Info("Certificates reconciled successfully", "consenter", ordererConsenter.Name)
+	return nil
+}
+
+// createCertificateSecrets creates Kubernetes secrets for certificate data
+func (r *OrdererConsenterReconciler) createCertificateSecrets(
+	ctx context.Context,
+	ordererConsenter *fabricxv1alpha1.OrdererConsenter,
+	certificates []certs.ComponentCertificateData,
+) error {
+	log := logf.FromContext(ctx)
+
+	// Process each certificate in the slice
+	for _, certData := range certificates {
+		secretName := fmt.Sprintf("%s-%s-cert", ordererConsenter.Name, certData.CertType)
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: ordererConsenter.Namespace,
+				Labels: map[string]string{
+					"app":                      "fabric-x",
+					"ordererconsenter":         ordererConsenter.Name,
+					"certificate-type":         certData.CertType,
+					"fabricx.kfsoft.tech/type": "certificate",
+				},
+			},
+			Data: map[string][]byte{
+				"cert.pem": certData.Cert,
+				"key.pem":  certData.Key,
+				"ca.pem":   certData.CACert,
+			},
+		}
+
+		// Set the controller reference
+		if err := controllerutil.SetControllerReference(ordererConsenter, secret, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
+		}
+
+		if err := r.Client.Create(ctx, secret); err != nil {
+			// If secret already exists, update it
+			if strings.Contains(err.Error(), "already exists") {
+				if err := r.Client.Update(ctx, secret); err != nil {
+					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
+				}
+			} else {
+				return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+			}
+		}
+
+		log.Info("Created certificate secret", "secret", secretName, "certType", certData.CertType)
+	}
+
 	return nil
 }
 
@@ -336,6 +433,7 @@ func (r *OrdererConsenterReconciler) reconcileConfigMap(ctx context.Context, ord
 		MSPID:       ordererConsenter.Spec.MSPID,
 		ConsenterID: ordererConsenter.Spec.ConsenterID,
 		Port:        7052,
+		DataDir:     ConsenterDataDir,
 	}
 
 	// Execute the template using the shared utility
@@ -400,7 +498,7 @@ func (r *OrdererConsenterReconciler) reconcileService(ctx context.Context, order
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ordererConsenter.Name,
+			Name:      r.getServiceName(ordererConsenter),
 			Namespace: ordererConsenter.Namespace,
 		},
 	}
@@ -418,15 +516,15 @@ func (r *OrdererConsenterReconciler) reconcileService(ctx context.Context, order
 func (r *OrdererConsenterReconciler) getServiceTemplate(ordererConsenter *fabricxv1alpha1.OrdererConsenter) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ordererConsenter.Name,
+			Name:      r.getServiceName(ordererConsenter),
 			Namespace: ordererConsenter.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeClusterIP,
 			Ports: []corev1.ServicePort{
 				{
-					Port:       7052,
-					TargetPort: intstr.FromInt(7052),
+					Port:       r.getServicePort(),
+					TargetPort: intstr.FromInt(r.getTargetPort()),
 					Protocol:   corev1.ProtocolTCP,
 					Name:       "consenter",
 				},
@@ -476,7 +574,7 @@ func (r *OrdererConsenterReconciler) reconcileDeployment(ctx context.Context, or
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ordererConsenter.Name,
+			Name:      r.getDeploymentName(ordererConsenter),
 			Namespace: ordererConsenter.Namespace,
 		},
 	}
@@ -783,8 +881,8 @@ func (r *OrdererConsenterReconciler) reconcileIstioGateway(ctx context.Context, 
 	istioConfig := ordererConsenter.Spec.Ingress.Istio
 	gatewayName := fmt.Sprintf("%s-gateway", ordererConsenter.Name)
 
-	// Create Gateway resource
-	gateway := &istionetworkingv1beta1.Gateway{
+	// Create Gateway resource template
+	gatewayTemplate := &istionetworkingv1beta1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gatewayName,
 			Namespace: ordererConsenter.Namespace,
@@ -802,49 +900,48 @@ func (r *OrdererConsenterReconciler) reconcileIstioGateway(ctx context.Context, 
 				{
 					Port: &istioapinetworkingv1alpha3.Port{
 						Number:   uint32(istioConfig.Port),
-						Name:     "http2",
-						Protocol: "HTTP2",
+						Name:     "tls",
+						Protocol: "TLS",
 					},
 					Hosts: istioConfig.Hosts,
-					Tls: func() *istioapinetworkingv1alpha3.ServerTLSSettings {
-						if istioConfig.TLS != nil && istioConfig.TLS.Enabled {
-							return &istioapinetworkingv1alpha3.ServerTLSSettings{
-								Mode:              istioapinetworkingv1alpha3.ServerTLSSettings_SIMPLE,
-								CredentialName:    istioConfig.TLS.SecretName,
-								PrivateKey:        "/etc/istio/ingressgateway-certs/tls.key",
-								ServerCertificate: "/etc/istio/ingressgateway-certs/tls.crt",
-							}
-						}
-						return nil
-					}(),
+					Tls: &istioapinetworkingv1alpha3.ServerTLSSettings{
+						Mode: istioapinetworkingv1alpha3.ServerTLSSettings_PASSTHROUGH,
+					},
 				},
 			},
 		},
 	}
 
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererConsenter, gateway, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(ordererConsenter, gatewayTemplate, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference for Gateway: %w", err)
 	}
 
-	// Create or update Gateway
-	if err := r.Client.Create(ctx, gateway); err != nil {
-		if errors.IsAlreadyExists(err) {
-			// Update existing Gateway
-			existingGateway := &istionetworkingv1beta1.Gateway{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
-				Name:      gatewayName,
-				Namespace: ordererConsenter.Namespace,
-			}, existingGateway); err != nil {
-				return fmt.Errorf("failed to get existing Gateway: %w", err)
+	// Check if Gateway already exists
+	existingGateway := &istionetworkingv1beta1.Gateway{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      gatewayName,
+		Namespace: ordererConsenter.Namespace,
+	}, existingGateway)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new Gateway
+			if err := r.Client.Create(ctx, gatewayTemplate); err != nil {
+				return fmt.Errorf("failed to create Gateway: %w", err)
 			}
-			existingGateway.Spec = gateway.Spec
-			if err := r.Client.Update(ctx, existingGateway); err != nil {
-				return fmt.Errorf("failed to update Gateway: %w", err)
-			}
+			log.Info("Created Istio Gateway", "gateway", gatewayName)
 		} else {
-			return fmt.Errorf("failed to create Gateway: %w", err)
+			return fmt.Errorf("failed to get existing Gateway: %w", err)
 		}
+	} else {
+		// Update existing Gateway - always update to ensure it's current
+		existingGateway.Spec = gatewayTemplate.Spec
+		existingGateway.Labels = gatewayTemplate.Labels
+		if err := r.Client.Update(ctx, existingGateway); err != nil {
+			return fmt.Errorf("failed to update Gateway: %w", err)
+		}
+		log.Info("Updated Istio Gateway", "gateway", gatewayName)
 	}
 
 	log.Info("Istio Gateway reconciled successfully", "gateway", gatewayName)
@@ -865,8 +962,8 @@ func (r *OrdererConsenterReconciler) reconcileIstioVirtualService(ctx context.Co
 	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererConsenter.Name)
 	gatewayName := fmt.Sprintf("%s-gateway", ordererConsenter.Name)
 
-	// Create VirtualService resource
-	virtualService := &istionetworkingv1beta1.VirtualService{
+	// Create VirtualService resource template
+	virtualServiceTemplate := &istionetworkingv1beta1.VirtualService{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      virtualServiceName,
 			Namespace: ordererConsenter.Namespace,
@@ -876,17 +973,23 @@ func (r *OrdererConsenterReconciler) reconcileIstioVirtualService(ctx context.Co
 				"fabricx.kfsoft.tech/type": "virtualservice",
 			},
 		},
-		Spec: v1alpha3.VirtualService{
+		Spec: istioapinetworkingv1alpha3.VirtualService{
 			Hosts:    istioConfig.Hosts,
 			Gateways: []string{gatewayName},
-			Http: []*v1alpha3.HTTPRoute{
+			Tls: []*istioapinetworkingv1alpha3.TLSRoute{
 				{
-					Route: []*v1alpha3.HTTPRouteDestination{
+					Match: []*istioapinetworkingv1alpha3.TLSMatchAttributes{
 						{
-							Destination: &v1alpha3.Destination{
-								Host: fmt.Sprintf("%s.%s.svc.cluster.local", ordererConsenter.Name, ordererConsenter.Namespace),
-								Port: &v1alpha3.PortSelector{
-									Number: 7052, // Consenter port
+							Port:     uint32(istioConfig.Port),
+							SniHosts: istioConfig.Hosts,
+						},
+					},
+					Route: []*istioapinetworkingv1alpha3.RouteDestination{
+						{
+							Destination: &istioapinetworkingv1alpha3.Destination{
+								Host: r.getServiceFQDN(ordererConsenter),
+								Port: &istioapinetworkingv1alpha3.PortSelector{
+									Number: uint32(r.getServicePort()),
 								},
 							},
 							Weight: 100,
@@ -898,28 +1001,35 @@ func (r *OrdererConsenterReconciler) reconcileIstioVirtualService(ctx context.Co
 	}
 
 	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererConsenter, virtualService, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(ordererConsenter, virtualServiceTemplate, r.Scheme); err != nil {
 		return fmt.Errorf("failed to set controller reference for VirtualService: %w", err)
 	}
 
-	// Create or update VirtualService
-	if err := r.Client.Create(ctx, virtualService); err != nil {
-		if errors.IsAlreadyExists(err) {
-			// Update existing VirtualService
-			existingVirtualService := &istionetworkingv1beta1.VirtualService{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
-				Name:      virtualServiceName,
-				Namespace: ordererConsenter.Namespace,
-			}, existingVirtualService); err != nil {
-				return fmt.Errorf("failed to get existing VirtualService: %w", err)
+	// Check if VirtualService already exists
+	existingVirtualService := &istionetworkingv1beta1.VirtualService{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      virtualServiceName,
+		Namespace: ordererConsenter.Namespace,
+	}, existingVirtualService)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new VirtualService
+			if err := r.Client.Create(ctx, virtualServiceTemplate); err != nil {
+				return fmt.Errorf("failed to create VirtualService: %w", err)
 			}
-			existingVirtualService.Spec = virtualService.Spec
-			if err := r.Client.Update(ctx, existingVirtualService); err != nil {
-				return fmt.Errorf("failed to update VirtualService: %w", err)
-			}
+			log.Info("Created Istio VirtualService", "virtualService", virtualServiceName)
 		} else {
-			return fmt.Errorf("failed to create VirtualService: %w", err)
+			return fmt.Errorf("failed to get existing VirtualService: %w", err)
 		}
+	} else {
+		// Update existing VirtualService - always update to ensure it's current
+		existingVirtualService.Spec = virtualServiceTemplate.Spec
+		existingVirtualService.Labels = virtualServiceTemplate.Labels
+		if err := r.Client.Update(ctx, existingVirtualService); err != nil {
+			return fmt.Errorf("failed to update VirtualService: %w", err)
+		}
+		log.Info("Updated Istio VirtualService", "virtualService", virtualServiceName)
 	}
 
 	log.Info("Istio VirtualService reconciled successfully", "virtualService", virtualServiceName)
@@ -983,7 +1093,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      ordererConsenter.Name,
+			Name:      r.getDeploymentName(ordererConsenter),
 			Namespace: ordererConsenter.Namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -1036,16 +1146,19 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 								"/bin/sh",
 								"-c",
 								fmt.Sprintf(
-									`mkdir -p ./msp/signcerts && ` +
-										"mkdir -p ./msp/keystore && " +
-										"mkdir -p ./msp/cacerts && " +
-										"mkdir -p ./tls && " +
-										"cp /sign-certs/cert.pem ./msp/signcerts/ && " +
-										"cp /sign-certs/key.pem ./msp/keystore/sign-privateKey.pem && " +
-										"cp /sign-certs/ca.pem ./msp/cacerts/ && " +
-										"cp /tls-certs/cert.pem ./tls/server.crt && " +
-										"cp /tls-certs/key.pem ./tls/server.key && " +
-										"cp /tls-certs/ca.pem ./tls/ca.crt",
+									`mkdir -p %s/signcerts && `+
+										"mkdir -p %s/keystore && "+
+										"mkdir -p %s/cacerts && "+
+										"mkdir -p %s && "+
+										"cp /sign-certs/cert.pem %s/signcerts/ && "+
+										"cp /sign-certs/key.pem %s/keystore/sign-privateKey.pem && "+
+										"cp /sign-certs/ca.pem %s/cacerts/ && "+
+										"cp /tls-certs/cert.pem %s/server.crt && "+
+										"cp /tls-certs/key.pem %s/server.key && "+
+										"cp /tls-certs/ca.pem %s/ca.crt",
+									ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir, ConsenterTLSDir,
+									ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir,
+									ConsenterTLSDir, ConsenterTLSDir, ConsenterTLSDir,
 								),
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -1061,11 +1174,11 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 								},
 								{
 									Name:      "shared-msp",
-									MountPath: "./msp",
+									MountPath: ConsenterMSPDir,
 								},
 								{
 									Name:      "shared-tls",
-									MountPath: "./tls",
+									MountPath: ConsenterTLSDir,
 								},
 							},
 						},
@@ -1075,7 +1188,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 							Command: []string{
 								"/bin/sh",
 								"-c",
-								"cp /genesis-block/genesis.block ./genesis.block",
+								fmt.Sprintf("cp /genesis-block/genesis.block %s/genesis.block", ConsenterGenesisDir),
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
@@ -1085,7 +1198,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 								},
 								{
 									Name:      "shared-genesis",
-									MountPath: "./genesis.block",
+									MountPath: ConsenterGenesisDir,
 								},
 							},
 						},
@@ -1096,12 +1209,12 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 							Image: "hyperledger/fabric-x-orderer:0.0.17",
 							Args: []string{
 								"consensus",
-								"--config=/config/node_config.yaml",
+								fmt.Sprintf("--config=%s/node_config.yaml", ConsenterConfigDir),
 							},
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "consenter-port",
-									ContainerPort: 7052,
+									ContainerPort: int32(r.getTargetPort()),
 									Protocol:      corev1.ProtocolTCP,
 								},
 							},
@@ -1109,27 +1222,23 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 								{
 									Name:      "config",
 									ReadOnly:  true,
-									MountPath: "/config",
+									MountPath: ConsenterConfigDir,
 								},
 								{
 									Name:      "shared-msp",
-									MountPath: "./msp",
+									MountPath: ConsenterMSPDir,
 								},
 								{
 									Name:      "shared-tls",
-									MountPath: "./tls",
+									MountPath: ConsenterTLSDir,
 								},
 								{
 									Name:      "shared-genesis",
-									MountPath: "./genesis.block",
+									MountPath: ConsenterGenesisDir,
 								},
 								{
-									Name:      "store",
-									MountPath: "./store",
-								},
-								{
-									Name:      "wal",
-									MountPath: "./wal",
+									Name:      "data",
+									MountPath: ConsenterDataDir,
 								},
 							},
 							Resources: func() corev1.ResourceRequirements {
@@ -1195,15 +1304,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 							},
 						},
 						{
-							Name: "store",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: fmt.Sprintf("%s-data-pvc", ordererConsenter.Name),
-								},
-							},
-						},
-						{
-							Name: "wal",
+							Name: "data",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: fmt.Sprintf("%s-data-pvc", ordererConsenter.Name),
@@ -1267,72 +1368,6 @@ func (r *OrdererConsenterReconciler) updateDeployment(ctx context.Context, order
 	})
 
 	return err
-}
-
-// createCertificateSecret creates a certificate secret for the OrdererConsenter
-func (r *OrdererConsenterReconciler) createCertificateSecret(ctx context.Context, ordererConsenter *fabricxv1alpha1.OrdererConsenter, secretName, certType string) error {
-	log := logf.FromContext(ctx)
-
-	// Check if secret already exists
-	existingSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
-		Namespace: ordererConsenter.Namespace,
-		Name:      secretName,
-	}, existingSecret)
-
-	if err == nil {
-		// Secret exists, check if it has the required data
-		if existingSecret.Data != nil {
-			if _, hasCert := existingSecret.Data["cert.pem"]; hasCert {
-				if _, hasKey := existingSecret.Data["key.pem"]; hasKey {
-					if _, hasCA := existingSecret.Data["ca.pem"]; hasCA {
-						log.Info("Certificate secret already exists, skipping creation",
-							"secret", secretName, "certType", certType)
-						return nil
-					}
-				}
-			}
-		}
-	}
-
-	// Create a simple certificate secret with placeholder data
-	// In a real implementation, this would call the actual certificate service
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: ordererConsenter.Namespace,
-			Labels: map[string]string{
-				"app":                      "fabric-x",
-				"ordererconsenter":         ordererConsenter.Name,
-				"certificate-type":         certType,
-				"fabricx.kfsoft.tech/type": "certificate",
-			},
-		},
-		Data: map[string][]byte{
-			"cert.pem": []byte("placeholder-certificate-data"),
-			"key.pem":  []byte("placeholder-key-data"),
-			"ca.pem":   []byte("placeholder-ca-data"),
-		},
-	}
-
-	// Set the controller reference
-	if err := controllerutil.SetControllerReference(ordererConsenter, secret, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
-	}
-
-	if err := r.Client.Create(ctx, secret); err != nil {
-		// If secret already exists, update it
-		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, secret); err != nil {
-				return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
-			}
-		} else {
-			return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
-		}
-	}
-
-	log.Info("Created certificate secret", "secret", secretName, "certType", certType)
-	return nil
 }
 
 // reconcileDeployMode handles reconciliation in deploy mode (full deployment)

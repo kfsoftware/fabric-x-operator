@@ -10,6 +10,8 @@ require (
 	github.com/onsi/gomega v1.36.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.10.0
+	istio.io/api v1.26.3
+	istio.io/client-go v1.26.3
 	k8s.io/api v0.33.0
 	k8s.io/apimachinery v0.33.3
 	k8s.io/client-go v0.33.0
@@ -69,8 +71,6 @@ require (
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/ldap.v2 v2.5.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	istio.io/api v1.26.3 // indirect
-	istio.io/client-go v1.26.3 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 

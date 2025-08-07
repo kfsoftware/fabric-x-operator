@@ -120,6 +120,59 @@ spec:
                   - tlsCaCertRef
                   type: object
                 type: array
+              batchingConfig:
+                description: Batching configuration
+                properties:
+                  batchSize:
+                    description: Batch size configuration
+                    properties:
+                      absoluteMaxBytes:
+                        description: Absolute max bytes
+                        format: int32
+                        type: integer
+                      maxMessageCount:
+                        description: Max message count
+                        format: int32
+                        type: integer
+                      preferredMaxBytes:
+                        description: Preferred max bytes
+                        format: int32
+                        type: integer
+                    required:
+                    - absoluteMaxBytes
+                    - maxMessageCount
+                    - preferredMaxBytes
+                    type: object
+                  batchTimeouts:
+                    description: Batch timeouts configuration
+                    properties:
+                      autoRemoveTimeout:
+                        description: Auto remove timeout
+                        type: string
+                      batchCreationTimeout:
+                        description: Batch creation timeout
+                        type: string
+                      firstStrikeThreshold:
+                        description: First strike threshold
+                        type: string
+                      secondStrikeThreshold:
+                        description: Second strike threshold
+                        type: string
+                    required:
+                    - autoRemoveTimeout
+                    - batchCreationTimeout
+                    - firstStrikeThreshold
+                    - secondStrikeThreshold
+                    type: object
+                  requestMaxBytes:
+                    description: Request max bytes
+                    format: int32
+                    type: integer
+                required:
+                - batchSize
+                - batchTimeouts
+                - requestMaxBytes
+                type: object
               channelID:
                 description: Channel ID for the genesis block
                 type: string
@@ -135,6 +188,110 @@ spec:
                 required:
                 - configMapName
                 - key
+                type: object
+              consensusConfig:
+                description: Consensus configuration
+                properties:
+                  smartBFT:
+                    description: SmartBFT configuration
+                    properties:
+                      collectTimeout:
+                        description: Collect timeout
+                        type: string
+                      decisionsPerLeader:
+                        description: Decisions per leader
+                        format: int32
+                        type: integer
+                      incomingMessageBufferSize:
+                        description: Incoming message buffer size
+                        format: int32
+                        type: integer
+                      leaderHeartbeatCount:
+                        description: Leader heartbeat count
+                        format: int32
+                        type: integer
+                      leaderHeartbeatTimeout:
+                        description: Leader heartbeat timeout
+                        type: string
+                      leaderRotation:
+                        description: Leader rotation
+                        type: boolean
+                      numOfTicksBehindBeforeSyncing:
+                        description: Number of ticks behind before syncing
+                        format: int32
+                        type: integer
+                      requestAutoRemoveTimeout:
+                        description: Request auto remove timeout
+                        type: string
+                      requestBatchMaxBytes:
+                        description: Request batch max bytes
+                        format: int32
+                        type: integer
+                      requestBatchMaxCount:
+                        description: Request batch max count
+                        format: int32
+                        type: integer
+                      requestBatchMaxInterval:
+                        description: Request batch max interval
+                        type: string
+                      requestComplainTimeout:
+                        description: Request complain timeout
+                        type: string
+                      requestForwardTimeout:
+                        description: Request forward timeout
+                        type: string
+                      requestMaxBytes:
+                        description: Request max bytes
+                        format: int32
+                        type: integer
+                      requestPoolSize:
+                        description: Request pool size
+                        format: int32
+                        type: integer
+                      requestPoolSubmitTimeout:
+                        description: Request pool submit timeout
+                        type: string
+                      selfID:
+                        description: Self ID for this node
+                        format: int32
+                        type: integer
+                      speedUpViewChange:
+                        description: Speed up view change
+                        type: boolean
+                      syncOnStart:
+                        description: Sync on start
+                        type: boolean
+                      viewChangeResendInterval:
+                        description: View change resend interval
+                        type: string
+                      viewChangeTimeout:
+                        description: View change timeout
+                        type: string
+                    required:
+                    - collectTimeout
+                    - decisionsPerLeader
+                    - incomingMessageBufferSize
+                    - leaderHeartbeatCount
+                    - leaderHeartbeatTimeout
+                    - leaderRotation
+                    - numOfTicksBehindBeforeSyncing
+                    - requestAutoRemoveTimeout
+                    - requestBatchMaxBytes
+                    - requestBatchMaxCount
+                    - requestBatchMaxInterval
+                    - requestComplainTimeout
+                    - requestForwardTimeout
+                    - requestMaxBytes
+                    - requestPoolSize
+                    - requestPoolSubmitTimeout
+                    - selfID
+                    - speedUpViewChange
+                    - syncOnStart
+                    - viewChangeResendInterval
+                    - viewChangeTimeout
+                    type: object
+                required:
+                - smartBFT
                 type: object
               consenters:
                 description: Specific consenter nodes for consensus
@@ -239,12 +396,208 @@ spec:
                       - name
                       - namespace
                       type: object
+                    assembler:
+                      description: Assembler configuration for this organization
+                      properties:
+                        host:
+                          description: Host address of the assembler
+                          type: string
+                        port:
+                          description: Port number for the assembler
+                          format: int32
+                          type: integer
+                        tlsCertRef:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - port
+                      - tlsCertRef
+                      type: object
+                    batchers:
+                      description: Batcher configurations for this organization
+                      items:
+                        description: BatcherConfig represents batcher configuration
+                          for an organization
+                        properties:
+                          host:
+                            description: Host address of the batcher
+                            type: string
+                          port:
+                            description: Port number for the batcher
+                            format: int32
+                            type: integer
+                          shardID:
+                            description: Shard ID for this batcher
+                            format: int32
+                            type: integer
+                          signCertRef:
+                            description: Signing certificate reference
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Namespace of the secret
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          tlsCertRef:
+                            description: TLS certificate reference
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Namespace of the secret
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                        required:
+                        - host
+                        - port
+                        - shardID
+                        - signCertRef
+                        - tlsCertRef
+                        type: object
+                      type: array
+                    consenter:
+                      description: Consenter configuration for this organization
+                      properties:
+                        host:
+                          description: Host address of the consenter
+                          type: string
+                        port:
+                          description: Port number for the consenter
+                          format: int32
+                          type: integer
+                        signCertRef:
+                          description: Signing certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                        tlsCertRef:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - port
+                      - signCertRef
+                      - tlsCertRef
+                      type: object
                     mspId:
                       description: MSP ID for the organization
                       type: string
                     name:
                       description: Name of the organization
                       type: string
+                    router:
+                      description: Router configuration for this organization
+                      properties:
+                        host:
+                          description: Host address of the router
+                          type: string
+                        partyID:
+                          description: Party ID for this router
+                          format: int32
+                          type: integer
+                        port:
+                          description: Port number for the router
+                          format: int32
+                          type: integer
+                        signCertRef:
+                          description: Signing certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                        tlsCertRef:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - partyID
+                      - port
+                      - signCertRef
+                      - tlsCertRef
+                      type: object
                     signCaCertRef:
                       description: Signing CA certificate reference
                       properties:
@@ -299,6 +652,238 @@ spec:
                 - blockKey
                 - secretName
                 type: object
+              parties:
+                description: Parties for SharedConfig
+                items:
+                  description: PartyConfig represents a party configuration for SharedConfig
+                  properties:
+                    assemblerConfig:
+                      description: Assembler configuration for this party
+                      properties:
+                        host:
+                          description: Host address of the assembler
+                          type: string
+                        port:
+                          description: Port number for the assembler
+                          format: int32
+                          type: integer
+                        tlsCert:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - port
+                      - tlsCert
+                      type: object
+                    batchersConfig:
+                      description: Batcher configurations for this party
+                      items:
+                        description: PartyBatcherConfig represents batcher configuration
+                          for a party
+                        properties:
+                          host:
+                            description: Host address of the batcher
+                            type: string
+                          port:
+                            description: Port number for the batcher
+                            format: int32
+                            type: integer
+                          shardID:
+                            description: Shard ID for this batcher
+                            format: int32
+                            type: integer
+                          signCert:
+                            description: Signing certificate reference
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Namespace of the secret
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          tlsCert:
+                            description: TLS certificate reference
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Namespace of the secret
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                        required:
+                        - host
+                        - port
+                        - shardID
+                        - signCert
+                        - tlsCert
+                        type: object
+                      type: array
+                    caCerts:
+                      description: CA certificates references
+                      items:
+                        description: SecretKeyNSSelector defines a secret key reference
+                        properties:
+                          key:
+                            description: Secret key
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                          namespace:
+                            description: Namespace of the secret
+                            type: string
+                        required:
+                        - key
+                        - name
+                        - namespace
+                        type: object
+                      type: array
+                    consenterConfig:
+                      description: Consenter configuration for this party
+                      properties:
+                        host:
+                          description: Host address of the consenter
+                          type: string
+                        port:
+                          description: Port number for the consenter
+                          format: int32
+                          type: integer
+                        signCert:
+                          description: Signing certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                        tlsCert:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - port
+                      - signCert
+                      - tlsCert
+                      type: object
+                    partyID:
+                      description: Party ID for this party
+                      format: int32
+                      type: integer
+                    routerConfig:
+                      description: Router configuration for this party
+                      properties:
+                        host:
+                          description: Host address of the router
+                          type: string
+                        port:
+                          description: Port number for the router
+                          format: int32
+                          type: integer
+                        tlsCert:
+                          description: TLS certificate reference
+                          properties:
+                            key:
+                              description: Secret key
+                              type: string
+                            name:
+                              description: Secret name
+                              type: string
+                            namespace:
+                              description: Namespace of the secret
+                              type: string
+                          required:
+                          - key
+                          - name
+                          - namespace
+                          type: object
+                      required:
+                      - host
+                      - port
+                      - tlsCert
+                      type: object
+                    tlsCaCerts:
+                      description: TLS CA certificates references
+                      items:
+                        description: SecretKeyNSSelector defines a secret key reference
+                        properties:
+                          key:
+                            description: Secret key
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                          namespace:
+                            description: Namespace of the secret
+                            type: string
+                        required:
+                        - key
+                        - name
+                        - namespace
+                        type: object
+                      type: array
+                  required:
+                  - assemblerConfig
+                  - batchersConfig
+                  - caCerts
+                  - consenterConfig
+                  - partyID
+                  - routerConfig
+                  - tlsCaCerts
+                  type: object
+                type: array
             required:
             - channelID
             - configTemplate

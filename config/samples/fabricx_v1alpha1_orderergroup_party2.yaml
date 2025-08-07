@@ -1,11 +1,11 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: OrdererGroup
 metadata:
-  name: orderergroup-sample
+  name: orderergroup-party2
   namespace: default
 
 spec:
-  partyID: 1
+  partyID: 2
   bootstrapMode: configure
   mspid: OrdererMSP
   common:
@@ -55,8 +55,8 @@ spec:
       ingress:
         istio:
           hosts:
-            - assembler-org1.localho.st
-          ingressGateway: istio-ingressgateway
+            - assembler-org2.localho.st
+          ingressGateway: ingressgateway
           port: 443
       replicas: 1
     batchers:
@@ -69,8 +69,8 @@ spec:
               key: tls.crt
               name: test-ca2-tls-crypto
               namespace: default
-            enrollid: admin
-            enrollsecret: adminpw
+          enrollid: admin
+          enrollsecret: adminpw
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -79,8 +79,8 @@ spec:
         ingress:
           istio:
             hosts:
-              - batcher-1-org1.localho.st
-            ingressGateway: istio-ingressgateway
+              - batcher-1-org2.localho.st
+            ingressGateway: ingressgateway
             port: 443
         podLabels:
           fabric-x/batcher-type: high-throughput
@@ -100,8 +100,8 @@ spec:
               key: tls.crt
               name: test-ca2-tls-crypto
               namespace: default
-            enrollid: admin
-            enrollsecret: adminpw
+          enrollid: admin
+          enrollsecret: adminpw
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -110,8 +110,8 @@ spec:
         ingress:
           istio:
             hosts:
-              - batcher-2-org1.localho.st
-            ingressGateway: istio-ingressgateway
+              - batcher-2-org2.localho.st
+            ingressGateway: ingressgateway
             port: 443
         podLabels:
           fabric-x/batcher-type: high-throughput
@@ -132,10 +132,10 @@ spec:
             key: tls.crt
             name: test-ca2-tls-crypto
             namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        enrollid: admin
+        enrollsecret: adminpw
       endpoints:
-        - consenter-1-org1.localho.st:7050
+        - consenter-1-org2.localho.st:7050
       env:
         - name: CONSENTER_TYPE
           value: raft
@@ -144,8 +144,8 @@ spec:
       ingress:
         istio:
           hosts:
-            - consenter-1-org1.localho.st
-          ingressGateway: istio-ingressgateway
+            - consenter-1-org2.localho.st
+          ingressGateway: ingressgateway
           port: 443
       podAnnotations:
         fabric-x/consenter-batch-size: '500'
@@ -162,8 +162,8 @@ spec:
             key: tls.crt
             name: test-ca2-tls-crypto
             namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        enrollid: admin
+        enrollsecret: adminpw
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
@@ -171,8 +171,8 @@ spec:
       ingress:
         istio:
           hosts:
-            - router-org1.localho.st
-          ingressGateway: istio-ingressgateway
+            - router-org2.localho.st
+          ingressGateway: ingressgateway
           port: 443
       replicas: 1
       volumes:
@@ -190,8 +190,8 @@ spec:
           key: tls.crt
           name: test-ca2-tls-crypto
           namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+      enrollid: admin
+      enrollsecret: adminpw
     tls:
       cahost: test-ca2.default
       caport: 7054
@@ -200,8 +200,8 @@ spec:
           key: tls.crt
           name: test-ca2-tls-crypto
           namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+      enrollid: admin
+      enrollsecret: adminpw
   genesis:
     secretKey: genesis.block
     secretName: fabricx-shared-genesis

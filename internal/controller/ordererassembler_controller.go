@@ -21,15 +21,25 @@ import (
 	"fmt"
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	// Istio imports
+	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
+	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 )
 
@@ -52,6 +62,8 @@ type OrdererAssemblerReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -130,16 +142,16 @@ func (r *OrdererAssemblerReconciler) reconcileOrdererAssembler(ctx context.Conte
 	log.Info("Starting OrdererAssembler reconciliation",
 		"name", ordererAssembler.Name,
 		"namespace", ordererAssembler.Namespace,
-		"deploymentMode", ordererAssembler.Spec.DeploymentMode)
+		"bootstrapMode", ordererAssembler.Spec.BootstrapMode)
 
-	// Determine deployment mode
-	deploymentMode := ordererAssembler.Spec.DeploymentMode
-	if deploymentMode == "" {
-		deploymentMode = "deploy" // Default to deploy mode
+	// Check bootstrap mode - only deploy when bootstrapMode is "deploy"
+	bootstrapMode := ordererAssembler.Spec.BootstrapMode
+	if bootstrapMode == "" {
+		bootstrapMode = "configure" // Default to configure mode
 	}
 
 	// Reconcile based on deployment mode
-	switch deploymentMode {
+	switch ordererAssembler.Spec.BootstrapMode {
 	case "configure":
 		if err := r.reconcileConfigureMode(ctx, ordererAssembler); err != nil {
 			errorMsg := fmt.Sprintf("Failed to reconcile in configure mode: %v", err)
@@ -155,8 +167,8 @@ func (r *OrdererAssemblerReconciler) reconcileOrdererAssembler(ctx context.Conte
 			return fmt.Errorf("failed to reconcile in deploy mode: %w", err)
 		}
 	default:
-		errorMsg := fmt.Sprintf("Invalid deployment mode: %s", deploymentMode)
-		log.Error(fmt.Errorf("%s", errorMsg), "Invalid deployment mode")
+		errorMsg := fmt.Sprintf("Invalid bootstrap mode: %s", ordererAssembler.Spec.BootstrapMode)
+		log.Error(fmt.Errorf("%s", errorMsg), "Invalid bootstrap mode")
 		r.updateOrdererAssemblerStatus(ctx, ordererAssembler, fabricxv1alpha1.FailedStatus, errorMsg)
 		return fmt.Errorf("%s", errorMsg)
 	}
@@ -190,94 +202,120 @@ func (r *OrdererAssemblerReconciler) reconcileConfigureMode(ctx context.Context,
 func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
 	log := logf.FromContext(ctx)
 
-	// For individual OrdererAssembler instances, we'll create a simple certificate approach
-	// that doesn't rely on the OrdererGroup certificate service
-
 	// Check if certificates are configured
 	if ordererAssembler.Spec.Certificates == nil {
 		log.Info("No certificate configuration found, skipping certificate creation")
 		return nil
 	}
 
-	// Create sign certificate secret
-	signSecretName := fmt.Sprintf("%s-sign-cert", ordererAssembler.Name)
-	if err := r.createCertificateSecret(ctx, ordererAssembler, signSecretName, "sign"); err != nil {
-		return fmt.Errorf("failed to create sign certificate secret: %w", err)
+	// Create certificate request for this assembler instance
+	request := certs.OrdererGroupCertificateRequest{
+		ComponentName:    ordererAssembler.Name,
+		ComponentType:    "assembler",
+		Namespace:        ordererAssembler.Namespace,
+		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
+		CertConfig:       convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Certificates),
+		EnrollmentConfig: nil, // Individual assemblers don't have global enrollment config
+		CertTypes:        []string{"sign", "tls"},
+		EnrollID:         ordererAssembler.Spec.Certificates.EnrollID,
+		EnrollSecret:     ordererAssembler.Spec.Certificates.EnrollSecret,
 	}
 
-	// Create TLS certificate secret
-	tlsSecretName := fmt.Sprintf("%s-tls-cert", ordererAssembler.Name)
-	if err := r.createCertificateSecret(ctx, ordererAssembler, tlsSecretName, "tls"); err != nil {
-		return fmt.Errorf("failed to create TLS certificate secret: %w", err)
+	// Provision certificates using the certificate service
+	certificates, err := certs.ProvisionOrdererGroupCertificatesWithClient(ctx, r.Client, request)
+	if err != nil {
+		return fmt.Errorf("failed to provision certificates: %w", err)
+	}
+
+	// Create Kubernetes secrets for the certificates
+	if err := r.createCertificateSecrets(ctx, ordererAssembler, certificates); err != nil {
+		return fmt.Errorf("failed to create certificate secrets: %w", err)
 	}
 
 	log.Info("Certificates reconciled successfully", "assembler", ordererAssembler.Name)
 	return nil
 }
 
-// createCertificateSecret creates a certificate secret for the OrdererAssembler
-func (r *OrdererAssemblerReconciler) createCertificateSecret(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler, secretName, certType string) error {
+// convertToCertConfigAssembler converts API certificate config to internal format
+func convertToCertConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+	if apiConfig == nil {
+		return nil
+	}
+
+	config := &certs.CertificateConfig{
+		CAHost:       apiConfig.CAHost,
+		CAName:       apiConfig.CAName,
+		CAPort:       apiConfig.CAPort,
+		EnrollID:     apiConfig.EnrollID,
+		EnrollSecret: apiConfig.EnrollSecret,
+		MSPID:        mspID,
+	}
+
+	if apiConfig.CATLS != nil {
+		config.CATLS = &certs.CATLSConfig{
+			CACert: apiConfig.CATLS.CACert,
+		}
+
+		if apiConfig.CATLS.SecretRef != nil {
+			config.CATLS.SecretRef = &certs.SecretRef{
+				Name:      apiConfig.CATLS.SecretRef.Name,
+				Key:       apiConfig.CATLS.SecretRef.Key,
+				Namespace: apiConfig.CATLS.SecretRef.Namespace,
+			}
+		}
+	}
+
+	return config
+}
+
+// createCertificateSecrets creates Kubernetes secrets for certificate data
+func (r *OrdererAssemblerReconciler) createCertificateSecrets(
+	ctx context.Context,
+	ordererAssembler *fabricxv1alpha1.OrdererAssembler,
+	certificates []certs.ComponentCertificateData,
+) error {
 	log := logf.FromContext(ctx)
 
-	// Check if secret already exists
-	existingSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
-		Namespace: ordererAssembler.Namespace,
-		Name:      secretName,
-	}, existingSecret)
-
-	if err == nil {
-		// Secret exists, check if it has the required data
-		if existingSecret.Data != nil {
-			if _, hasCert := existingSecret.Data["cert.pem"]; hasCert {
-				if _, hasKey := existingSecret.Data["key.pem"]; hasKey {
-					if _, hasCA := existingSecret.Data["ca.pem"]; hasCA {
-						log.Info("Certificate secret already exists, skipping creation",
-							"secret", secretName, "certType", certType)
-						return nil
-					}
-				}
-			}
-		}
-	}
-
-	// Create a simple certificate secret with placeholder data
-	// In a real implementation, this would call the actual certificate service
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: ordererAssembler.Namespace,
-			Labels: map[string]string{
-				"app":                      "fabric-x",
-				"ordererassembler":         ordererAssembler.Name,
-				"certificate-type":         certType,
-				"fabricx.kfsoft.tech/type": "certificate",
+	// Process each certificate in the slice
+	for _, certData := range certificates {
+		secretName := fmt.Sprintf("%s-%s-cert", ordererAssembler.Name, certData.CertType)
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: ordererAssembler.Namespace,
+				Labels: map[string]string{
+					"app":                      "fabric-x",
+					"ordererassembler":         ordererAssembler.Name,
+					"certificate-type":         certData.CertType,
+					"fabricx.kfsoft.tech/type": "certificate",
+				},
 			},
-		},
-		Data: map[string][]byte{
-			"cert.pem": []byte("placeholder-certificate-data"),
-			"key.pem":  []byte("placeholder-key-data"),
-			"ca.pem":   []byte("placeholder-ca-data"),
-		},
-	}
-
-	// Set the controller reference
-	if err := controllerutil.SetControllerReference(ordererAssembler, secret, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
-	}
-
-	if err := r.Client.Create(ctx, secret); err != nil {
-		// If secret already exists, update it
-		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, secret); err != nil {
-				return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
-			}
-		} else {
-			return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+			Data: map[string][]byte{
+				"cert.pem": certData.Cert,
+				"key.pem":  certData.Key,
+				"ca.pem":   certData.CACert,
+			},
 		}
+
+		// Set the controller reference
+		if err := controllerutil.SetControllerReference(ordererAssembler, secret, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
+		}
+
+		if err := r.Client.Create(ctx, secret); err != nil {
+			// If secret already exists, update it
+			if strings.Contains(err.Error(), "already exists") {
+				if err := r.Client.Update(ctx, secret); err != nil {
+					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
+				}
+			} else {
+				return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+			}
+		}
+
+		log.Info("Created certificate secret", "secret", secretName, "certType", certData.CertType)
 	}
 
-	log.Info("Created certificate secret", "secret", secretName, "certType", certType)
 	return nil
 }
 
@@ -294,12 +332,28 @@ func (r *OrdererAssemblerReconciler) reconcileDeployMode(ctx context.Context, or
 		return fmt.Errorf("failed to reconcile certificates: %w", err)
 	}
 
-	// TODO: Implement full deployment resource creation
-	// - Create ConfigMap for Assembler configuration
-	// - Create Service for Assembler
-	// - Create Deployment for Assembler
-	// - Create PVC if needed
-	// - Create Ingress if configured
+	// 2. Create/Update ConfigMap for Assembler configuration
+	if err := r.reconcileConfigMap(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile ConfigMap: %w", err)
+	}
+
+	// 3. Create/Update Service
+	if err := r.reconcileService(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile Service: %w", err)
+	}
+	// 5. Create/Update PVC if needed
+	if err := r.reconcilePVC(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile PVC: %w", err)
+	}
+	// 4. Create/Update Deployment for Assembler
+	if err := r.reconcileDeployment(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile Deployment: %w", err)
+	}
+
+	// 6. Create/Update Istio resources
+	if err := r.reconcileIstioResources(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile Istio resources: %w", err)
+	}
 
 	log.Info("OrdererAssembler deploy mode reconciliation completed")
 	return nil
@@ -327,6 +381,18 @@ func (r *OrdererAssemblerReconciler) handleDeletion(ctx context.Context, orderer
 
 	// Set status to indicate deletion
 	r.updateOrdererAssemblerStatus(ctx, ordererAssembler, fabricxv1alpha1.PendingStatus, "Deleting OrdererAssembler resources")
+
+	// Clean up Istio resources if they exist
+	if ordererAssembler.Spec.Ingress != nil && ordererAssembler.Spec.Ingress.Istio != nil {
+		if err := r.cleanupIstioResources(ctx, ordererAssembler); err != nil {
+			log.Error(err, "Failed to cleanup Istio resources")
+		}
+	}
+
+	// Clean up deployment resources
+	if err := r.cleanupDeploymentResources(ctx, ordererAssembler); err != nil {
+		log.Error(err, "Failed to cleanup deployment resources")
+	}
 
 	// TODO: Clean up resources based on deployment mode
 	// - Delete Deployments/StatefulSets
@@ -399,8 +465,688 @@ func (r *OrdererAssemblerReconciler) updateOrdererAssemblerStatus(ctx context.Co
 	}
 }
 
+// reconcileService creates or updates the Service for Assembler
+func (r *OrdererAssemblerReconciler) reconcileService(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-service", ordererAssembler.Name),
+			Namespace: ordererAssembler.Namespace,
+		},
+	}
+
+	template := r.getServiceTemplate(ordererAssembler)
+
+	if err := r.updateService(ctx, ordererAssembler, service, template); err != nil {
+		log.Error(err, "Failed to update Service", "name", service.Name)
+		return fmt.Errorf("failed to update Service %s: %w", service.Name, err)
+	}
+
+	log.Info("Service reconciled successfully", "assembler", ordererAssembler.Name)
+	return nil
+}
+
+// getServiceTemplate returns the service template for the OrdererAssembler
+func (r *OrdererAssemblerReconciler) getServiceTemplate(ordererAssembler *fabricxv1alpha1.OrdererAssembler) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-service", ordererAssembler.Name),
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":              "fabric-x",
+				"ordererassembler": ordererAssembler.Name,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app":              "fabric-x",
+				"ordererassembler": ordererAssembler.Name,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "assembler",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       7050,
+					TargetPort: intstr.FromInt32(7050),
+				},
+			},
+			Type: corev1.ServiceTypeClusterIP,
+		},
+	}
+}
+
+// updateService updates a Service with the given template
+func (r *OrdererAssemblerReconciler) updateService(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler, service *corev1.Service, template *corev1.Service) error {
+	// Set the controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, template, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for service: %w", err)
+	}
+
+	// Try to create the Service
+	if err := r.Client.Create(ctx, template); err != nil {
+		// If Service already exists, update it
+		if strings.Contains(err.Error(), "already exists") {
+			if err := r.Client.Update(ctx, template); err != nil {
+				return fmt.Errorf("failed to update Service: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create Service: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// reconcileIstioGateway creates or updates the Istio Gateway for Assembler
+func (r *OrdererAssemblerReconciler) reconcileIstioGateway(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Gateway creation")
+		return nil
+	}
+
+	istioConfig := ordererAssembler.Spec.Ingress.Istio
+	gatewayName := fmt.Sprintf("%s-gateway", ordererAssembler.Name)
+
+	// Create Gateway resource template
+	gatewayTemplate := &istionetworkingv1beta1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      gatewayName,
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererassembler":         ordererAssembler.Name,
+				"fabricx.kfsoft.tech/type": "gateway",
+			},
+		},
+		Spec: istioapinetworkingv1alpha3.Gateway{
+			Selector: map[string]string{
+				"istio": istioConfig.IngressGateway,
+			},
+			Servers: []*istioapinetworkingv1alpha3.Server{
+				{
+					Port: &istioapinetworkingv1alpha3.Port{
+						Number:   uint32(istioConfig.Port),
+						Name:     "tls",
+						Protocol: "TLS",
+					},
+					Hosts: istioConfig.Hosts,
+					Tls: &istioapinetworkingv1alpha3.ServerTLSSettings{
+						Mode: istioapinetworkingv1alpha3.ServerTLSSettings_PASSTHROUGH,
+					},
+				},
+			},
+		},
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, gatewayTemplate, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for Gateway: %w", err)
+	}
+
+	// Check if Gateway already exists
+	existingGateway := &istionetworkingv1beta1.Gateway{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      gatewayName,
+		Namespace: ordererAssembler.Namespace,
+	}, existingGateway)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new Gateway
+			if err := r.Client.Create(ctx, gatewayTemplate); err != nil {
+				return fmt.Errorf("failed to create Gateway: %w", err)
+			}
+			log.Info("Created Istio Gateway", "gateway", gatewayName)
+		} else {
+			return fmt.Errorf("failed to get existing Gateway: %w", err)
+		}
+	} else {
+		// Update existing Gateway - always update to ensure it's current
+		existingGateway.Spec = gatewayTemplate.Spec
+		existingGateway.Labels = gatewayTemplate.Labels
+		if err := r.Client.Update(ctx, existingGateway); err != nil {
+			return fmt.Errorf("failed to update Gateway: %w", err)
+		}
+		log.Info("Updated Istio Gateway", "gateway", gatewayName)
+	}
+
+	log.Info("Istio Gateway reconciled successfully", "gateway", gatewayName)
+	return nil
+}
+
+// reconcileIstioVirtualService creates or updates the Istio VirtualService for Assembler
+func (r *OrdererAssemblerReconciler) reconcileIstioVirtualService(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping VirtualService creation")
+		return nil
+	}
+
+	istioConfig := ordererAssembler.Spec.Ingress.Istio
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererAssembler.Name)
+	gatewayName := fmt.Sprintf("%s-gateway", ordererAssembler.Name)
+
+	// Create VirtualService resource template
+	virtualServiceTemplate := &istionetworkingv1beta1.VirtualService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      virtualServiceName,
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererassembler":         ordererAssembler.Name,
+				"fabricx.kfsoft.tech/type": "virtualservice",
+			},
+		},
+		Spec: istioapinetworkingv1alpha3.VirtualService{
+			Hosts:    istioConfig.Hosts,
+			Gateways: []string{gatewayName},
+			Tls: []*istioapinetworkingv1alpha3.TLSRoute{
+				{
+					Match: []*istioapinetworkingv1alpha3.TLSMatchAttributes{
+						{
+							Port:     uint32(istioConfig.Port),
+							SniHosts: istioConfig.Hosts,
+						},
+					},
+					Route: []*istioapinetworkingv1alpha3.RouteDestination{
+						{
+							Destination: &istioapinetworkingv1alpha3.Destination{
+								Host: fmt.Sprintf("%s-service.%s.svc.cluster.local", ordererAssembler.Name, ordererAssembler.Namespace),
+								Port: &istioapinetworkingv1alpha3.PortSelector{
+									Number: 7050, // Assembler port
+								},
+							},
+							Weight: 100,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, virtualServiceTemplate, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for VirtualService: %w", err)
+	}
+
+	// Check if VirtualService already exists
+	existingVirtualService := &istionetworkingv1beta1.VirtualService{}
+	err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      virtualServiceName,
+		Namespace: ordererAssembler.Namespace,
+	}, existingVirtualService)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Create new VirtualService
+			if err := r.Client.Create(ctx, virtualServiceTemplate); err != nil {
+				return fmt.Errorf("failed to create VirtualService: %w", err)
+			}
+			log.Info("Created Istio VirtualService", "virtualService", virtualServiceName)
+		} else {
+			return fmt.Errorf("failed to get existing VirtualService: %w", err)
+		}
+	} else {
+		// Update existing VirtualService - always update to ensure it's current
+		existingVirtualService.Spec = virtualServiceTemplate.Spec
+		existingVirtualService.Labels = virtualServiceTemplate.Labels
+		if err := r.Client.Update(ctx, existingVirtualService); err != nil {
+			return fmt.Errorf("failed to update VirtualService: %w", err)
+		}
+		log.Info("Updated Istio VirtualService", "virtualService", virtualServiceName)
+	}
+
+	log.Info("Istio VirtualService reconciled successfully", "virtualService", virtualServiceName)
+	return nil
+}
+
+// reconcileIstioResources creates or updates Istio Gateway and VirtualService resources
+func (r *OrdererAssemblerReconciler) reconcileIstioResources(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Istio resources")
+		return nil
+	}
+
+	// Reconcile Gateway
+	if err := r.reconcileIstioGateway(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
+	}
+
+	// Reconcile VirtualService
+	if err := r.reconcileIstioVirtualService(ctx, ordererAssembler); err != nil {
+		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
+	}
+
+	log.Info("Istio resources reconciled successfully")
+	return nil
+}
+
+// cleanupIstioResources cleans up Istio Gateway and VirtualService resources
+func (r *OrdererAssemblerReconciler) cleanupIstioResources(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	// Check if Istio configuration is provided
+	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Istio == nil {
+		log.Info("No Istio configuration found, skipping Istio resources cleanup")
+		return nil
+	}
+
+	gatewayName := fmt.Sprintf("%s-gateway", ordererAssembler.Name)
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererAssembler.Name)
+
+	// Delete Gateway
+	gateway := &istionetworkingv1beta1.Gateway{}
+	gateway.SetName(gatewayName)
+	gateway.SetNamespace(ordererAssembler.Namespace)
+
+	if err := r.Client.Delete(ctx, gateway); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete Istio Gateway", "name", gatewayName)
+	} else {
+		log.Info("Deleted Istio Gateway", "name", gatewayName)
+	}
+
+	// Delete VirtualService
+	virtualService := &istionetworkingv1beta1.VirtualService{}
+	virtualService.SetName(virtualServiceName)
+	virtualService.SetNamespace(ordererAssembler.Namespace)
+
+	if err := r.Client.Delete(ctx, virtualService); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete Istio VirtualService", "name", virtualServiceName)
+	} else {
+		log.Info("Deleted Istio VirtualService", "name", virtualServiceName)
+	}
+
+	log.Info("Istio resources cleanup completed")
+	return nil
+}
+
+// reconcileConfigMap creates or updates the ConfigMap for Assembler
+func (r *OrdererAssemblerReconciler) reconcileConfigMap(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-config", ordererAssembler.Name),
+			Namespace: ordererAssembler.Namespace,
+		},
+	}
+
+	template := r.getConfigMapTemplate(ctx, ordererAssembler)
+
+	if err := r.updateConfigMap(ctx, ordererAssembler, configMap, template); err != nil {
+		log.Error(err, "Failed to update ConfigMap", "name", configMap.Name)
+		return fmt.Errorf("failed to update ConfigMap %s: %w", configMap.Name, err)
+	}
+
+	log.Info("ConfigMap reconciled successfully", "assembler", ordererAssembler.Name)
+	return nil
+}
+
+// getConfigMapTemplate returns the configmap template for the OrdererAssembler
+func (r *OrdererAssemblerReconciler) getConfigMapTemplate(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-config", ordererAssembler.Name),
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":              "fabric-x",
+				"ordererassembler": ordererAssembler.Name,
+			},
+		},
+		Data: map[string]string{
+			"assembler.yaml": r.generateAssemblerConfig(ctx, ordererAssembler),
+		},
+	}
+}
+
+// generateAssemblerConfig generates the assembler configuration
+func (r *OrdererAssemblerReconciler) generateAssemblerConfig(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) string {
+	log := logf.FromContext(ctx)
+	// Create template data for assembler
+	templateData := utils.AssemblerTemplateData{
+		Name:    ordererAssembler.Name,
+		PartyID: ordererAssembler.Spec.PartyID,
+		MSPID:   ordererAssembler.Spec.MSPID,
+		Port:    7050, // Assembler port
+		
+	}
+
+	// Execute the template
+	config, err := utils.ExecuteTemplate(utils.AssemblerConfigTemplate, templateData)
+	if err != nil {
+		log.Error(err, "Failed to generate Assembler configuration", "name", ordererAssembler.Name)
+		// Fallback to basic config if template execution fails
+		return fmt.Sprintf(`
+# Assembler Configuration for %s
+assembler:
+  name: %s
+  namespace: %s
+  mspId: %s
+  partyId: %d
+  port: 7050
+  tls:
+    enabled: false
+    certFile: /etc/hyperledger/fabricx/assembler/tls/server.crt
+    keyFile: /etc/hyperledger/fabricx/assembler/tls/server.key
+    caFile: /etc/hyperledger/fabricx/assembler/tls/ca.crt
+`, ordererAssembler.Name, ordererAssembler.Name, ordererAssembler.Namespace, ordererAssembler.Spec.MSPID, ordererAssembler.Spec.PartyID)
+	}
+
+	return config
+}
+
+// updateConfigMap updates a ConfigMap with the given template
+func (r *OrdererAssemblerReconciler) updateConfigMap(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler, configMap *corev1.ConfigMap, template *corev1.ConfigMap) error {
+	// Set the controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, template, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for configmap: %w", err)
+	}
+
+	// Try to create the ConfigMap
+	if err := r.Client.Create(ctx, template); err != nil {
+		// If ConfigMap already exists, update it
+		if strings.Contains(err.Error(), "already exists") {
+			if err := r.Client.Update(ctx, template); err != nil {
+				return fmt.Errorf("failed to update ConfigMap: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create ConfigMap: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// reconcileDeployment creates or updates the Deployment for Assembler
+func (r *OrdererAssemblerReconciler) reconcileDeployment(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ordererAssembler.Name,
+			Namespace: ordererAssembler.Namespace,
+		},
+	}
+
+	template := r.getDeploymentTemplate(ctx, ordererAssembler)
+
+	if err := r.updateDeployment(ctx, ordererAssembler, deployment, template); err != nil {
+		log.Error(err, "Failed to update Deployment", "name", deployment.Name)
+		return fmt.Errorf("failed to update Deployment %s: %w", deployment.Name, err)
+	}
+
+	log.Info("Deployment reconciled successfully", "assembler", ordererAssembler.Name)
+	return nil
+}
+
+// getDeploymentTemplate returns the deployment template for the OrdererAssembler
+func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) *appsv1.Deployment {
+	replicas := int32(1)
+	if ordererAssembler.Spec.Replicas > 0 {
+		replicas = ordererAssembler.Spec.Replicas
+	}
+
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ordererAssembler.Name,
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":              "fabric-x",
+				"ordererassembler": ordererAssembler.Name,
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: &replicas,
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RecreateDeploymentStrategyType,
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app":              "fabric-x",
+					"ordererassembler": ordererAssembler.Name,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":              "fabric-x",
+						"ordererassembler": ordererAssembler.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "assembler",
+							Image: "hyperledger/fabric-x-orderer:0.0.17",
+							Args: []string{
+								"assembler",
+								"--config",
+								"/etc/hyperledger/assembler/assembler.yaml",
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "assembler",
+									ContainerPort: 7050,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name:  "ASSEMBLER_CONFIG",
+									Value: "/etc/hyperledger/assembler/assembler.yaml",
+								},
+								{
+									Name:  "ASSEMBLER_NAME",
+									Value: ordererAssembler.Name,
+								},
+								{
+									Name:  "ASSEMBLER_NAMESPACE",
+									Value: ordererAssembler.Namespace,
+								},
+								{
+									Name:  "MSP_ID",
+									Value: ordererAssembler.Spec.MSPID,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "config",
+									MountPath: "/etc/hyperledger/assembler",
+								},
+								{
+									Name:      "certs",
+									MountPath: "/var/hyperledger/msp",
+								},
+								{
+									Name:      "tls-certs",
+									MountPath: "/var/hyperledger/tls",
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("512Mi"),
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: fmt.Sprintf("%s-config", ordererAssembler.Name),
+									},
+								},
+							},
+						},
+						{
+							Name: "certs",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-sign-cert", ordererAssembler.Name),
+								},
+							},
+						},
+						{
+							Name: "tls-certs",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-tls-cert", ordererAssembler.Name),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// updateDeployment updates a Deployment with the given template
+func (r *OrdererAssemblerReconciler) updateDeployment(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler, deployment *appsv1.Deployment, template *appsv1.Deployment) error {
+	// Set the controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, template, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for deployment: %w", err)
+	}
+
+	// Try to create the Deployment
+	if err := r.Client.Create(ctx, template); err != nil {
+		// If Deployment already exists, update it
+		if strings.Contains(err.Error(), "already exists") {
+			if err := r.Client.Update(ctx, template); err != nil {
+				return fmt.Errorf("failed to update Deployment: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create Deployment: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// reconcilePVC creates or updates the PVC for Assembler
+func (r *OrdererAssemblerReconciler) reconcilePVC(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	// Check if storage is configured
+	if ordererAssembler.Spec.Storage == nil {
+		log.Info("No storage configuration found, skipping PVC creation")
+		return nil
+	}
+
+	pvcName := fmt.Sprintf("%s-data-pvc", ordererAssembler.Name)
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: ordererAssembler.Namespace,
+			Labels: map[string]string{
+				"app":              "fabric-x",
+				"ordererassembler": ordererAssembler.Name,
+			},
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(ordererAssembler.Spec.Storage.Size),
+				},
+			},
+			StorageClassName: &ordererAssembler.Spec.Storage.StorageClass,
+		},
+	}
+
+	// Set the controller reference
+	if err := controllerutil.SetControllerReference(ordererAssembler, pvc, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for PVC: %w", err)
+	}
+
+	if err := r.Client.Create(ctx, pvc); err != nil {
+		// If PVC already exists, update it
+		if strings.Contains(err.Error(), "already exists") {
+			if err := r.Client.Update(ctx, pvc); err != nil {
+				return fmt.Errorf("failed to update PVC: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create PVC: %w", err)
+		}
+	}
+
+	log.Info("PVC reconciled successfully", "assembler", ordererAssembler.Name)
+	return nil
+}
+
+// cleanupDeploymentResources cleans up deployment resources (ConfigMap, Deployment, PVC)
+func (r *OrdererAssemblerReconciler) cleanupDeploymentResources(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+
+	configMapName := fmt.Sprintf("%s-config", ordererAssembler.Name)
+	deploymentName := ordererAssembler.Name
+	pvcName := fmt.Sprintf("%s-data-pvc", ordererAssembler.Name)
+
+	// Delete ConfigMap
+	configMap := &corev1.ConfigMap{}
+	configMap.SetName(configMapName)
+	configMap.SetNamespace(ordererAssembler.Namespace)
+
+	if err := r.Client.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete ConfigMap", "name", configMapName)
+		return err
+	} else {
+		log.Info("Deleted ConfigMap", "name", configMapName)
+	}
+
+	// Delete Deployment
+	deployment := &appsv1.Deployment{}
+	deployment.SetName(deploymentName)
+	deployment.SetNamespace(ordererAssembler.Namespace)
+
+	if err := r.Client.Delete(ctx, deployment); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete Deployment", "name", deploymentName)
+		return err
+	} else {
+		log.Info("Deleted Deployment", "name", deploymentName)
+	}
+
+	// Delete PVC
+	pvc := &corev1.PersistentVolumeClaim{}
+	pvc.SetName(pvcName)
+	pvc.SetNamespace(ordererAssembler.Namespace)
+
+	if err := r.Client.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete PVC", "name", pvcName)
+		return err
+	} else {
+		log.Info("Deleted PVC", "name", pvcName)
+	}
+
+	log.Info("Deployment resources cleanup completed")
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrdererAssemblerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Register Istio types with the scheme
+	if err := istionetworkingv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("failed to add Istio networking v1beta1 to scheme: %w", err)
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.OrdererAssembler{}).
 		Named("ordererassembler").

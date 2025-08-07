@@ -23,10 +23,10 @@ import (
 
 // OrdererBatcherSpec defines the desired state of OrdererBatcher.
 type OrdererBatcherSpec struct {
-	// Deployment mode: "configure" or "deploy"
+	// Bootstrap mode: "configure" or "deploy"
 	// When set to "configure", only configuration resources are created
 	// When set to "deploy", full deployment resources are created
-	DeploymentMode string `json:"deploymentMode,omitempty"`
+	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
 	// MSP ID for this batcher
 	MSPID string `json:"mspid,omitempty"`

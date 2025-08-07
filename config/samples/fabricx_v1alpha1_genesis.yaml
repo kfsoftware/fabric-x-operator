@@ -3,6 +3,7 @@ kind: Genesis
 metadata:
   name: shared-genesis
   namespace: default
+
 spec:
   applicationOrgs:
     - mspId: Org1MSP
@@ -22,67 +23,67 @@ spec:
   consenters:
     - clientTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-0-tls-cert
+        name: orderergroup-party1-consenter-tls-cert
         namespace: default
       host: consenter-1-org1.localho.st
       id: 1
       identityRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-0-sign-cert
+        name: orderergroup-party1-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 7050
+      port: 443
       serverTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-0-tls-cert
+        name: orderergroup-party1-consenter-tls-cert
         namespace: default
     - clientTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-1-tls-cert
+        name: orderergroup-party2-consenter-tls-cert
         namespace: default
-      host: consenter-2-org1.localho.st
+      host: consenter-1-org2.localho.st
       id: 2
       identityRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-1-sign-cert
+        name: orderergroup-party2-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 7050
+      port: 443
       serverTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-1-tls-cert
+        name: orderergroup-party2-consenter-tls-cert
         namespace: default
     - clientTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-2-tls-cert
+        name: orderergroup-party3-consenter-tls-cert
         namespace: default
-      host: consenter-3-org1.localho.st
+      host: consenter-1-org3.localho.st
       id: 3
       identityRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-2-sign-cert
+        name: orderergroup-party3-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 7050
+      port: 443
       serverTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-2-tls-cert
+        name: orderergroup-party3-consenter-tls-cert
         namespace: default
     - clientTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-3-tls-cert
+        name: orderergroup-party4-consenter-tls-cert
         namespace: default
-      host: consenter-4-org1.localho.st
+      host: consenter-1-org4.localho.st
       id: 4
       identityRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-3-sign-cert
+        name: orderergroup-party4-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 7050
+      port: 443
       serverTlsCertRef:
         key: cert.pem
-        name: orderergroup-sample-consenter-3-tls-cert
+        name: orderergroup-party4-consenter-tls-cert
         namespace: default
   ordererOrganizations:
     - mspId: OrdererMSP
@@ -95,6 +96,269 @@ spec:
         key: certfile
         name: test-ca2-tlsca-crypto
         namespace: default
+  parties:
+    - partyID: 1
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: router-org1.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: batcher-1-org1.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: batcher-2-org1.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: consenter-1-org1.localho.st
+        port: 443
+        signCert:
+          key: cert.pem
+          name: orderergroup-party1-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: assembler-org1.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-assembler-tls-cert
+          namespace: default
+    - partyID: 2
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: router-org2.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: batcher-1-org2.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: batcher-2-org2.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: consenter-1-org2.localho.st
+        port: 443
+        signCert:
+          key: cert.pem
+          name: orderergroup-party2-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: assembler-org2.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-assembler-tls-cert
+          namespace: default
+    - partyID: 3
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: router-org3.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: batcher-1-org3.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: batcher-2-org3.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: consenter-1-org3.localho.st
+        port: 443
+        signCert:
+          key: cert.pem
+          name: orderergroup-party3-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: assembler-org3.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-assembler-tls-cert
+          namespace: default
+    - partyID: 4
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: router-org4.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: batcher-1-org4.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: batcher-2-org4.localho.st
+          port: 443
+          signCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: consenter-1-org4.localho.st
+        port: 443
+        signCert:
+          key: cert.pem
+          name: orderergroup-party4-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: assembler-org4.localho.st
+        port: 443
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-assembler-tls-cert
+          namespace: default
+  consensusConfig:
+    smartBFT:
+      selfID: 0
+      requestBatchMaxCount: 100
+      requestBatchMaxBytes: 10485760
+      requestBatchMaxInterval: "500ms"
+      incomingMessageBufferSize: 200
+      requestPoolSize: 400
+      requestForwardTimeout: "10s"
+      requestComplainTimeout: "20s"
+      requestAutoRemoveTimeout: "3m0s"
+      viewChangeResendInterval: "5s"
+      viewChangeTimeout: "20s"
+      leaderHeartbeatTimeout: "1m0s"
+      leaderHeartbeatCount: 10
+      numOfTicksBehindBeforeSyncing: 10
+      collectTimeout: "1s"
+      syncOnStart: false
+      speedUpViewChange: false
+      leaderRotation: false
+      decisionsPerLeader: 0
+      requestMaxBytes: 10240
+      requestPoolSubmitTimeout: "5s"
+  batchingConfig:
+    batchTimeouts:
+      batchCreationTimeout: "500ms"
+      firstStrikeThreshold: "10s"
+      secondStrikeThreshold: "10s"
+      autoRemoveTimeout: "10s"
+    batchSize:
+      maxMessageCount: 10000
+      absoluteMaxBytes: 10485760
+      preferredMaxBytes: 2097152
+    requestMaxBytes: 1048576
   output:
     blockKey: genesis.block
     secretName: fabricx-shared-genesis

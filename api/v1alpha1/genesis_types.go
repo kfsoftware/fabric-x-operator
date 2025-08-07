@@ -48,6 +48,81 @@ type OrdererOrganization struct {
 
 	// Admin certificate reference (optional)
 	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
+
+	// Router configuration for this organization
+	Router *RouterConfig `json:"router,omitempty"`
+
+	// Batcher configurations for this organization
+	Batchers []BatcherConfig `json:"batchers,omitempty"`
+
+	// Consenter configuration for this organization
+	Consenter *ConsenterConfig `json:"consenter,omitempty"`
+
+	// Assembler configuration for this organization
+	Assembler *AssemblerConfig `json:"assembler,omitempty"`
+}
+
+// RouterConfig represents router configuration for an organization
+type RouterConfig struct {
+	// Host address of the router
+	Host string `json:"host"`
+
+	// Port number for the router
+	Port int32 `json:"port"`
+
+	// Party ID for this router
+	PartyID int32 `json:"partyID"`
+
+	// Signing certificate reference
+	SignCertRef SecretKeyNSSelector `json:"signCertRef"`
+
+	// TLS certificate reference
+	TLSCertRef SecretKeyNSSelector `json:"tlsCertRef"`
+}
+
+// BatcherConfig represents batcher configuration for an organization
+type BatcherConfig struct {
+	// Shard ID for this batcher
+	ShardID int32 `json:"shardID"`
+
+	// Host address of the batcher
+	Host string `json:"host"`
+
+	// Port number for the batcher
+	Port int32 `json:"port"`
+
+	// Signing certificate reference
+	SignCertRef SecretKeyNSSelector `json:"signCertRef"`
+
+	// TLS certificate reference
+	TLSCertRef SecretKeyNSSelector `json:"tlsCertRef"`
+}
+
+// ConsenterConfig represents consenter configuration for an organization
+type ConsenterConfig struct {
+	// Host address of the consenter
+	Host string `json:"host"`
+
+	// Port number for the consenter
+	Port int32 `json:"port"`
+
+	// Signing certificate reference
+	SignCertRef SecretKeyNSSelector `json:"signCertRef"`
+
+	// TLS certificate reference
+	TLSCertRef SecretKeyNSSelector `json:"tlsCertRef"`
+}
+
+// AssemblerConfig represents assembler configuration for an organization
+type AssemblerConfig struct {
+	// Host address of the assembler
+	Host string `json:"host"`
+
+	// Port number for the assembler
+	Port int32 `json:"port"`
+
+	// TLS certificate reference
+	TLSCertRef SecretKeyNSSelector `json:"tlsCertRef"`
 }
 
 // OrdererNode represents a specific orderer node for consensus
@@ -117,6 +192,198 @@ type ExternalApplicationOrg struct {
 	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 }
 
+// PartyConfig represents a party configuration for SharedConfig
+type PartyConfig struct {
+	// Party ID for this party
+	PartyID int32 `json:"partyID"`
+
+	// CA certificates references
+	CACerts []SecretKeyNSSelector `json:"caCerts"`
+
+	// TLS CA certificates references
+	TLSCACerts []SecretKeyNSSelector `json:"tlsCaCerts"`
+
+	// Router configuration for this party
+	RouterConfig *PartyRouterConfig `json:"routerConfig"`
+
+	// Batcher configurations for this party
+	BatchersConfig []PartyBatcherConfig `json:"batchersConfig"`
+
+	// Consenter configuration for this party
+	ConsenterConfig *PartyConsenterConfig `json:"consenterConfig"`
+
+	// Assembler configuration for this party
+	AssemblerConfig *PartyAssemblerConfig `json:"assemblerConfig"`
+}
+
+// PartyRouterConfig represents router configuration for a party
+type PartyRouterConfig struct {
+	// Host address of the router
+	Host string `json:"host"`
+
+	// Port number for the router
+	Port int32 `json:"port"`
+
+	// TLS certificate reference
+	TLSCert SecretKeyNSSelector `json:"tlsCert"`
+}
+
+// PartyBatcherConfig represents batcher configuration for a party
+type PartyBatcherConfig struct {
+	// Shard ID for this batcher
+	ShardID int32 `json:"shardID"`
+
+	// Host address of the batcher
+	Host string `json:"host"`
+
+	// Port number for the batcher
+	Port int32 `json:"port"`
+
+	// Signing certificate reference
+	SignCert SecretKeyNSSelector `json:"signCert"`
+
+	// TLS certificate reference
+	TLSCert SecretKeyNSSelector `json:"tlsCert"`
+}
+
+// PartyConsenterConfig represents consenter configuration for a party
+type PartyConsenterConfig struct {
+	// Host address of the consenter
+	Host string `json:"host"`
+
+	// Port number for the consenter
+	Port int32 `json:"port"`
+
+	// Signing certificate reference
+	SignCert SecretKeyNSSelector `json:"signCert"`
+
+	// TLS certificate reference
+	TLSCert SecretKeyNSSelector `json:"tlsCert"`
+}
+
+// PartyAssemblerConfig represents assembler configuration for a party
+type PartyAssemblerConfig struct {
+	// Host address of the assembler
+	Host string `json:"host"`
+
+	// Port number for the assembler
+	Port int32 `json:"port"`
+
+	// TLS certificate reference
+	TLSCert SecretKeyNSSelector `json:"tlsCert"`
+}
+
+// ConsensusConfig represents consensus configuration
+type ConsensusConfig struct {
+	// SmartBFT configuration
+	SmartBFT *SmartBFTConfig `json:"smartBFT"`
+}
+
+// SmartBFTConfig represents SmartBFT consensus configuration
+type SmartBFTConfig struct {
+	// Self ID for this node
+	SelfID int32 `json:"selfID"`
+
+	// Request batch max count
+	RequestBatchMaxCount int32 `json:"requestBatchMaxCount"`
+
+	// Request batch max bytes
+	RequestBatchMaxBytes int32 `json:"requestBatchMaxBytes"`
+
+	// Request batch max interval
+	RequestBatchMaxInterval string `json:"requestBatchMaxInterval"`
+
+	// Incoming message buffer size
+	IncomingMessageBufferSize int32 `json:"incomingMessageBufferSize"`
+
+	// Request pool size
+	RequestPoolSize int32 `json:"requestPoolSize"`
+
+	// Request forward timeout
+	RequestForwardTimeout string `json:"requestForwardTimeout"`
+
+	// Request complain timeout
+	RequestComplainTimeout string `json:"requestComplainTimeout"`
+
+	// Request auto remove timeout
+	RequestAutoRemoveTimeout string `json:"requestAutoRemoveTimeout"`
+
+	// View change resend interval
+	ViewChangeResendInterval string `json:"viewChangeResendInterval"`
+
+	// View change timeout
+	ViewChangeTimeout string `json:"viewChangeTimeout"`
+
+	// Leader heartbeat timeout
+	LeaderHeartbeatTimeout string `json:"leaderHeartbeatTimeout"`
+
+	// Leader heartbeat count
+	LeaderHeartbeatCount int32 `json:"leaderHeartbeatCount"`
+
+	// Number of ticks behind before syncing
+	NumOfTicksBehindBeforeSyncing int32 `json:"numOfTicksBehindBeforeSyncing"`
+
+	// Collect timeout
+	CollectTimeout string `json:"collectTimeout"`
+
+	// Sync on start
+	SyncOnStart bool `json:"syncOnStart"`
+
+	// Speed up view change
+	SpeedUpViewChange bool `json:"speedUpViewChange"`
+
+	// Leader rotation
+	LeaderRotation bool `json:"leaderRotation"`
+
+	// Decisions per leader
+	DecisionsPerLeader int32 `json:"decisionsPerLeader"`
+
+	// Request max bytes
+	RequestMaxBytes int32 `json:"requestMaxBytes"`
+
+	// Request pool submit timeout
+	RequestPoolSubmitTimeout string `json:"requestPoolSubmitTimeout"`
+}
+
+// BatchingConfig represents batching configuration
+type BatchingConfig struct {
+	// Batch timeouts configuration
+	BatchTimeouts *BatchTimeoutsConfig `json:"batchTimeouts"`
+
+	// Batch size configuration
+	BatchSize *BatchSizeConfig `json:"batchSize"`
+
+	// Request max bytes
+	RequestMaxBytes int32 `json:"requestMaxBytes"`
+}
+
+// BatchTimeoutsConfig represents batch timeouts configuration
+type BatchTimeoutsConfig struct {
+	// Batch creation timeout
+	BatchCreationTimeout string `json:"batchCreationTimeout"`
+
+	// First strike threshold
+	FirstStrikeThreshold string `json:"firstStrikeThreshold"`
+
+	// Second strike threshold
+	SecondStrikeThreshold string `json:"secondStrikeThreshold"`
+
+	// Auto remove timeout
+	AutoRemoveTimeout string `json:"autoRemoveTimeout"`
+}
+
+// BatchSizeConfig represents batch size configuration
+type BatchSizeConfig struct {
+	// Max message count
+	MaxMessageCount int32 `json:"maxMessageCount"`
+
+	// Absolute max bytes
+	AbsoluteMaxBytes int32 `json:"absoluteMaxBytes"`
+
+	// Preferred max bytes
+	PreferredMaxBytes int32 `json:"preferredMaxBytes"`
+}
+
 // GenesisSpec defines the desired state of Genesis.
 type GenesisSpec struct {
 	// Channel ID for the genesis block
@@ -134,6 +401,15 @@ type GenesisSpec struct {
 
 	// Specific consenter nodes for consensus
 	Consenters []OrdererNode `json:"consenters,omitempty"`
+
+	// Parties for SharedConfig
+	Parties []PartyConfig `json:"parties,omitempty"`
+
+	// Consensus configuration
+	ConsensusConfig *ConsensusConfig `json:"consensusConfig,omitempty"`
+
+	// Batching configuration
+	BatchingConfig *BatchingConfig `json:"batchingConfig,omitempty"`
 
 	// Output configuration
 	Output GenesisOutput `json:"output"`
