@@ -415,49 +415,6 @@ spec:
                   When set to "configure", only configuration resources are created
                   When set to "deploy", full deployment resources are created
                 type: string
-              certificates:
-                description: Component-specific certificates
-                properties:
-                  cahost:
-                    description: CA host
-                    type: string
-                  caname:
-                    description: CA name
-                    type: string
-                  caport:
-                    description: CA port
-                    format: int32
-                    type: integer
-                  catls:
-                    description: CA TLS configuration
-                    properties:
-                      cacert:
-                        description: CA certificate (base64 encoded)
-                        type: string
-                      secretRef:
-                        description: Secret reference for CA certificate
-                        properties:
-                          key:
-                            description: Secret key
-                            type: string
-                          name:
-                            description: Secret name
-                            type: string
-                          namespace:
-                            description: Secret namespace
-                            type: string
-                        required:
-                        - key
-                        - name
-                        type: object
-                    type: object
-                  enrollid:
-                    description: Enrollment ID
-                    type: string
-                  enrollsecret:
-                    description: Enrollment secret
-                    type: string
-                type: object
               command:
                 description: Component-specific command
                 items:
@@ -472,6 +429,136 @@ spec:
                 items:
                   type: string
                 type: array
+              enrollment:
+                description: Component-specific enrollment configuration
+                properties:
+                  sign:
+                    description: Sign certificate configuration
+                    properties:
+                      ca:
+                        description: CA configuration
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                        type: object
+                      sans:
+                        description: |-
+                          Subject Alternative Names (SANS) for TLS certificates
+                          This includes hostnames and IP addresses to be included in the certificate
+                        properties:
+                          dnsNames:
+                            description: DNS names (hostnames) to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                          ipAddresses:
+                            description: IP addresses to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                  tls:
+                    description: TLS certificate configuration
+                    properties:
+                      ca:
+                        description: CA configuration
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                        type: object
+                      sans:
+                        description: |-
+                          Subject Alternative Names (SANS) for TLS certificates
+                          This includes hostnames and IP addresses to be included in the certificate
+                        properties:
+                          dnsNames:
+                            description: DNS names (hostnames) to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                          ipAddresses:
+                            description: IP addresses to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                type: object
               env:
                 description: Component-specific environment variables
                 items:
@@ -654,6 +741,21 @@ spec:
                       otherwise to an implementation-defined value. Requests cannot exceed Limits.
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                     type: object
+                type: object
+              sans:
+                description: Component-specific SANS configuration (overrides enrollment
+                  SANS)
+                properties:
+                  dnsNames:
+                    description: DNS names (hostnames) to include in the certificate
+                    items:
+                      type: string
+                    type: array
+                  ipAddresses:
+                    description: IP addresses to include in the certificate
+                    items:
+                      type: string
+                    type: array
                 type: object
               securityContext:
                 description: Security context

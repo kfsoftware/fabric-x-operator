@@ -377,13 +377,24 @@ type TLSConfig struct {
 	Enabled bool `json:"enabled,omitempty"`
 }
 
-// CertificateConfig defines certificate enrollment configuration
+// CertificateConfig defines full certificate configuration including CA
 type CertificateConfig struct {
-	// CA host
-	CAHost string `json:"cahost,omitempty"`
 
+	// CA configuration
+	CA *CACertificateConfig `json:"ca,omitempty"`
+
+	// Subject Alternative Names (SANS) for TLS certificates
+	// This includes hostnames and IP addresses to be included in the certificate
+	SANS *SANSConfig `json:"sans,omitempty"`
+}
+
+// CACertificateConfig defines CA certificate generation configuration
+type CACertificateConfig struct {
 	// CA name
 	CAName string `json:"caname,omitempty"`
+
+	// CA host
+	CAHost string `json:"cahost,omitempty"`
 
 	// CA port
 	CAPort int32 `json:"caport,omitempty"`
@@ -396,6 +407,15 @@ type CertificateConfig struct {
 
 	// Enrollment secret
 	EnrollSecret string `json:"enrollsecret,omitempty"`
+}
+
+// SANSConfig defines Subject Alternative Names configuration
+type SANSConfig struct {
+	// DNS names (hostnames) to include in the certificate
+	DNSNames []string `json:"dnsNames,omitempty"`
+
+	// IP addresses to include in the certificate
+	IPAddresses []string `json:"ipAddresses,omitempty"`
 }
 
 // CATLSConfig defines CA TLS configuration
@@ -427,8 +447,11 @@ type ComponentConfig struct {
 	// Component-specific ingress configuration
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 
-	// Component-specific certificates
-	Certificates *CertificateConfig `json:"certificates,omitempty"`
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
 
 	// Component-specific endpoints
 	Endpoints []string `json:"endpoints,omitempty"`
@@ -441,6 +464,14 @@ type ComponentConfig struct {
 
 	// Component-specific args
 	Args []string `json:"args,omitempty"`
+}
+
+// ComponentCertificateConfig defines certificate configuration for components
+// Components inherit CA configuration from enrollment, so only SANS are needed
+type ComponentCertificateConfig struct {
+	// Subject Alternative Names (SANS) for TLS certificates
+	// This includes hostnames and IP addresses to be included in the certificate
+	SANS *SANSConfig `json:"sans,omitempty"`
 }
 
 // EnvVar defines an environment variable
@@ -531,8 +562,11 @@ type BatcherInstance struct {
 	// Component-specific ingress configuration
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 
-	// Component-specific certificates
-	Certificates *CertificateConfig `json:"certificates,omitempty"`
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
 
 	// Component-specific endpoints
 	Endpoints []string `json:"endpoints,omitempty"`
@@ -558,8 +592,11 @@ type ConsenterInstance struct {
 	// Component-specific ingress configuration
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 
-	// Component-specific certificates
-	Certificates *CertificateConfig `json:"certificates,omitempty"`
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
 
 	// Component-specific endpoints
 	Endpoints []string `json:"endpoints,omitempty"`

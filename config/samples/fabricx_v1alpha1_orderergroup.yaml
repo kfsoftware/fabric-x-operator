@@ -40,15 +40,9 @@ spec:
   components:
     assembler:
       certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+        sans:
+          dnsNames:
+            - assembler-org1.localho.st
       env:
         - name: ASSEMBLER_MAX_MESSAGE_COUNT
           value: '500'
@@ -62,15 +56,9 @@ spec:
     batchers:
       - shardID: 1
         certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-            enrollid: admin
-            enrollsecret: adminpw
+          sans:
+            dnsNames:
+              - batcher-1-org1.localho.st
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -93,15 +81,9 @@ spec:
             value: batcher
       - shardID: 2
         certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-            enrollid: admin
-            enrollsecret: adminpw
+          sans:
+            dnsNames:
+              - batcher-2-org1.localho.st
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -125,15 +107,9 @@ spec:
     consenter:
       consenterID: 1
       certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        sans:
+          dnsNames:
+            - consenter-1-org1.localho.st
       endpoints:
         - consenter-1-org1.localho.st:7050
       env:
@@ -155,15 +131,9 @@ spec:
       volumes: []
     router:
       certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        sans:
+          dnsNames:
+            - router-org1.localho.st
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
@@ -183,23 +153,27 @@ spec:
               sizeLimit: 1Gi
   enrollment:
     sign:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
         enrollid: admin
         enrollsecret: adminpw
     tls:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
         enrollid: admin
         enrollsecret: adminpw
   genesis:

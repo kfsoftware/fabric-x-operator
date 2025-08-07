@@ -1,208 +1,317 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: OrdererGroup
 metadata:
-  name: orderergroup-party2
-  namespace: default
+    name: orderergroup-party2
+    namespace: default
 
 spec:
-  partyID: 2
-  bootstrapMode: configure
-  mspid: OrdererMSP
-  common:
-    imagePullSecrets: []
-    podAnnotations:
-      prometheus.io/port: '8080'
-      prometheus.io/scrape: 'true'
-    podLabels:
-      app.kubernetes.io/component: fabric-x
-      app.kubernetes.io/part-of: admingroup
-    replicas: 1
-    storage:
-      accessMode: ReadWriteOnce
-      size: 10Gi
-      storageClass: fast-ssd
-    volumeMounts:
-      - mountPath: /etc/fabric-x/config
-        name: shared-config
-        readOnly: true
-      - mountPath: /etc/fabric-x/certs
-        name: shared-certs
-        readOnly: true
-    volumes:
-      - name: shared-config
-        volumeSource:
-          configMap:
-            name: fabric-x-config
-      - name: shared-certs
-        volumeSource:
-          secret:
-            secretName: fabric-x-certs
-  components:
-    assembler:
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-      env:
-        - name: ASSEMBLER_MAX_MESSAGE_COUNT
-          value: '500'
-      ingress:
-        istio:
-          hosts:
-            - assembler-org2.localho.st
-          ingressGateway: ingressgateway
-          port: 443
-      replicas: 1
-    batchers:
-      - shardID: 1
-        certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
-        env:
-          - name: BATCHER_TIMEOUT
-            value: 2s
-          - name: BATCHER_PREFERRED_MAX_BYTES
-            value: '2097152'
-        ingress:
-          istio:
-            hosts:
-              - batcher-1-org2.localho.st
-            ingressGateway: ingressgateway
-            port: 443
+    partyID: 2
+    bootstrapMode: configure
+    mspid: OrdererMSP
+    common:
+        imagePullSecrets: []
+        podAnnotations:
+            prometheus.io/port: '8080'
+            prometheus.io/scrape: 'true'
         podLabels:
-          fabric-x/batcher-type: high-throughput
-          fabric-x/shard-id: '1'
+            app.kubernetes.io/component: fabric-x
+            app.kubernetes.io/part-of: admingroup
         replicas: 1
-        tolerations:
-          - effect: NoSchedule
-            key: dedicated
-            operator: Equal
-            value: batcher
-      - shardID: 2
-        certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
-        env:
-          - name: BATCHER_TIMEOUT
-            value: 2s
-          - name: BATCHER_PREFERRED_MAX_BYTES
-            value: '2097152'
-        ingress:
-          istio:
-            hosts:
-              - batcher-2-org2.localho.st
-            ingressGateway: ingressgateway
-            port: 443
-        podLabels:
-          fabric-x/batcher-type: high-throughput
-          fabric-x/shard-id: '2'
-        replicas: 1
-        tolerations:
-          - effect: NoSchedule
-            key: dedicated
-            operator: Equal
-            value: batcher
-    consenter:
-      consenterID: 1
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-      endpoints:
-        - consenter-1-org2.localho.st:7050
-      env:
-        - name: CONSENTER_TYPE
-          value: raft
-        - name: CONSENTER_BATCH_SIZE
-          value: '500'
-      ingress:
-        istio:
-          hosts:
-            - consenter-1-org2.localho.st
-          ingressGateway: ingressgateway
-          port: 443
-      podAnnotations:
-        fabric-x/consenter-batch-size: '500'
-        fabric-x/consenter-type: raft
-      replicas: 1
-      volumeMounts: []
-      volumes: []
-    router:
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-      env:
-        - name: ROUTER_CHANNEL_BUFFER_SIZE
-          value: '1000'
-      imagePullSecrets: []
-      ingress:
-        istio:
-          hosts:
-            - router-org2.localho.st
-          ingressGateway: ingressgateway
-          port: 443
-      replicas: 1
-      volumes:
-        - name: router-cache
-          volumeSource:
-            emptyDir:
-              medium: Memory
-              sizeLimit: 1Gi
-  enrollment:
-    sign:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
-      enrollid: admin
-      enrollsecret: adminpw
-    tls:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
-      enrollid: admin
-      enrollsecret: adminpw
-  genesis:
-    secretKey: genesis.block
-    secretName: fabricx-shared-genesis
-    secretNamespace: default
+        storage:
+            accessMode: ReadWriteOnce
+            size: 10Gi
+            storageClass: fast-ssd
+        volumeMounts:
+            - mountPath: /etc/fabric-x/config
+              name: shared-config
+              readOnly: true
+            - mountPath: /etc/fabric-x/certs
+              name: shared-certs
+              readOnly: true
+        volumes:
+            - name: shared-config
+              volumeSource:
+                  configMap:
+                      name: fabric-x-config
+            - name: shared-certs
+              volumeSource:
+                  secret:
+                      secretName: fabric-x-certs
+    components:
+        assembler:
+            enrollment:
+                sign:
+                    ca:
+                        caname: ca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - assembler-org2.localho.st
+                tls:
+                    ca:
+                        caname: tlsca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - assembler-org2.localho.st
+            env:
+                - name: ASSEMBLER_MAX_MESSAGE_COUNT
+                  value: '500'
+            ingress:
+                istio:
+                    hosts:
+                        - assembler-org2.localho.st
+                    ingressGateway: ingressgateway
+                    port: 443
+            replicas: 1
+        batchers:
+            - shardID: 1
+              enrollment:
+                  sign:
+                      ca:
+                          caname: ca
+                          cahost: test-ca2.default
+                          caport: 7054
+                          catls:
+                              secretRef:
+                                  key: tls.crt
+                                  name: test-ca2-tls-crypto
+                                  namespace: default
+                          enrollid: admin
+                          enrollsecret: adminpw
+                      sans:
+                          dnsNames:
+                              - batcher-1-org2.localho.st
+                  tls:
+                      ca:
+                          caname: tlsca
+                          cahost: test-ca2.default
+                          caport: 7054
+                          catls:
+                              secretRef:
+                                  key: tls.crt
+                                  name: test-ca2-tls-crypto
+                                  namespace: default
+                          enrollid: admin
+                          enrollsecret: adminpw
+                      sans:
+                          dnsNames:
+                              - batcher-1-org2.localho.st
+              env:
+                  - name: BATCHER_TIMEOUT
+                    value: 2s
+                  - name: BATCHER_PREFERRED_MAX_BYTES
+                    value: '2097152'
+              ingress:
+                  istio:
+                      hosts:
+                          - batcher-1-org2.localho.st
+                      ingressGateway: ingressgateway
+                      port: 443
+              podLabels:
+                  fabric-x/batcher-type: high-throughput
+                  fabric-x/shard-id: '1'
+              replicas: 1
+              tolerations:
+                  - effect: NoSchedule
+                    key: dedicated
+                    operator: Equal
+                    value: batcher
+            - shardID: 2
+              enrollment:
+                  sign:
+                      ca:
+                          caname: ca
+                          cahost: test-ca2.default
+                          caport: 7054
+                          catls:
+                              secretRef:
+                                  key: tls.crt
+                                  name: test-ca2-tls-crypto
+                                  namespace: default
+                          enrollid: admin
+                          enrollsecret: adminpw
+                      sans:
+                          dnsNames:
+                              - batcher-2-org2.localho.st
+                  tls:
+                      ca:
+                          caname: tlsca
+                          cahost: test-ca2.default
+                          caport: 7054
+                          catls:
+                              secretRef:
+                                  key: tls.crt
+                                  name: test-ca2-tls-crypto
+                                  namespace: default
+                          enrollid: admin
+                          enrollsecret: adminpw
+                      sans:
+                          dnsNames:
+                              - batcher-2-org2.localho.st
+              env:
+                  - name: BATCHER_TIMEOUT
+                    value: 2s
+                  - name: BATCHER_PREFERRED_MAX_BYTES
+                    value: '2097152'
+              ingress:
+                  istio:
+                      hosts:
+                          - batcher-2-org2.localho.st
+                      ingressGateway: ingressgateway
+                      port: 443
+              podLabels:
+                  fabric-x/batcher-type: high-throughput
+                  fabric-x/shard-id: '2'
+              replicas: 1
+              tolerations:
+                  - effect: NoSchedule
+                    key: dedicated
+                    operator: Equal
+                    value: batcher
+        consenter:
+            consenterID: 1
+            enrollment:
+                sign:
+                    ca:
+                        caname: ca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - consenter-1-org2.localho.st
+                tls:
+                    ca:
+                        caname: tlsca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - consenter-1-org2.localho.st
+            endpoints:
+                - consenter-1-org2.localho.st:7050
+            env:
+                - name: CONSENTER_TYPE
+                  value: raft
+                - name: CONSENTER_BATCH_SIZE
+                  value: '500'
+            ingress:
+                istio:
+                    hosts:
+                        - consenter-1-org2.localho.st
+                    ingressGateway: ingressgateway
+                    port: 443
+            podAnnotations:
+                fabric-x/consenter-batch-size: '500'
+                fabric-x/consenter-type: raft
+            replicas: 1
+            volumeMounts: []
+            volumes: []
+        router:
+            enrollment:
+                sign:
+                    ca:
+                        caname: ca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - router-org2.localho.st
+                tls:
+                    ca:
+                        caname: tlsca
+                        cahost: test-ca2.default
+                        caport: 7054
+                        catls:
+                            secretRef:
+                                key: tls.crt
+                                name: test-ca2-tls-crypto
+                                namespace: default
+                            enrollid: admin
+                            enrollsecret: adminpw
+                    sans:
+                        dnsNames:
+                            - router-org2.localho.st
+            env:
+                - name: ROUTER_CHANNEL_BUFFER_SIZE
+                  value: '1000'
+            imagePullSecrets: []
+            ingress:
+                istio:
+                    hosts:
+                        - router-org2.localho.st
+                    ingressGateway: ingressgateway
+                    port: 443
+            replicas: 1
+            volumes:
+                - name: router-cache
+                  volumeSource:
+                      emptyDir:
+                          medium: Memory
+                          sizeLimit: 1Gi
+    enrollment:
+        sign:
+            ca:
+                caname: ca
+                cahost: test-ca2.default
+                caport: 7054
+                catls:
+                    secretRef:
+                        key: tls.crt
+                        name: test-ca2-tls-crypto
+                        namespace: default
+                enrollid: admin
+                enrollsecret: adminpw
+        tls:
+            ca:
+                caname: tlsca
+                cahost: test-ca2.default
+                caport: 7054
+                catls:
+                    secretRef:
+                        key: tls.crt
+                        name: test-ca2-tls-crypto
+                        namespace: default
+                enrollid: admin
+                enrollsecret: adminpw
+    genesis:
+        secretKey: genesis.block
+        secretName: fabricx-shared-genesis
+        secretNamespace: default

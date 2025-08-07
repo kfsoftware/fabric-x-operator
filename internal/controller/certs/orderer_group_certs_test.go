@@ -32,12 +32,16 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_ExistingSecret(t
 			MSPID: "TestMSP",
 			Enrollment: &fabricxv1alpha1.EnrollmentConfig{
 				Sign: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-sign-id",
-					EnrollSecret: "test-sign-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-sign-id",
+						EnrollSecret: "test-sign-secret",
+					},
 				},
 				TLS: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-tls-id",
-					EnrollSecret: "test-tls-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-tls-id",
+						EnrollSecret: "test-tls-secret",
+					},
 				},
 			},
 		},
@@ -64,9 +68,17 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_ExistingSecret(t
 		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 			Replicas: 1,
 		},
-		Certificates: &fabricxv1alpha1.CertificateConfig{
-			EnrollID:     "test-enroll-id",
-			EnrollSecret: "test-enroll-secret",
+		Enrollment: &fabricxv1alpha1.EnrollmentConfig{
+			Sign: &fabricxv1alpha1.CertificateConfig{
+				SANS: &fabricxv1alpha1.SANSConfig{
+					DNSNames: []string{"test-consenter.localho.st"},
+				},
+			},
+			TLS: &fabricxv1alpha1.CertificateConfig{
+				SANS: &fabricxv1alpha1.SANSConfig{
+					DNSNames: []string{"test-consenter.localho.st"},
+				},
+			},
 		},
 	}
 
@@ -97,12 +109,16 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_NoExistingSecret
 			MSPID: "TestMSP",
 			Enrollment: &fabricxv1alpha1.EnrollmentConfig{
 				Sign: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-sign-id",
-					EnrollSecret: "test-sign-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-sign-id",
+						EnrollSecret: "test-sign-secret",
+					},
 				},
 				TLS: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-tls-id",
-					EnrollSecret: "test-tls-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-tls-id",
+						EnrollSecret: "test-tls-secret",
+					},
 				},
 			},
 		},
@@ -113,9 +129,17 @@ func TestOrdererGroupCertService_ProvisionComponentCertificates_NoExistingSecret
 		CommonComponentConfig: fabricxv1alpha1.CommonComponentConfig{
 			Replicas: 1,
 		},
-		Certificates: &fabricxv1alpha1.CertificateConfig{
-			EnrollID:     "test-enroll-id",
-			EnrollSecret: "test-enroll-secret",
+		Enrollment: &fabricxv1alpha1.EnrollmentConfig{
+			Sign: &fabricxv1alpha1.CertificateConfig{
+				SANS: &fabricxv1alpha1.SANSConfig{
+					DNSNames: []string{"test-consenter.localho.st"},
+				},
+			},
+			TLS: &fabricxv1alpha1.CertificateConfig{
+				SANS: &fabricxv1alpha1.SANSConfig{
+					DNSNames: []string{"test-consenter.localho.st"},
+				},
+			},
 		},
 	}
 

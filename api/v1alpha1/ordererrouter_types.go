@@ -28,7 +28,6 @@ type OrdererRouterSpec struct {
 	// When set to "deploy", full deployment resources are created
 	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
-
 	// MSP ID for this router
 	MSPID string `json:"mspid,omitempty"`
 
@@ -76,8 +75,11 @@ type OrdererRouterSpec struct {
 	// Component-specific ingress configuration
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 
-	// Component-specific certificates
-	Certificates *CertificateConfig `json:"certificates,omitempty"`
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
 
 	// Component-specific endpoints
 	Endpoints []string `json:"endpoints,omitempty"`

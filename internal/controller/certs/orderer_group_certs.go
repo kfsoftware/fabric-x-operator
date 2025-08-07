@@ -82,23 +82,27 @@ func (s *OrdererGroupCertService) ProvisionComponentCertificates(
 				}
 			}
 
-			// Get enrollment parameters based on certificate type
-			var enrollID, enrollSecret string
-
-			if ordererGroup.Spec.Enrollment != nil {
-				if certType == "sign" && ordererGroup.Spec.Enrollment.Sign != nil {
-					enrollID = ordererGroup.Spec.Enrollment.Sign.EnrollID
-					enrollSecret = ordererGroup.Spec.Enrollment.Sign.EnrollSecret
-				} else if certType == "tls" && ordererGroup.Spec.Enrollment.TLS != nil {
-					enrollID = ordererGroup.Spec.Enrollment.TLS.EnrollID
-					enrollSecret = ordererGroup.Spec.Enrollment.TLS.EnrollSecret
-				}
+			// Select the appropriate enrollment configuration based on certType
+			var certConfig *fabricxv1alpha1.CertificateConfig
+			switch certType {
+			case "sign":
+				certConfig = componentConfig.Enrollment.Sign
+			case "tls":
+				certConfig = componentConfig.Enrollment.TLS
+			default:
+				return fmt.Errorf("unknown certificate type: %s", certType)
 			}
 
-			// Fallback to component-specific enrollment if global enrollment is not available
-			if enrollID == "" && componentConfig.Certificates != nil {
-				enrollID = componentConfig.Certificates.EnrollID
-				enrollSecret = componentConfig.Certificates.EnrollSecret
+			// Create a copy of the cert config to avoid modifying the original
+			mergedCertConfig := &fabricxv1alpha1.CertificateConfig{
+				CA: certConfig.CA,
+			}
+
+			// Use component-specific SANS if available, otherwise use enrollment SANS
+			if componentConfig.SANS != nil {
+				mergedCertConfig.SANS = componentConfig.SANS
+			} else if certConfig.SANS != nil {
+				mergedCertConfig.SANS = certConfig.SANS
 			}
 
 			// Create certificate request for this specific type and replica
@@ -107,11 +111,9 @@ func (s *OrdererGroupCertService) ProvisionComponentCertificates(
 				ComponentType:    "orderer",
 				Namespace:        ordererGroup.Namespace,
 				OrdererGroupName: ordererGroup.Name,
-				CertConfig:       convertToCertConfig(ordererGroup.Spec.MSPID, componentConfig.Certificates),
+				CertConfig:       convertToCertConfig(ordererGroup.Spec.MSPID, mergedCertConfig),
 				EnrollmentConfig: convertToEnrollmentConfig(ordererGroup.Spec.MSPID, ordererGroup.Spec.Enrollment),
 				CertTypes:        []string{certType}, // Only one cert type per request
-				EnrollID:         enrollID,
-				EnrollSecret:     enrollSecret,
 			}
 
 			// Provision certificates with client context
@@ -230,25 +232,61 @@ func convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateCon
 	}
 
 	config := &CertificateConfig{
-		CAHost:       apiConfig.CAHost,
-		CAName:       apiConfig.CAName,
-		CAPort:       apiConfig.CAPort,
-		EnrollID:     apiConfig.EnrollID,
-		EnrollSecret: apiConfig.EnrollSecret,
-		MSPID:        mspID,
+		MSPID: mspID,
 	}
 
-	if apiConfig.CATLS != nil {
-		config.CATLS = &CATLSConfig{
-			CACert: apiConfig.CATLS.CACert,
+	// Add CA configuration if provided
+	if apiConfig.CA != nil {
+		config.CA = &CACertificateConfig{
+			CAHost:       apiConfig.CA.CAHost,
+			CAName:       apiConfig.CA.CAName,
+			CAPort:       apiConfig.CA.CAPort,
+			EnrollID:     apiConfig.CA.EnrollID,
+			EnrollSecret: apiConfig.CA.EnrollSecret,
 		}
 
-		if apiConfig.CATLS.SecretRef != nil {
-			config.CATLS.SecretRef = &SecretRef{
-				Name:      apiConfig.CATLS.SecretRef.Name,
-				Key:       apiConfig.CATLS.SecretRef.Key,
-				Namespace: apiConfig.CATLS.SecretRef.Namespace,
+		// Add CATLS configuration if provided
+		if apiConfig.CA.CATLS != nil {
+			config.CA.CATLS = &CATLSConfig{
+				CACert: apiConfig.CA.CATLS.CACert,
 			}
+			if apiConfig.CA.CATLS.SecretRef != nil {
+				config.CA.CATLS.SecretRef = &SecretRef{
+					Name:      apiConfig.CA.CATLS.SecretRef.Name,
+					Key:       apiConfig.CA.CATLS.SecretRef.Key,
+					Namespace: apiConfig.CA.CATLS.SecretRef.Namespace,
+				}
+			}
+		}
+	}
+
+	// Add SANS configuration if provided
+	if apiConfig.SANS != nil {
+		config.SANS = &SANSConfig{
+			DNSNames:    apiConfig.SANS.DNSNames,
+			IPAddresses: apiConfig.SANS.IPAddresses,
+		}
+	}
+
+	return config
+}
+
+// convertComponentCertConfig converts API component certificate config to internal format
+// This function handles ComponentCertificateConfig which only contains SANS
+func convertComponentCertConfig(mspID string, apiConfig *fabricxv1alpha1.ComponentCertificateConfig) *CertificateConfig {
+	if apiConfig == nil {
+		return nil
+	}
+
+	config := &CertificateConfig{
+		MSPID: mspID,
+	}
+
+	// Add SANS configuration if provided
+	if apiConfig.SANS != nil {
+		config.SANS = &SANSConfig{
+			DNSNames:    apiConfig.SANS.DNSNames,
+			IPAddresses: apiConfig.SANS.IPAddresses,
 		}
 	}
 

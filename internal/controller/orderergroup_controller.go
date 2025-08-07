@@ -441,7 +441,8 @@ func (r *OrdererGroupReconciler) buildConsenterSpec(ordererGroup *fabricxv1alpha
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Certificates = config.Certificates
+		spec.Enrollment = config.Enrollment
+		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command
@@ -518,7 +519,8 @@ func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fa
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Certificates = config.Certificates
+		spec.Enrollment = config.Enrollment
+		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command
@@ -594,7 +596,8 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Certificates = config.Certificates
+		spec.Enrollment = config.Enrollment
+		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command
@@ -670,7 +673,8 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Certificates = config.Certificates
+		spec.Enrollment = config.Enrollment
+		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command
@@ -750,7 +754,8 @@ func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Certificates = config.Certificates
+		spec.Enrollment = config.Enrollment
+		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command

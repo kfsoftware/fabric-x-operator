@@ -39,16 +39,10 @@ spec:
             secretName: fabric-x-certs
   components:
     assembler:
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+      # Component-specific SANS configuration (overrides enrollment SANS)
+      sans:
+        dnsNames:
+          - assembler-org1.localho.st
       env:
         - name: ASSEMBLER_MAX_MESSAGE_COUNT
           value: '500'
@@ -61,16 +55,10 @@ spec:
       replicas: 1
     batchers:
       - shardID: 1
-        certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        # Component-specific SANS configuration for this batcher instance
+        sans:
+          dnsNames:
+            - batcher-1-org1.localho.st
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -92,16 +80,10 @@ spec:
             operator: Equal
             value: batcher
       - shardID: 2
-        certificates:
-          cahost: test-ca2.default
-          caport: 7054
-          catls:
-            secretRef:
-              key: tls.crt
-              name: test-ca2-tls-crypto
-              namespace: default
-          enrollid: admin
-          enrollsecret: adminpw
+        # Component-specific SANS configuration for this batcher instance
+        sans:
+          dnsNames:
+            - batcher-2-org1.localho.st      
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -124,16 +106,10 @@ spec:
             value: batcher
     consenter:
       consenterID: 1
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+      # Component-specific SANS configuration for consenter
+      sans:
+        dnsNames:
+          - consenter-1-org1.localho.st
       endpoints:
         - consenter-1-org1.localho.st:7050
       env:
@@ -154,16 +130,10 @@ spec:
       volumeMounts: []
       volumes: []
     router:
-      certificates:
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+      # Component-specific SANS configuration for router
+      sans:
+        dnsNames:
+          - router-org1.localho.st
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
@@ -183,25 +153,35 @@ spec:
               sizeLimit: 1Gi
   enrollment:
     sign:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
-      enrollid: admin
-      enrollsecret: adminpw
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+      sans:
+        dnsNames:
+          - default-sign.localho.st
     tls:
-      cahost: test-ca2.default
-      caport: 7054
-      catls:
-        secretRef:
-          key: tls.crt
-          name: test-ca2-tls-crypto
-          namespace: default
-      enrollid: admin
-      enrollsecret: adminpw
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+      sans:
+        dnsNames:
+          - default-tls.localho.st
   genesis:
     secretKey: genesis.block
     secretName: fabricx-shared-genesis

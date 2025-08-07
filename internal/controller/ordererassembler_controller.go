@@ -262,29 +262,35 @@ func (r *OrdererAssemblerReconciler) reconcileGenesisBlock(ctx context.Context, 
 func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
 	log := logf.FromContext(ctx)
 
-	// Check if certificates are configured
-	if ordererAssembler.Spec.Certificates == nil {
-		log.Info("No certificate configuration found, skipping certificate creation")
+	// Check if enrollment is configured
+	if ordererAssembler.Spec.Enrollment == nil {
+		log.Info("No enrollment configuration found, skipping certificate creation")
 		return nil
-	}
-
-	// Create base certificate request
-	baseRequest := certs.OrdererGroupCertificateRequest{
-		ComponentName:    ordererAssembler.Name,
-		ComponentType:    "assembler",
-		Namespace:        ordererAssembler.Namespace,
-		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
-		CertConfig:       convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Certificates),
-		EnrollmentConfig: nil, // Individual assemblers don't have global enrollment config
-		EnrollID:         ordererAssembler.Spec.Certificates.EnrollID,
-		EnrollSecret:     ordererAssembler.Spec.Certificates.EnrollSecret,
 	}
 
 	// Generate certificates for each type (each function handles its own existence check)
 	var allCertificates []certs.ComponentCertificateData
 
-	// Create sign certificate
-	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, baseRequest)
+	// Create sign certificate with component-specific SANS if available
+	signCertConfig := &fabricxv1alpha1.CertificateConfig{
+		CA: ordererAssembler.Spec.Enrollment.Sign.CA,
+	}
+	// Use component-specific SANS if available, otherwise use enrollment SANS
+	if ordererAssembler.Spec.SANS != nil {
+		signCertConfig.SANS = ordererAssembler.Spec.SANS
+	} else if ordererAssembler.Spec.Enrollment.Sign.SANS != nil {
+		signCertConfig.SANS = ordererAssembler.Spec.Enrollment.Sign.SANS
+	}
+
+	signRequest := certs.OrdererGroupCertificateRequest{
+		ComponentName:    ordererAssembler.Name,
+		ComponentType:    "assembler",
+		Namespace:        ordererAssembler.Namespace,
+		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
+		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, signCertConfig),
+		EnrollmentConfig: r.convertToEnrollmentConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Enrollment),
+	}
+	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, signRequest)
 	if err != nil {
 		return fmt.Errorf("failed to create sign certificate: %w", err)
 	}
@@ -292,8 +298,26 @@ func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, 
 		allCertificates = append(allCertificates, *signCertData)
 	}
 
-	// Create TLS certificate
-	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, baseRequest)
+	// Create TLS certificate with component-specific SANS if available
+	tlsCertConfig := &fabricxv1alpha1.CertificateConfig{
+		CA: ordererAssembler.Spec.Enrollment.TLS.CA,
+	}
+	// Use component-specific SANS if available, otherwise use enrollment SANS
+	if ordererAssembler.Spec.SANS != nil {
+		tlsCertConfig.SANS = ordererAssembler.Spec.SANS
+	} else if ordererAssembler.Spec.Enrollment.TLS.SANS != nil {
+		tlsCertConfig.SANS = ordererAssembler.Spec.Enrollment.TLS.SANS
+	}
+
+	tlsRequest := certs.OrdererGroupCertificateRequest{
+		ComponentName:    ordererAssembler.Name,
+		ComponentType:    "assembler",
+		Namespace:        ordererAssembler.Namespace,
+		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
+		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, tlsCertConfig),
+		EnrollmentConfig: r.convertToEnrollmentConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Enrollment),
+	}
+	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, tlsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to create TLS certificate: %w", err)
 	}
@@ -313,32 +337,65 @@ func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, 
 }
 
 // convertToCertConfigAssembler converts API certificate config to internal format
-func convertToCertConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+func (r *OrdererAssemblerReconciler) convertToCertConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
 	if apiConfig == nil {
 		return nil
 	}
 
 	config := &certs.CertificateConfig{
-		CAHost:       apiConfig.CAHost,
-		CAName:       apiConfig.CAName,
-		CAPort:       apiConfig.CAPort,
-		EnrollID:     apiConfig.EnrollID,
-		EnrollSecret: apiConfig.EnrollSecret,
-		MSPID:        mspID,
+		MSPID: mspID,
 	}
 
-	if apiConfig.CATLS != nil {
-		config.CATLS = &certs.CATLSConfig{
-			CACert: apiConfig.CATLS.CACert,
+	// Add CA configuration if provided
+	if apiConfig.CA != nil {
+		config.CA = &certs.CACertificateConfig{
+			CAHost:       apiConfig.CA.CAHost,
+			CAName:       apiConfig.CA.CAName,
+			CAPort:       apiConfig.CA.CAPort,
+			EnrollID:     apiConfig.CA.EnrollID,
+			EnrollSecret: apiConfig.CA.EnrollSecret,
 		}
 
-		if apiConfig.CATLS.SecretRef != nil {
-			config.CATLS.SecretRef = &certs.SecretRef{
-				Name:      apiConfig.CATLS.SecretRef.Name,
-				Key:       apiConfig.CATLS.SecretRef.Key,
-				Namespace: apiConfig.CATLS.SecretRef.Namespace,
+		// Add CATLS configuration if provided
+		if apiConfig.CA.CATLS != nil {
+			config.CA.CATLS = &certs.CATLSConfig{
+				CACert: apiConfig.CA.CATLS.CACert,
+			}
+			if apiConfig.CA.CATLS.SecretRef != nil {
+				config.CA.CATLS.SecretRef = &certs.SecretRef{
+					Name:      apiConfig.CA.CATLS.SecretRef.Name,
+					Key:       apiConfig.CA.CATLS.SecretRef.Key,
+					Namespace: apiConfig.CA.CATLS.SecretRef.Namespace,
+				}
 			}
 		}
+	}
+
+	// Add SANS configuration if provided
+	if apiConfig.SANS != nil {
+		config.SANS = &certs.SANSConfig{
+			DNSNames:    apiConfig.SANS.DNSNames,
+			IPAddresses: apiConfig.SANS.IPAddresses,
+		}
+	}
+
+	return config
+}
+
+// convertToEnrollmentConfigAssembler converts API enrollment config to internal format
+func (r *OrdererAssemblerReconciler) convertToEnrollmentConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.EnrollmentConfig) *certs.EnrollmentConfig {
+	if apiConfig == nil {
+		return nil
+	}
+
+	config := &certs.EnrollmentConfig{}
+
+	if apiConfig.Sign != nil {
+		config.Sign = r.convertToCertConfigAssembler(mspID, apiConfig.Sign)
+	}
+
+	if apiConfig.TLS != nil {
+		config.TLS = r.convertToCertConfigAssembler(mspID, apiConfig.TLS)
 	}
 
 	return config

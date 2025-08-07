@@ -82,23 +82,15 @@ func (s *CommitterCertService) ProvisionComponentCertificates(
 				}
 			}
 
-			// Get enrollment parameters based on certificate type
-			var enrollID, enrollSecret string
-
-			if committer.Spec.Enrollment != nil {
-				if certType == "sign" && committer.Spec.Enrollment.Sign != nil {
-					enrollID = committer.Spec.Enrollment.Sign.EnrollID
-					enrollSecret = committer.Spec.Enrollment.Sign.EnrollSecret
-				} else if certType == "tls" && committer.Spec.Enrollment.TLS != nil {
-					enrollID = committer.Spec.Enrollment.TLS.EnrollID
-					enrollSecret = committer.Spec.Enrollment.TLS.EnrollSecret
-				}
-			}
-
-			// Fallback to component-specific enrollment if global enrollment is not available
-			if enrollID == "" && componentConfig.Certificates != nil {
-				enrollID = componentConfig.Certificates.EnrollID
-				enrollSecret = componentConfig.Certificates.EnrollSecret
+			// Select the appropriate enrollment configuration based on certType
+			var certConfig *fabricxv1alpha1.CertificateConfig
+			switch certType {
+			case "sign":
+				certConfig = componentConfig.Enrollment.Sign
+			case "tls":
+				certConfig = componentConfig.Enrollment.TLS
+			default:
+				return fmt.Errorf("unknown certificate type: %s", certType)
 			}
 
 			// Create certificate request for this specific type and replica
@@ -107,11 +99,9 @@ func (s *CommitterCertService) ProvisionComponentCertificates(
 				ComponentType:    "committer",
 				Namespace:        committer.Namespace,
 				OrdererGroupName: committer.Name, // Using OrdererGroupName field for committer name
-				CertConfig:       convertToCertConfig(committer.Spec.MSPID, componentConfig.Certificates),
+				CertConfig:       convertToCertConfig(committer.Spec.MSPID, certConfig),
 				EnrollmentConfig: convertToEnrollmentConfig(committer.Spec.MSPID, committer.Spec.Enrollment),
 				CertTypes:        []string{certType}, // Only one cert type per request
-				EnrollID:         enrollID,
-				EnrollSecret:     enrollSecret,
 			}
 
 			// Provision certificates with client context

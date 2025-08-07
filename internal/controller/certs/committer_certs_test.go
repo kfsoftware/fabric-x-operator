@@ -31,12 +31,16 @@ func TestCommitterCertService_CleanupComponentCertificates(t *testing.T) {
 			MSPID: "TestMSP",
 			Enrollment: &fabricxv1alpha1.EnrollmentConfig{
 				Sign: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-sign-id",
-					EnrollSecret: "test-sign-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-sign-id",
+						EnrollSecret: "test-sign-secret",
+					},
 				},
 				TLS: &fabricxv1alpha1.CertificateConfig{
-					EnrollID:     "test-tls-id",
-					EnrollSecret: "test-tls-secret",
+					CA: &fabricxv1alpha1.CACertificateConfig{
+						EnrollID:     "test-tls-id",
+						EnrollSecret: "test-tls-secret",
+					},
 				},
 			},
 		},

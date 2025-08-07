@@ -87,8 +87,11 @@ type OrdererConsenterSpec struct {
 	// Component-specific ingress configuration
 	Ingress *IngressConfig `json:"ingress,omitempty"`
 
-	// Component-specific certificates
-	Certificates *CertificateConfig `json:"certificates,omitempty"`
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
 
 	// Component-specific endpoints
 	Endpoints []string `json:"endpoints,omitempty"`

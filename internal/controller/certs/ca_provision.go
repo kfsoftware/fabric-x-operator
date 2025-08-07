@@ -165,16 +165,18 @@ type FabricCAParams struct {
 }
 
 type EnrollUserRequest struct {
-	TLSCert    string
-	URL        string
-	Name       string
-	MSPID      string
-	User       string
-	Secret     string
-	Hosts      []string
-	CN         string
-	Profile    string
-	Attributes []*api.AttributeRequest
+	TLSCert        string
+	URL            string
+	Name           string
+	MSPID          string
+	User           string
+	Secret         string
+	Hosts          []string
+	CN             string
+	Profile        string
+	Attributes     []*api.AttributeRequest
+	EmailAddresses []string
+	URIs           []string
 }
 type ReenrollUserRequest struct {
 	EnrollID   string
@@ -331,6 +333,12 @@ func EnrollUser(ctx context.Context, params EnrollUserRequest) (*x509.Certificat
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// Combine hosts with email addresses and URIs for SANS
+	allHosts := make([]string, 0, len(params.Hosts)+len(params.EmailAddresses)+len(params.URIs))
+	allHosts = append(allHosts, params.Hosts...)
+	allHosts = append(allHosts, params.EmailAddresses...)
+	allHosts = append(allHosts, params.URIs...)
+
 	enrollmentRequest := &api.EnrollmentRequest{
 		Name:     params.User,
 		Secret:   params.Secret,
@@ -339,7 +347,7 @@ func EnrollUser(ctx context.Context, params EnrollUserRequest) (*x509.Certificat
 		Label:    "",
 		Type:     "x509",
 		CSR: &api.CSRInfo{
-			Hosts: params.Hosts,
+			Hosts: allHosts,
 			CN:    params.CN,
 		},
 	}
@@ -432,23 +440,43 @@ type OrdererGroupCertificateRequest struct {
 
 	// Certificate types to generate (sign, tls)
 	CertTypes []string
-
-	// Enrollment ID
-	EnrollID string
-
-	// Enrollment secret
-	EnrollSecret string
 }
 
 // CertificateConfig represents the certificate configuration from the API
 type CertificateConfig struct {
-	CAHost       string       `json:"cahost,omitempty"`
-	CAName       string       `json:"caname,omitempty"`
-	CAPort       int32        `json:"caport,omitempty"`
-	CATLS        *CATLSConfig `json:"catls,omitempty"`
-	EnrollID     string       `json:"enrollid,omitempty"`
-	EnrollSecret string       `json:"enrollsecret,omitempty"`
-	MSPID        string       `json:"mspid,omitempty"`
+	CA    *CACertificateConfig `json:"ca,omitempty"`
+	MSPID string               `json:"mspid,omitempty"`
+	SANS  *SANSConfig          `json:"sans,omitempty"`
+}
+
+// CACertificateConfig defines CA certificate generation configuration
+type CACertificateConfig struct {
+	// CA name
+	CAName string `json:"caname,omitempty"`
+
+	// CA host
+	CAHost string `json:"cahost,omitempty"`
+
+	// CA port
+	CAPort int32 `json:"caport,omitempty"`
+
+	// CA TLS configuration
+	CATLS *CATLSConfig `json:"catls,omitempty"`
+
+	// Enrollment ID
+	EnrollID string `json:"enrollid,omitempty"`
+
+	// Enrollment secret
+	EnrollSecret string `json:"enrollsecret,omitempty"`
+}
+
+// SANSConfig defines Subject Alternative Names configuration
+type SANSConfig struct {
+	// DNS names (hostnames) to include in the certificate
+	DNSNames []string `json:"dnsNames,omitempty"`
+
+	// IP addresses to include in the certificate
+	IPAddresses []string `json:"ipAddresses,omitempty"`
 }
 
 // CATLSConfig represents CA TLS configuration
@@ -701,11 +729,11 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 	// Create enrollment request
 	enrollRequest := EnrollUserRequest{
 		TLSCert:    caCert,
-		URL:        fmt.Sprintf("https://%s:%d", certConfig.CAHost, certConfig.CAPort),
-		Name:       certConfig.CAName,
+		URL:        fmt.Sprintf("https://%s:%d", certConfig.CA.CAHost, certConfig.CA.CAPort),
+		Name:       certConfig.CA.CAName,
 		MSPID:      certConfig.MSPID,
-		User:       request.EnrollID,
-		Secret:     request.EnrollSecret,
+		User:       request.CertConfig.CA.EnrollID,
+		Secret:     request.CertConfig.CA.EnrollSecret,
 		Hosts:      hosts,
 		CN:         cn,
 		Attributes: []*api.AttributeRequest{},
@@ -714,7 +742,7 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 	// Enroll the component
 	userCert, userKey, rootCert, err := EnrollUser(ctx, enrollRequest)
 	if err != nil {
-		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.EnrollID)
+		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.CertConfig.CA.EnrollID)
 		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollRequest.User, err)
 	}
 
@@ -766,16 +794,29 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 	}
 
 	// Generate component-specific enrollment parameters
-	enrollID := request.EnrollID
-	secret := request.EnrollSecret
+	enrollID := request.CertConfig.CA.EnrollID
+	secret := request.CertConfig.CA.EnrollSecret
 	hosts := generateComponentHosts(request.ComponentName, request.OrdererGroupName, request.Namespace)
 	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
+
+	// Add SANS configuration to hosts only for TLS certificates
+	if certType == "tls" && certConfig.SANS != nil {
+		// Add DNS names from SANS
+		if certConfig.SANS.DNSNames != nil {
+			hosts = append(hosts, certConfig.SANS.DNSNames...)
+		}
+
+		// Add IP addresses from SANS
+		if certConfig.SANS.IPAddresses != nil {
+			hosts = append(hosts, certConfig.SANS.IPAddresses...)
+		}
+	}
 
 	// Create enrollment request
 	enrollRequest := EnrollUserRequest{
 		TLSCert:    caCert,
-		URL:        fmt.Sprintf("https://%s:%d", certConfig.CAHost, certConfig.CAPort),
-		Name:       certConfig.CAName,
+		URL:        fmt.Sprintf("https://%s:%d", certConfig.CA.CAHost, certConfig.CA.CAPort),
+		Name:       certConfig.CA.CAName,
 		MSPID:      certConfig.MSPID, // Default MSP ID for orderer components
 		User:       enrollID,
 		Secret:     secret,
@@ -787,7 +828,7 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 	// Enroll the component
 	userCert, userKey, rootCert, err := EnrollUser(ctx, enrollRequest)
 	if err != nil {
-		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.EnrollID)
+		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.CertConfig.CA.EnrollID)
 		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollID, err)
 	}
 
@@ -810,22 +851,22 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 
 // getCACertificate retrieves the CA certificate from the configuration
 func getCACertificate(ctx context.Context, k8sClient client.Client, certConfig *CertificateConfig) (string, error) {
-	if certConfig.CATLS == nil {
+	if certConfig.CA == nil || certConfig.CA.CATLS == nil {
 		return "", fmt.Errorf("CA TLS configuration is required")
 	}
 
 	// If CA certificate is directly provided
-	if certConfig.CATLS.CACert != "" {
-		return certConfig.CATLS.CACert, nil
+	if certConfig.CA.CATLS.CACert != "" {
+		return certConfig.CA.CATLS.CACert, nil
 	}
 
 	// If CA certificate is in a secret
-	if certConfig.CATLS.SecretRef != nil {
+	if certConfig.CA.CATLS.SecretRef != nil {
 		if k8sClient == nil {
 			return "", fmt.Errorf("Kubernetes client is required to read CA certificate from secret")
 		}
 
-		secretRef := certConfig.CATLS.SecretRef
+		secretRef := certConfig.CA.CATLS.SecretRef
 
 		// Determine namespace
 		namespace := secretRef.Namespace
