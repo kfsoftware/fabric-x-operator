@@ -13,9 +13,10 @@ import (
 	"github.com/hyperledger/fabric-ca/lib/tls"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Key represents a cryptographic key
@@ -202,7 +203,8 @@ type RevokeUserRequest struct {
 	RevocationRequest *api.RevocationRequest
 }
 
-func RevokeUser(params RevokeUserRequest) error {
+func RevokeUser(ctx context.Context, k8sClient client.Client, params RevokeUserRequest) error {
+	log := logf.FromContext(ctx)
 	caClient, err := GetClient(FabricCAParams{
 		TLSCert:      params.TLSCert,
 		URL:          params.URL,
@@ -222,7 +224,7 @@ func RevokeUser(params RevokeUserRequest) error {
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Revoked user %v", result.RevokedCerts)
+	log.Info("Revoked user", "result", result.RevokedCerts)
 	return nil
 }
 
@@ -239,7 +241,8 @@ type RegisterUserRequest struct {
 	Attributes   []api.Attribute
 }
 
-func RegisterUser(params RegisterUserRequest) (string, error) {
+func RegisterUser(ctx context.Context, k8sClient client.Client, params RegisterUserRequest) (string, error) {
+	log := logf.FromContext(ctx)
 	caClient, err := GetClient(FabricCAParams{
 		TLSCert:      params.TLSCert,
 		URL:          params.URL,
@@ -259,7 +262,8 @@ func RegisterUser(params RegisterUserRequest) (string, error) {
 		Type:     params.Type,
 	})
 	if err != nil {
-		return "", err
+		log.Error(err, "Failed to register user")
+		return "", errors.Wrap(err, "Failed to register user")
 	}
 	secret, err := enrollResponse.Identity.Register(&api.RegistrationRequest{
 		Name:           params.User,
@@ -316,8 +320,8 @@ func readKey(client *lib.Client) (*ecdsa.PrivateKey, error) {
 	}
 	return ecdsaKey, nil
 }
-func EnrollUser(params EnrollUserRequest) (*x509.Certificate, *ecdsa.PrivateKey, *x509.Certificate, error) {
-
+func EnrollUser(ctx context.Context, params EnrollUserRequest) (*x509.Certificate, *ecdsa.PrivateKey, *x509.Certificate, error) {
+	log := logf.FromContext(ctx)
 	caClient, err := GetClient(FabricCAParams{
 		TLSCert: params.TLSCert,
 		URL:     params.URL,
@@ -339,7 +343,7 @@ func EnrollUser(params EnrollUserRequest) (*x509.Certificate, *ecdsa.PrivateKey,
 			CN:    params.CN,
 		},
 	}
-	logrus.Infof("Enrollment request: %+v", enrollmentRequest)
+	log.Info("Enrollment request", "request", enrollmentRequest)
 	enrollResponse, err := caClient.Enroll(enrollmentRequest)
 	if err != nil {
 		return nil, nil, nil, err
@@ -482,6 +486,141 @@ type ComponentCertificateData struct {
 	CACert []byte
 }
 
+// CreateSignCertificate checks if sign certificate secret exists and generates it if missing
+func CreateSignCertificate(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
+
+	// Check if sign certificate secret already exists
+	secretName := fmt.Sprintf("%s-sign-cert", request.ComponentName)
+	existingSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, client.ObjectKey{
+		Name:      secretName,
+		Namespace: request.Namespace,
+	}, existingSecret)
+
+	if err == nil {
+		log.Info("Sign certificate secret already exists, skipping generation",
+			"component", request.ComponentName,
+			"secret", secretName)
+		return nil, nil
+	}
+
+	if !k8serrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to check existing sign certificate secret %s: %w", secretName, err)
+	}
+
+	log.Info("Sign certificate secret not found, generating new sign certificate",
+		"component", request.ComponentName,
+		"secret", secretName)
+
+	certData, err := provisionComponentCertificateWithClient(ctx, k8sClient, request, "sign")
+	if err != nil {
+		return nil, fmt.Errorf("failed to provision sign certificate for %s: %w", request.ComponentName, err)
+	}
+
+	log.Info("Successfully generated sign certificate",
+		"component", request.ComponentName)
+
+	return certData, nil
+}
+
+// CreateTLSCertificate checks if TLS certificate secret exists and generates it if missing
+func CreateTLSCertificate(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
+
+	// Check if TLS certificate secret already exists
+	secretName := fmt.Sprintf("%s-tls-cert", request.ComponentName)
+	existingSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, client.ObjectKey{
+		Name:      secretName,
+		Namespace: request.Namespace,
+	}, existingSecret)
+
+	if err == nil {
+		log.Info("TLS certificate secret already exists, skipping generation",
+			"component", request.ComponentName,
+			"secret", secretName)
+		return nil, nil
+	}
+
+	if !k8serrors.IsNotFound(err) {
+		return nil, fmt.Errorf("failed to check existing TLS certificate secret %s: %w", secretName, err)
+	}
+
+	log.Info("TLS certificate secret not found, generating new TLS certificate",
+		"component", request.ComponentName,
+		"secret", secretName)
+
+	certData, err := provisionComponentCertificateWithClient(ctx, k8sClient, request, "tls")
+	if err != nil {
+		return nil, fmt.Errorf("failed to provision TLS certificate for %s: %w", request.ComponentName, err)
+	}
+
+	log.Info("Successfully generated TLS certificate",
+		"component", request.ComponentName)
+
+	return certData, nil
+}
+
+// ProvisionSignCertificate provisions only the sign certificate for a component
+func ProvisionSignCertificate(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
+
+	log.Info("Provisioning sign certificate",
+		"component", request.ComponentName,
+		"componentType", request.ComponentType)
+
+	certData, err := provisionComponentCertificateWithClient(ctx, k8sClient, request, "sign")
+	if err != nil {
+		return nil, fmt.Errorf("failed to provision sign certificate for %s: %w", request.ComponentName, err)
+	}
+
+	log.Info("Successfully provisioned sign certificate",
+		"component", request.ComponentName)
+
+	return certData, nil
+}
+
+// ProvisionTLSCertificate provisions only the TLS certificate for a component
+func ProvisionTLSCertificate(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
+
+	log.Info("Provisioning TLS certificate",
+		"component", request.ComponentName,
+		"componentType", request.ComponentType)
+
+	certData, err := provisionComponentCertificateWithClient(ctx, k8sClient, request, "tls")
+	if err != nil {
+		return nil, fmt.Errorf("failed to provision TLS certificate for %s: %w", request.ComponentName, err)
+	}
+
+	log.Info("Successfully provisioned TLS certificate",
+		"component", request.ComponentName)
+
+	return certData, nil
+}
+
+// ProvisionSpecificCertificate provisions a specific certificate type for a component
+func ProvisionSpecificCertificate(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest, certType string) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
+
+	log.Info("Provisioning specific certificate",
+		"component", request.ComponentName,
+		"componentType", request.ComponentType,
+		"certType", certType)
+
+	certData, err := provisionComponentCertificateWithClient(ctx, k8sClient, request, certType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to provision %s certificate for %s: %w", certType, request.ComponentName, err)
+	}
+
+	log.Info("Successfully provisioned specific certificate",
+		"component", request.ComponentName,
+		"certType", certType)
+
+	return certData, nil
+}
+
 // ProvisionOrdererGroupCertificates provisions certificates for all components in an OrdererGroup
 func ProvisionOrdererGroupCertificates(ctx context.Context, request OrdererGroupCertificateRequest) ([]ComponentCertificateData, error) {
 	var certificates []ComponentCertificateData
@@ -527,6 +666,7 @@ func ProvisionOrdererGroupCertificatesWithClient(ctx context.Context, k8sClient 
 
 // provisionComponentCertificate provisions a certificate for a specific component and type
 func provisionComponentCertificate(ctx context.Context, request OrdererGroupCertificateRequest, certType string) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
 	// Determine which certificate configuration to use
 	var certConfig *CertificateConfig
 	var enrollmentConfig *EnrollmentConfig
@@ -572,8 +712,9 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 	}
 
 	// Enroll the component
-	userCert, userKey, rootCert, err := EnrollUser(enrollRequest)
+	userCert, userKey, rootCert, err := EnrollUser(ctx, enrollRequest)
 	if err != nil {
+		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.EnrollID)
 		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollRequest.User, err)
 	}
 
@@ -596,6 +737,7 @@ func provisionComponentCertificate(ctx context.Context, request OrdererGroupCert
 
 // provisionComponentCertificateWithClient provisions a certificate for a specific component and type with client context
 func provisionComponentCertificateWithClient(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest, certType string) (*ComponentCertificateData, error) {
+	log := logf.FromContext(ctx)
 	// Determine which certificate configuration to use
 	var certConfig *CertificateConfig
 	var enrollmentConfig *EnrollmentConfig
@@ -643,8 +785,9 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 	}
 
 	// Enroll the component
-	userCert, userKey, rootCert, err := EnrollUser(enrollRequest)
+	userCert, userKey, rootCert, err := EnrollUser(ctx, enrollRequest)
 	if err != nil {
+		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.EnrollID)
 		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollID, err)
 	}
 

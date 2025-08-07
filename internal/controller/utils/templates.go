@@ -229,7 +229,7 @@ General:
     ListenAddress: 0.0.0.0
     ListenPort: {{.Port}}
     TLS:
-        Enabled: false
+        Enabled: true
         PrivateKey: /etc/hyperledger/fabricx/assembler/tls/server.key
         Certificate: /etc/hyperledger/fabricx/assembler/tls/server.crt
         RootCAs:

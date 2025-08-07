@@ -19,24 +19,23 @@ package genesis
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"github.com/hyperledger/fabric-x-orderer/config/protos"
-
 	"github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // SharedConfigService handles the generation of SharedConfig from Genesis resources
 type SharedConfigService struct {
-	logger *logrus.Logger
+	logger logr.Logger
 	client client.Client
 }
 
 // NewSharedConfigService creates a new SharedConfigService
-func NewSharedConfigService(logger *logrus.Logger, client client.Client) *SharedConfigService {
+func NewSharedConfigService(logger logr.Logger, client client.Client) *SharedConfigService {
 	return &SharedConfigService{
 		logger: logger,
 		client: client,
@@ -51,7 +50,7 @@ type SharedConfigRequest struct {
 
 // GenerateSharedConfig generates SharedConfig based on the Genesis resource
 func (s *SharedConfigService) GenerateSharedConfig(ctx context.Context, req *SharedConfigRequest) (*protos.SharedConfig, error) {
-	s.logger.Infof("Generating SharedConfig for %s/%s channel %s", req.Genesis.Namespace, req.Genesis.Name, req.ChannelID)
+	s.logger.Info("Generating SharedConfig", "namespace", req.Genesis.Namespace, "name", req.Genesis.Name, "channel", req.ChannelID)
 
 	// Validate input
 	if req == nil {
@@ -129,7 +128,7 @@ func (s *SharedConfigService) GenerateSharedConfig(ctx context.Context, req *Sha
 		return nil, errors.New("created shared config is nil")
 	}
 
-	s.logger.Infof("Successfully generated SharedConfig with %d parties", len(partiesConfig))
+	s.logger.Info("Successfully generated SharedConfig", "parties", len(partiesConfig))
 	return sharedConfig, nil
 }
 
@@ -137,7 +136,7 @@ func (s *SharedConfigService) GenerateSharedConfig(ctx context.Context, req *Sha
 func (s *SharedConfigService) generatePartiesConfig(ctx context.Context, genesis *v1alpha1.Genesis) ([]*protos.PartyConfig, error) {
 	var partiesConfig []*protos.PartyConfig
 
-	s.logger.Infof("Processing %d parties", len(genesis.Spec.Parties))
+	s.logger.Info("Processing parties", "parties", len(genesis.Spec.Parties))
 
 	// Process parties directly from the Parties configuration
 	for _, party := range genesis.Spec.Parties {
@@ -148,7 +147,7 @@ func (s *SharedConfigService) generatePartiesConfig(ctx context.Context, genesis
 		partiesConfig = append(partiesConfig, partyConfig)
 	}
 
-	s.logger.Infof("Generated %d party configurations", len(partiesConfig))
+	s.logger.Info("Generated party configurations", "parties", len(partiesConfig))
 	// Return empty slice instead of nil if no parties
 	if len(partiesConfig) == 0 {
 		return make([]*protos.PartyConfig, 0), nil

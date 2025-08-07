@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func TestGenesisService_CreateGenesisBlock(t *testing.T) {
@@ -250,7 +250,11 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create test genesis with all organization types
@@ -294,7 +298,11 @@ func TestGenesisService_CreateGenesisBlock_EmptyGenesis(t *testing.T) {
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create empty genesis
@@ -461,7 +469,11 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		WithObjects(external2SignSecret, external2TLSSecret, external2AdminSecret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create genesis with external organizations and orderer organization
@@ -630,7 +642,11 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create genesis with application organizations and orderer organization
@@ -671,7 +687,11 @@ func TestGenesisService_StoreGenesisBlock(t *testing.T) {
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create test genesis
@@ -728,7 +748,11 @@ func TestGenesisService_GetConfigTemplate(t *testing.T) {
 	// Create fake client with ConfigMap
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(configMap).Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create test genesis
@@ -820,7 +844,11 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewGenesisService(fakeClient, logger, "testchannel")
 
 	// Create test genesis with internal organizations only

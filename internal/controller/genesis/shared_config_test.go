@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // generateTestCertificates creates valid test certificates using Go's crypto library
@@ -177,7 +177,11 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create test genesis with all organization types
@@ -375,7 +379,11 @@ func TestSharedConfigService_GenerateSharedConfig_EmptyGenesis(t *testing.T) {
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create empty genesis - this should fail due to minimum party requirement
@@ -458,7 +466,11 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
 		Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create a simple genesis with four orderer organizations to meet minimum requirements
@@ -553,7 +565,11 @@ func TestSharedConfigService_GenerateSharedConfig_Minimal(t *testing.T) {
 	// Create fake client
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
 
-	logger := logrus.New()
+	opts := zap.Options{
+		Development: true,
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
 	service := NewSharedConfigService(logger, fakeClient)
 
 	// Create a minimal genesis with no organizations - this should fail due to minimum party requirement

@@ -68,7 +68,7 @@ const (
 
 // getServiceName returns the service name for the consenter
 func (r *OrdererConsenterReconciler) getServiceName(ordererConsenter *fabricxv1alpha1.OrdererConsenter) string {
-	return ordererConsenter.Name
+	return utils.GetServiceName(ordererConsenter.Name)
 }
 
 // getDeploymentName returns the deployment name for the consenter
@@ -88,7 +88,7 @@ func (r *OrdererConsenterReconciler) getTargetPort() int {
 
 // getServiceFQDN returns the fully qualified domain name for the service
 func (r *OrdererConsenterReconciler) getServiceFQDN(ordererConsenter *fabricxv1alpha1.OrdererConsenter) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", r.getServiceName(ordererConsenter), ordererConsenter.Namespace)
+	return utils.GetServiceFQDN(ordererConsenter.Name, ordererConsenter.Namespace)
 }
 
 // computeConfigMapHash computes a hash of the ConfigMap data to trigger deployment updates
@@ -191,7 +191,8 @@ func (r *OrdererConsenterReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	// Requeue after 1 minute to ensure continuous monitoring
+	return ctrl.Result{RequeueAfter: time.Minute}, nil
 }
 
 // reconcileOrdererConsenter handles the reconciliation of an OrdererConsenter
@@ -336,28 +337,44 @@ func (r *OrdererConsenterReconciler) reconcileCertificates(ctx context.Context, 
 		return nil
 	}
 
-	// Create certificate request for this consenter instance
-	request := certs.OrdererGroupCertificateRequest{
+	// Create base certificate request
+	baseRequest := certs.OrdererGroupCertificateRequest{
 		ComponentName:    ordererConsenter.Name,
 		ComponentType:    "consenter",
 		Namespace:        ordererConsenter.Namespace,
 		OrdererGroupName: ordererConsenter.Name, // Using consenter name as orderer group name for individual instances
 		CertConfig:       convertToCertConfig(ordererConsenter.Spec.MSPID, ordererConsenter.Spec.Certificates),
 		EnrollmentConfig: nil, // Individual consenters don't have global enrollment config
-		CertTypes:        []string{"sign", "tls"},
 		EnrollID:         ordererConsenter.Spec.Certificates.EnrollID,
 		EnrollSecret:     ordererConsenter.Spec.Certificates.EnrollSecret,
 	}
 
-	// Provision certificates using the certificate service
-	certificates, err := certs.ProvisionOrdererGroupCertificatesWithClient(ctx, r.Client, request)
+	// Generate certificates for each type (each function handles its own existence check)
+	var allCertificates []certs.ComponentCertificateData
+
+	// Create sign certificate
+	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, baseRequest)
 	if err != nil {
-		return fmt.Errorf("failed to provision certificates: %w", err)
+		return fmt.Errorf("failed to create sign certificate: %w", err)
+	}
+	if signCertData != nil {
+		allCertificates = append(allCertificates, *signCertData)
 	}
 
-	// Create Kubernetes secrets for the certificates
-	if err := r.createCertificateSecrets(ctx, ordererConsenter, certificates); err != nil {
-		return fmt.Errorf("failed to create certificate secrets: %w", err)
+	// Create TLS certificate
+	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, baseRequest)
+	if err != nil {
+		return fmt.Errorf("failed to create TLS certificate: %w", err)
+	}
+	if tlsCertData != nil {
+		allCertificates = append(allCertificates, *tlsCertData)
+	}
+
+	// Create Kubernetes secrets for the certificates (only if any were generated)
+	if len(allCertificates) > 0 {
+		if err := r.createCertificateSecrets(ctx, ordererConsenter, allCertificates); err != nil {
+			return fmt.Errorf("failed to create certificate secrets: %w", err)
+		}
 	}
 
 	log.Info("Certificates reconciled successfully", "consenter", ordererConsenter.Name)
@@ -375,41 +392,87 @@ func (r *OrdererConsenterReconciler) createCertificateSecrets(
 	// Process each certificate in the slice
 	for _, certData := range certificates {
 		secretName := fmt.Sprintf("%s-%s-cert", ordererConsenter.Name, certData.CertType)
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: ordererConsenter.Namespace,
-				Labels: map[string]string{
-					"app":                      "fabric-x",
-					"ordererconsenter":         ordererConsenter.Name,
-					"certificate-type":         certData.CertType,
-					"fabricx.kfsoft.tech/type": "certificate",
-				},
-			},
-			Data: map[string][]byte{
-				"cert.pem": certData.Cert,
-				"key.pem":  certData.Key,
-				"ca.pem":   certData.CACert,
-			},
-		}
 
-		// Set the controller reference
-		if err := controllerutil.SetControllerReference(ordererConsenter, secret, r.Scheme); err != nil {
-			return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
-		}
+		// Check if secret already exists
+		existingSecret := &corev1.Secret{}
+		err := r.Client.Get(ctx, types.NamespacedName{
+			Name:      secretName,
+			Namespace: ordererConsenter.Namespace,
+		}, existingSecret)
 
-		if err := r.Client.Create(ctx, secret); err != nil {
-			// If secret already exists, update it
-			if strings.Contains(err.Error(), "already exists") {
-				if err := r.Client.Update(ctx, secret); err != nil {
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Secret doesn't exist, create it
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName,
+						Namespace: ordererConsenter.Namespace,
+						Labels: map[string]string{
+							"app":                      "fabric-x",
+							"ordererconsenter":         ordererConsenter.Name,
+							"certificate-type":         certData.CertType,
+							"fabricx.kfsoft.tech/type": "certificate",
+						},
+					},
+					Data: map[string][]byte{
+						"cert.pem": certData.Cert,
+						"key.pem":  certData.Key,
+						"ca.pem":   certData.CACert,
+					},
+				}
+
+				// Set the controller reference
+				if err := controllerutil.SetControllerReference(ordererConsenter, secret, r.Scheme); err != nil {
+					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
+				}
+
+				if err := r.Client.Create(ctx, secret); err != nil {
+					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+				}
+
+				log.Info("Created certificate secret", "secret", secretName, "certType", certData.CertType)
+			} else {
+				return fmt.Errorf("failed to check existing certificate secret %s: %w", secretName, err)
+			}
+		} else {
+			// Secret exists, check if it needs to be updated
+			needsUpdate := false
+			updatedSecret := existingSecret.DeepCopy()
+
+			// Check if certificate data has changed
+			if !reflect.DeepEqual(existingSecret.Data["cert.pem"], certData.Cert) ||
+				!reflect.DeepEqual(existingSecret.Data["key.pem"], certData.Key) ||
+				!reflect.DeepEqual(existingSecret.Data["ca.pem"], certData.CACert) {
+
+				updatedSecret.Data = map[string][]byte{
+					"cert.pem": certData.Cert,
+					"key.pem":  certData.Key,
+					"ca.pem":   certData.CACert,
+				}
+				needsUpdate = true
+			}
+
+			// Check if labels need to be updated
+			expectedLabels := map[string]string{
+				"app":                      "fabric-x",
+				"ordererconsenter":         ordererConsenter.Name,
+				"certificate-type":         certData.CertType,
+				"fabricx.kfsoft.tech/type": "certificate",
+			}
+			if !reflect.DeepEqual(existingSecret.Labels, expectedLabels) {
+				updatedSecret.Labels = expectedLabels
+				needsUpdate = true
+			}
+
+			if needsUpdate {
+				if err := r.Client.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
+				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
 			} else {
-				return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
+				log.Info("Certificate secret already exists and is up to date", "secret", secretName, "certType", certData.CertType)
 			}
 		}
-
-		log.Info("Created certificate secret", "secret", secretName, "certType", certData.CertType)
 	}
 
 	return nil

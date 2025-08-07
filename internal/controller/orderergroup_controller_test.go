@@ -30,7 +30,6 @@ import (
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	fakeclientset "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/fake"
 )
@@ -173,18 +172,15 @@ func TestOrdererGroupReconciler_Reconcile(t *testing.T) {
 			// Create fake client
 			fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(tt.ordererGroup).Build()
 
+			// Create fake clientset
+			fakeClientset := fakeclientset.NewSimpleClientset()
+
 			// Create reconciler
 			r := &OrdererGroupReconciler{
-				Client: fakeClient,
-				Scheme: s,
+				Client:    fakeClient,
+				Scheme:    s,
+				Clientset: fakeClientset,
 			}
-
-			// Initialize component controllers with mock certificate service
-			mockCertService := NewMockOrdererGroupCertService(fakeClient)
-			r.AssemblerController = ordgroup.NewAssemblerControllerWithCertService(fakeClient, s, mockCertService)
-			r.BatcherController = ordgroup.NewBatcherControllerWithCertService(fakeClient, s, mockCertService)
-			r.RouterController = ordgroup.NewRouterControllerWithCertService(fakeClient, s, mockCertService)
-			r.ConsenterController = ordgroup.NewConsenterControllerWithCertService(fakeClient, s, mockCertService)
 
 			// Create request
 			req := reconcile.Request{
@@ -295,13 +291,6 @@ func TestOrdererGroupReconciler_handleDeletion(t *testing.T) {
 		Scheme:    s,
 		Clientset: fakeClientset,
 	}
-
-	// Initialize component controllers with mock certificate service
-	mockCertService := NewMockOrdererGroupCertService(fakeClient)
-	r.AssemblerController = ordgroup.NewAssemblerControllerWithCertService(fakeClient, s, mockCertService)
-	r.BatcherController = ordgroup.NewBatcherControllerWithCertService(fakeClient, s, mockCertService)
-	r.RouterController = ordgroup.NewRouterControllerWithCertService(fakeClient, s, mockCertService)
-	r.ConsenterController = ordgroup.NewConsenterControllerWithCertService(fakeClient, s, mockCertService)
 
 	// Test deletion handling
 	ctx := context.Background()

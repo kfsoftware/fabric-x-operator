@@ -16,6 +16,8 @@ limitations under the License.
 
 package utils
 
+import "fmt"
+
 // ContainsString checks if a slice contains a specific string
 func ContainsString(slice []string, str string) bool {
 	for _, item := range slice {
@@ -35,4 +37,28 @@ func RemoveString(slice []string, str string) []string {
 		}
 	}
 	return result
+}
+
+// Service naming utilities for consistent service naming across controllers
+
+// GetServiceName returns the service name for a component
+// This function centralizes service naming logic to ensure consistency
+func GetServiceName(componentName string) string {
+	return componentName
+}
+
+// GetServiceFQDN returns the fully qualified domain name for a service
+func GetServiceFQDN(componentName, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", GetServiceName(componentName), namespace)
+}
+
+// GetServiceNameWithSuffix returns the service name with a suffix (for backward compatibility)
+// This is used by components that historically used a suffix in their service names
+func GetServiceNameWithSuffix(componentName, suffix string) string {
+	return fmt.Sprintf("%s-%s", componentName, suffix)
+}
+
+// GetServiceFQDNWithSuffix returns the fully qualified domain name for a service with suffix
+func GetServiceFQDNWithSuffix(componentName, suffix, namespace string) string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", GetServiceNameWithSuffix(componentName, suffix), namespace)
 }

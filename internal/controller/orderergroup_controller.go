@@ -27,7 +27,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/ordgroup"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	clientset "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned"
 )
@@ -42,12 +41,6 @@ type OrdererGroupReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
 	Clientset clientset.Interface
-
-	// Component controllers (kept for backward compatibility)
-	ConsenterController *ordgroup.ConsenterController
-	AssemblerController *ordgroup.AssemblerController
-	RouterController    *ordgroup.RouterController
-	BatcherController   *ordgroup.BatcherController
 }
 
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=orderergroups,verbs=get;list;watch;create;update;patch;delete
@@ -176,40 +169,6 @@ func (r *OrdererGroupReconciler) reconcileOrdererGroup(ctx context.Context, orde
 // reconcileChildComponents reconciles all child components of the OrdererGroup
 func (r *OrdererGroupReconciler) reconcileChildComponents(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
-
-	// Reconcile Consenter (single consenter instance)
-	if ordererGroup.Spec.Components.Consenter != nil {
-		// The consenter controller handles single instance internally
-		if err := r.ConsenterController.Reconcile(ctx, ordererGroup, nil); err != nil {
-			return fmt.Errorf("failed to reconcile consenter: %w", err)
-		}
-		log.Info("Consenter component reconciled successfully")
-	}
-
-	// Reconcile Assembler
-	if ordererGroup.Spec.Components.Assembler != nil {
-		if err := r.AssemblerController.Reconcile(ctx, ordererGroup, ordererGroup.Spec.Components.Assembler); err != nil {
-			return fmt.Errorf("failed to reconcile assembler: %w", err)
-		}
-		log.Info("Assembler component reconciled successfully")
-	}
-
-	// Reconcile Router
-	if ordererGroup.Spec.Components.Router != nil {
-		if err := r.RouterController.Reconcile(ctx, ordererGroup, ordererGroup.Spec.Components.Router); err != nil {
-			return fmt.Errorf("failed to reconcile router: %w", err)
-		}
-		log.Info("Router component reconciled successfully")
-	}
-
-	// Reconcile Batchers (multiple batcher instances)
-	if len(ordererGroup.Spec.Components.Batchers) > 0 {
-		// The batcher controller handles multiple instances internally
-		if err := r.BatcherController.Reconcile(ctx, ordererGroup, nil); err != nil {
-			return fmt.Errorf("failed to reconcile batchers: %w", err)
-		}
-		log.Info("Batcher components reconciled successfully")
-	}
 
 	log.Info("All child components reconciled successfully")
 	return nil
@@ -864,34 +823,6 @@ func (r *OrdererGroupReconciler) handleDeletion(ctx context.Context, ordererGrou
 func (r *OrdererGroupReconciler) cleanupChildComponents(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	log := logf.FromContext(ctx)
 
-	// Cleanup Consenter (single consenter instance)
-	if ordererGroup.Spec.Components.Consenter != nil {
-		if err := r.ConsenterController.Cleanup(ctx, ordererGroup, nil); err != nil {
-			log.Error(err, "Failed to cleanup consenter")
-		}
-	}
-
-	// Cleanup Assembler
-	if ordererGroup.Spec.Components.Assembler != nil {
-		if err := r.AssemblerController.Cleanup(ctx, ordererGroup, ordererGroup.Spec.Components.Assembler); err != nil {
-			log.Error(err, "Failed to cleanup assembler")
-		}
-	}
-
-	// Cleanup Router
-	if ordererGroup.Spec.Components.Router != nil {
-		if err := r.RouterController.Cleanup(ctx, ordererGroup, ordererGroup.Spec.Components.Router); err != nil {
-			log.Error(err, "Failed to cleanup router")
-		}
-	}
-
-	// Cleanup Batchers
-	if len(ordererGroup.Spec.Components.Batchers) > 0 {
-		if err := r.BatcherController.Cleanup(ctx, ordererGroup, nil); err != nil {
-			log.Error(err, "Failed to cleanup batchers")
-		}
-	}
-
 	log.Info("All child components cleaned up successfully")
 	return nil
 }
@@ -1026,12 +957,6 @@ func (r *OrdererGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
 	r.Clientset = clientset
-
-	// Initialize component controllers (kept for backward compatibility)
-	r.ConsenterController = ordgroup.NewConsenterController(r.Client, r.Scheme)
-	r.AssemblerController = ordgroup.NewAssemblerController(r.Client, r.Scheme)
-	r.RouterController = ordgroup.NewRouterController(r.Client, r.Scheme)
-	r.BatcherController = ordgroup.NewBatcherController(r.Client, r.Scheme)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.OrdererGroup{}).

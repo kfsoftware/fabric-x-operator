@@ -39,7 +39,6 @@ import (
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/genesis"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	pkgerrors "github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -194,12 +193,8 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 		return fmt.Errorf("genesis spec validation failed: %w", err)
 	}
 
-	// Create a logger for the Genesis service
-	logger := logrus.New()
-	logger.SetLevel(logrus.InfoLevel)
-
 	// Create Genesis service
-	genesisService := genesis.NewGenesisService(r.Client, logger, genesisCR.Spec.ChannelID)
+	genesisService := genesis.NewGenesisService(r.Client, log, genesisCR.Spec.ChannelID)
 
 	// Create genesis block with additional error handling
 	genesisBlock, err := genesisService.CreateGenesisBlock(ctx, &genesis.GenesisRequest{

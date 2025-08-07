@@ -29,10 +29,10 @@ import (
 	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen"
 	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen/genesisconfig"
 
+	"github.com/go-logr/logr"
 	"github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -57,12 +57,12 @@ type Policy struct {
 // GenesisService handles the creation of genesis blocks
 type GenesisService struct {
 	client    client.Client
-	logger    *logrus.Logger
+	logger    logr.Logger
 	ChannelID string
 }
 
 // NewGenesisService creates a new GenesisService
-func NewGenesisService(client client.Client, logger *logrus.Logger, channelID string) *GenesisService {
+func NewGenesisService(client client.Client, logger logr.Logger, channelID string) *GenesisService {
 	return &GenesisService{
 		client:    client,
 		logger:    logger,
@@ -88,7 +88,7 @@ type GenesisResult struct {
 
 // CreateGenesisBlock creates a genesis block based on the Genesis resource
 func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisRequest) ([]byte, error) {
-	s.logger.Infof("Creating genesis block for %s/%s channel %s", req.Genesis.Namespace, req.Genesis.Name, s.ChannelID)
+	s.logger.Info("Creating genesis block", "namespace", req.Genesis.Namespace, "name", req.Genesis.Name, "channel", s.ChannelID)
 
 	// Validate that we have at least some organizations
 	if len(req.Genesis.Spec.OrdererOrganizations) == 0 &&
@@ -167,7 +167,7 @@ func (s *GenesisService) processOrganizations(ctx context.Context, organizations
 	var orgConfigs []*genesisconfig.Organization
 
 	for _, org := range organizations {
-		s.logger.Infof("Processing organization %s", org.Name)
+		s.logger.Info("Processing organization", "name", org.Name)
 
 		// Fetch signing CA certificate
 		signCACert, err := s.fetchAndValidateX509Certificate(ctx, org.SignCACertRef)
@@ -231,7 +231,7 @@ func (s *GenesisService) fetchAndValidateX509Certificate(ctx context.Context, se
 	if !exists {
 		return nil, errors.Errorf("key %s not found in secret %s/%s", secretRef.Key, secretRef.Namespace, secretRef.Name)
 	}
-	s.logger.Infof("Certificate data: %s", string(certData))
+	s.logger.Info("Certificate data", "data", string(certData))
 	// Validate that the data is not empty
 	if len(certData) == 0 {
 		return nil, errors.Errorf("certificate data is empty for key %s in secret %s/%s", secretRef.Key, secretRef.Namespace, secretRef.Name)
@@ -366,7 +366,7 @@ func (s *GenesisService) processApplicationOrganizations(ctx context.Context, ap
 	var organizations []*genesisconfig.Organization
 
 	for _, org := range appOrgs {
-		s.logger.Infof("Processing application organization %s", org.Name)
+		s.logger.Info("Processing application organization", "name", org.Name)
 
 		var orgConfig *genesisconfig.Organization
 		var err error
@@ -513,7 +513,7 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 		return nil, errors.Wrapf(err, "failed to read shared config file: %s", sharedConfigPath)
 	}
 
-	s.logger.Infof("Shared config file exists and is readable, size: %d bytes", len(sharedConfigBytes))
+	s.logger.Info("Shared config file exists and is readable", "size", len(sharedConfigBytes))
 
 	// Create a genesis profile programmatically
 	profile := &genesisconfig.Profile{
@@ -590,8 +590,8 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 			},
 		},
 	}
-	s.logger.Infof("Orderer orgs: %v", profile)
-	s.logger.Infof("Creating genesis block with %d orderer orgs and %d application orgs", len(ordererOrgs), len(allOrgs))
+	s.logger.Info("Orderer orgs", "orgs", profile)
+	s.logger.Info("Creating genesis block", "orderer orgs", len(ordererOrgs), "application orgs", len(allOrgs))
 	genesisBlock, err := configtxgen.GetOutputBlock(profile, s.ChannelID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create genesis block")
@@ -644,7 +644,7 @@ func (s *GenesisService) StoreGenesisBlock(ctx context.Context, genesis *v1alpha
 	// Decode protobuf to JSON
 	genesisJSON, err := s.decodeProtoToJSON("common.Block", genesisBlock)
 	if err != nil {
-		s.logger.Warnf("Failed to decode genesis block to JSON: %v", err)
+		s.logger.Info("Failed to decode genesis block to JSON", "error", err)
 		// Continue with binary storage even if JSON conversion fails
 		genesisJSON = []byte("{}")
 	}
@@ -680,7 +680,7 @@ func (s *GenesisService) StoreGenesisBlock(ctx context.Context, genesis *v1alpha
 		}
 	}
 
-	s.logger.Infof("Stored genesis block (binary and JSON) in secret %s/%s", secret.Namespace, secret.Name)
+	s.logger.Info("Stored genesis block (binary and JSON) in secret", "namespace", secret.Namespace, "name", secret.Name)
 	return nil
 }
 
