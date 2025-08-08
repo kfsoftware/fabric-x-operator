@@ -286,19 +286,13 @@ func (r *OrdererBatcherReconciler) reconcileCertificates(ctx context.Context, or
 	signCertConfig := &fabricxv1alpha1.CertificateConfig{
 		CA: ordererBatcher.Spec.Enrollment.Sign.CA,
 	}
-	// Use component-specific SANS if available, otherwise use enrollment SANS
-	if ordererBatcher.Spec.SANS != nil {
-		signCertConfig.SANS = ordererBatcher.Spec.SANS
-	} else if ordererBatcher.Spec.Enrollment.Sign.SANS != nil {
-		signCertConfig.SANS = ordererBatcher.Spec.Enrollment.Sign.SANS
-	}
 
 	signRequest := certs.OrdererGroupCertificateRequest{
 		ComponentName:    ordererBatcher.Name,
 		ComponentType:    "batcher",
 		Namespace:        ordererBatcher.Namespace,
 		OrdererGroupName: ordererBatcher.Name, // Using batcher name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfig(ordererBatcher.Spec.MSPID, signCertConfig),
+		CertConfig:       r.convertToCertConfig(ordererBatcher.Spec.MSPID, signCertConfig, "sign"),
 		EnrollmentConfig: r.convertToEnrollmentConfig(ordererBatcher.Spec.MSPID, ordererBatcher.Spec.Enrollment),
 	}
 	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, signRequest)
@@ -325,7 +319,7 @@ func (r *OrdererBatcherReconciler) reconcileCertificates(ctx context.Context, or
 		ComponentType:    "batcher",
 		Namespace:        ordererBatcher.Namespace,
 		OrdererGroupName: ordererBatcher.Name, // Using batcher name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfig(ordererBatcher.Spec.MSPID, tlsCertConfig),
+		CertConfig:       r.convertToCertConfig(ordererBatcher.Spec.MSPID, tlsCertConfig, "tls"),
 		EnrollmentConfig: r.convertToEnrollmentConfig(ordererBatcher.Spec.MSPID, ordererBatcher.Spec.Enrollment),
 	}
 	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, tlsRequest)
@@ -348,7 +342,7 @@ func (r *OrdererBatcherReconciler) reconcileCertificates(ctx context.Context, or
 }
 
 // convertToCertConfig converts API certificate config to internal format
-func (r *OrdererBatcherReconciler) convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+func (r *OrdererBatcherReconciler) convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig, certType string) *certs.CertificateConfig {
 	if apiConfig == nil {
 		return nil
 	}
@@ -383,7 +377,7 @@ func (r *OrdererBatcherReconciler) convertToCertConfig(mspID string, apiConfig *
 	}
 
 	// Add SANS configuration if provided
-	if apiConfig.SANS != nil {
+	if certType == "tls" && apiConfig.SANS != nil {
 		config.SANS = &certs.SANSConfig{
 			DNSNames:    apiConfig.SANS.DNSNames,
 			IPAddresses: apiConfig.SANS.IPAddresses,
@@ -402,11 +396,11 @@ func (r *OrdererBatcherReconciler) convertToEnrollmentConfig(mspID string, apiCo
 	config := &certs.EnrollmentConfig{}
 
 	if apiConfig.Sign != nil {
-		config.Sign = r.convertToCertConfig(mspID, apiConfig.Sign)
+		config.Sign = r.convertToCertConfig(mspID, apiConfig.Sign, "sign")
 	}
 
 	if apiConfig.TLS != nil {
-		config.TLS = r.convertToCertConfig(mspID, apiConfig.TLS)
+		config.TLS = r.convertToCertConfig(mspID, apiConfig.TLS, "tls")
 	}
 
 	return config

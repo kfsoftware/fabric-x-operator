@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -280,14 +279,21 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	genesisBlock, err := service.CreateGenesisBlock(ctx, req)
+	genesisResult, err := service.CreateGenesisBlock(ctx, req)
 
 	require.NoError(t, err)
-	assert.NotNil(t, genesisBlock)
-	assert.NotEmpty(t, genesisBlock)
+	assert.NotNil(t, genesisResult)
+	assert.NotNil(t, genesisResult.GenesisBlock)
+	assert.NotEmpty(t, genesisResult.GenesisBlock)
 
 	// Verify the genesis block is valid protobuf
-	assert.Greater(t, len(genesisBlock), 0)
+	assert.Greater(t, len(genesisResult.GenesisBlock), 0)
+
+	// Verify shared config is also generated
+	assert.NotNil(t, genesisResult.SharedConfigProto)
+	assert.NotEmpty(t, genesisResult.SharedConfigProto)
+	assert.NotNil(t, genesisResult.SharedConfigJSON)
+	assert.NotEmpty(t, genesisResult.SharedConfigJSON)
 }
 
 func TestGenesisService_CreateGenesisBlock_EmptyGenesis(t *testing.T) {
@@ -498,11 +504,12 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	genesisBlock, err := service.CreateGenesisBlock(ctx, req)
+	genesisResult, err := service.CreateGenesisBlock(ctx, req)
 
 	require.NoError(t, err)
-	assert.NotNil(t, genesisBlock)
-	assert.NotEmpty(t, genesisBlock)
+	assert.NotNil(t, genesisResult)
+	assert.NotNil(t, genesisResult.GenesisBlock)
+	assert.NotEmpty(t, genesisResult.GenesisBlock)
 }
 
 func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
@@ -672,61 +679,12 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	genesisBlock, err := service.CreateGenesisBlock(ctx, req)
+	genesisResult, err := service.CreateGenesisBlock(ctx, req)
 
 	require.NoError(t, err)
-	assert.NotNil(t, genesisBlock)
-	assert.NotEmpty(t, genesisBlock)
-}
-
-func TestGenesisService_StoreGenesisBlock(t *testing.T) {
-	// Setup scheme
-	err := v1alpha1.AddToScheme(scheme.Scheme)
-	require.NoError(t, err)
-
-	// Create fake client
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-
-	opts := zap.Options{
-		Development: true,
-	}
-
-	logger := zap.New(zap.UseFlagOptions(&opts))
-	service := NewGenesisService(fakeClient, logger, "testchannel")
-
-	// Create test genesis
-	genesis := &v1alpha1.Genesis{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-genesis",
-			Namespace: "default",
-		},
-		Spec: v1alpha1.GenesisSpec{
-			Output: v1alpha1.GenesisOutput{
-				SecretName: "genesis-block-secret",
-				BlockKey:   "genesis.block",
-			},
-		},
-	}
-
-	// Create test genesis block
-	genesisBlock := []byte("test-genesis-block-data")
-
-	ctx := context.Background()
-	err = service.StoreGenesisBlock(ctx, genesis, genesisBlock)
-
-	require.NoError(t, err)
-
-	// Verify the secret was created
-	secret := &corev1.Secret{}
-	err = fakeClient.Get(ctx, client.ObjectKey{
-		Namespace: "default",
-		Name:      "genesis-block-secret",
-	}, secret)
-
-	require.NoError(t, err)
-	assert.NotNil(t, secret)
-	assert.Equal(t, genesisBlock, secret.Data["genesis.block"])
-	assert.Contains(t, secret.Data, "genesis.json")
+	assert.NotNil(t, genesisResult)
+	assert.NotNil(t, genesisResult.GenesisBlock)
+	assert.NotEmpty(t, genesisResult.GenesisBlock)
 }
 
 func TestGenesisService_GetConfigTemplate(t *testing.T) {
@@ -873,9 +831,10 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	genesisBlock, err := service.CreateGenesisBlock(ctx, req)
+	genesisResult, err := service.CreateGenesisBlock(ctx, req)
 
 	require.NoError(t, err)
-	assert.NotNil(t, genesisBlock)
-	assert.NotEmpty(t, genesisBlock)
+	assert.NotNil(t, genesisResult)
+	assert.NotNil(t, genesisResult.GenesisBlock)
+	assert.NotEmpty(t, genesisResult.GenesisBlock)
 }

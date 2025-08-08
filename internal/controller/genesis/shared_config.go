@@ -123,11 +123,6 @@ func (s *SharedConfigService) GenerateSharedConfig(ctx context.Context, req *Sha
 		BatchingConfig:  batchingConfig,
 	}
 
-	// Validate the final SharedConfig
-	if sharedConfig == nil {
-		return nil, errors.New("created shared config is nil")
-	}
-
 	s.logger.Info("Successfully generated SharedConfig", "parties", len(partiesConfig))
 	return sharedConfig, nil
 }

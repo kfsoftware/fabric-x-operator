@@ -249,19 +249,13 @@ func (r *OrdererRouterReconciler) reconcileCertificates(ctx context.Context, ord
 	signCertConfig := &fabricxv1alpha1.CertificateConfig{
 		CA: ordererRouter.Spec.Enrollment.Sign.CA,
 	}
-	// Use component-specific SANS if available, otherwise use enrollment SANS
-	if ordererRouter.Spec.SANS != nil {
-		signCertConfig.SANS = ordererRouter.Spec.SANS
-	} else if ordererRouter.Spec.Enrollment.Sign.SANS != nil {
-		signCertConfig.SANS = ordererRouter.Spec.Enrollment.Sign.SANS
-	}
 
 	signRequest := certs.OrdererGroupCertificateRequest{
 		ComponentName:    ordererRouter.Name,
 		ComponentType:    "router",
 		Namespace:        ordererRouter.Namespace,
 		OrdererGroupName: ordererRouter.Name, // Using router name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfig(ordererRouter.Spec.MSPID, signCertConfig),
+		CertConfig:       r.convertToCertConfig(ordererRouter.Spec.MSPID, signCertConfig, "sign"),
 		EnrollmentConfig: r.convertToEnrollmentConfig(ordererRouter.Spec.MSPID, ordererRouter.Spec.Enrollment),
 	}
 	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, signRequest)
@@ -288,7 +282,7 @@ func (r *OrdererRouterReconciler) reconcileCertificates(ctx context.Context, ord
 		ComponentType:    "router",
 		Namespace:        ordererRouter.Namespace,
 		OrdererGroupName: ordererRouter.Name, // Using router name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfig(ordererRouter.Spec.MSPID, tlsCertConfig),
+		CertConfig:       r.convertToCertConfig(ordererRouter.Spec.MSPID, tlsCertConfig, "tls"),
 		EnrollmentConfig: r.convertToEnrollmentConfig(ordererRouter.Spec.MSPID, ordererRouter.Spec.Enrollment),
 	}
 	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, tlsRequest)
@@ -408,7 +402,7 @@ func (r *OrdererRouterReconciler) createCertificateSecrets(
 }
 
 // convertRouterCertConfig converts API certificate config to internal format for router
-func (r *OrdererRouterReconciler) convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+func (r *OrdererRouterReconciler) convertToCertConfig(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig, certType string) *certs.CertificateConfig {
 	if apiConfig == nil {
 		return nil
 	}
@@ -443,7 +437,7 @@ func (r *OrdererRouterReconciler) convertToCertConfig(mspID string, apiConfig *f
 	}
 
 	// Add SANS configuration if provided
-	if apiConfig.SANS != nil {
+	if certType == "tls" && apiConfig.SANS != nil {
 		config.SANS = &certs.SANSConfig{
 			DNSNames:    apiConfig.SANS.DNSNames,
 			IPAddresses: apiConfig.SANS.IPAddresses,
@@ -462,11 +456,11 @@ func (r *OrdererRouterReconciler) convertToEnrollmentConfig(mspID string, apiCon
 	config := &certs.EnrollmentConfig{}
 
 	if apiConfig.Sign != nil {
-		config.Sign = r.convertToCertConfig(mspID, apiConfig.Sign)
+		config.Sign = r.convertToCertConfig(mspID, apiConfig.Sign, "sign")
 	}
 
 	if apiConfig.TLS != nil {
-		config.TLS = r.convertToCertConfig(mspID, apiConfig.TLS)
+		config.TLS = r.convertToCertConfig(mspID, apiConfig.TLS, "tls")
 	}
 
 	return config

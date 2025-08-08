@@ -39,37 +39,9 @@ spec:
                       secretName: fabric-x-certs
     components:
         assembler:
-            enrollment:
-                sign:
-                    ca:
-                        caname: ca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - assembler-org2.localho.st
-                tls:
-                    ca:
-                        caname: tlsca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - assembler-org2.localho.st
+            sans:
+                dnsNames:
+                    - assembler-org2.localho.st
             env:
                 - name: ASSEMBLER_MAX_MESSAGE_COUNT
                   value: '500'
@@ -82,37 +54,9 @@ spec:
             replicas: 1
         batchers:
             - shardID: 1
-              enrollment:
-                  sign:
-                      ca:
-                          caname: ca
-                          cahost: test-ca2.default
-                          caport: 7054
-                          catls:
-                              secretRef:
-                                  key: tls.crt
-                                  name: test-ca2-tls-crypto
-                                  namespace: default
-                          enrollid: admin
-                          enrollsecret: adminpw
-                      sans:
-                          dnsNames:
-                              - batcher-1-org2.localho.st
-                  tls:
-                      ca:
-                          caname: tlsca
-                          cahost: test-ca2.default
-                          caport: 7054
-                          catls:
-                              secretRef:
-                                  key: tls.crt
-                                  name: test-ca2-tls-crypto
-                                  namespace: default
-                          enrollid: admin
-                          enrollsecret: adminpw
-                      sans:
-                          dnsNames:
-                              - batcher-1-org2.localho.st
+              sans:
+                  dnsNames:
+                      - batcher-1-org2.localho.st
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -134,37 +78,9 @@ spec:
                     operator: Equal
                     value: batcher
             - shardID: 2
-              enrollment:
-                  sign:
-                      ca:
-                          caname: ca
-                          cahost: test-ca2.default
-                          caport: 7054
-                          catls:
-                              secretRef:
-                                  key: tls.crt
-                                  name: test-ca2-tls-crypto
-                                  namespace: default
-                          enrollid: admin
-                          enrollsecret: adminpw
-                      sans:
-                          dnsNames:
-                              - batcher-2-org2.localho.st
-                  tls:
-                      ca:
-                          caname: tlsca
-                          cahost: test-ca2.default
-                          caport: 7054
-                          catls:
-                              secretRef:
-                                  key: tls.crt
-                                  name: test-ca2-tls-crypto
-                                  namespace: default
-                          enrollid: admin
-                          enrollsecret: adminpw
-                      sans:
-                          dnsNames:
-                              - batcher-2-org2.localho.st
+              sans:
+                  dnsNames:
+                      - batcher-2-org2.localho.st
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -186,38 +102,10 @@ spec:
                     operator: Equal
                     value: batcher
         consenter:
+            sans:
+                dnsNames:
+                    - consenter-1-org2.localho.st
             consenterID: 1
-            enrollment:
-                sign:
-                    ca:
-                        caname: ca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - consenter-1-org2.localho.st
-                tls:
-                    ca:
-                        caname: tlsca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - consenter-1-org2.localho.st
             endpoints:
                 - consenter-1-org2.localho.st:7050
             env:
@@ -238,37 +126,9 @@ spec:
             volumeMounts: []
             volumes: []
         router:
-            enrollment:
-                sign:
-                    ca:
-                        caname: ca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - router-org2.localho.st
-                tls:
-                    ca:
-                        caname: tlsca
-                        cahost: test-ca2.default
-                        caport: 7054
-                        catls:
-                            secretRef:
-                                key: tls.crt
-                                name: test-ca2-tls-crypto
-                                namespace: default
-                            enrollid: admin
-                            enrollsecret: adminpw
-                    sans:
-                        dnsNames:
-                            - router-org2.localho.st
+            sans:
+                dnsNames:
+                    - router-org2.localho.st
             env:
                 - name: ROUTER_CHANNEL_BUFFER_SIZE
                   value: '1000'

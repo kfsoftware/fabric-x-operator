@@ -350,6 +350,7 @@ func EnrollUser(ctx context.Context, params EnrollUserRequest) (*x509.Certificat
 			Hosts: allHosts,
 			CN:    params.CN,
 		},
+		Profile: params.Profile,
 	}
 	log.Info("Enrollment request", "request", enrollmentRequest)
 	enrollResponse, err := caClient.Enroll(enrollmentRequest)
@@ -649,28 +650,6 @@ func ProvisionSpecificCertificate(ctx context.Context, k8sClient client.Client, 
 	return certData, nil
 }
 
-// ProvisionOrdererGroupCertificates provisions certificates for all components in an OrdererGroup
-func ProvisionOrdererGroupCertificates(ctx context.Context, request OrdererGroupCertificateRequest) ([]ComponentCertificateData, error) {
-	var certificates []ComponentCertificateData
-
-	// Determine which certificate types to generate
-	certTypes := request.CertTypes
-	if len(certTypes) == 0 {
-		certTypes = []string{"sign", "tls"}
-	}
-
-	// Generate certificates for each type
-	for _, certType := range certTypes {
-		certData, err := provisionComponentCertificate(ctx, request, certType)
-		if err != nil {
-			return nil, fmt.Errorf("failed to provision %s certificate for %s: %w", certType, request.ComponentName, err)
-		}
-		certificates = append(certificates, *certData)
-	}
-
-	return certificates, nil
-}
-
 // ProvisionOrdererGroupCertificatesWithClient provisions certificates for all components in an OrdererGroup with client context
 func ProvisionOrdererGroupCertificatesWithClient(ctx context.Context, k8sClient client.Client, request OrdererGroupCertificateRequest) ([]ComponentCertificateData, error) {
 	var certificates []ComponentCertificateData
@@ -690,77 +669,6 @@ func ProvisionOrdererGroupCertificatesWithClient(ctx context.Context, k8sClient 
 		certificates = append(certificates, *certData)
 	}
 	return certificates, nil
-}
-
-// provisionComponentCertificate provisions a certificate for a specific component and type
-func provisionComponentCertificate(ctx context.Context, request OrdererGroupCertificateRequest, certType string) (*ComponentCertificateData, error) {
-	log := logf.FromContext(ctx)
-	// Determine which certificate configuration to use
-	var certConfig *CertificateConfig
-	var enrollmentConfig *EnrollmentConfig
-
-	if request.CertConfig != nil {
-		// Use component-specific certificate configuration
-		certConfig = request.CertConfig
-	} else if request.EnrollmentConfig != nil {
-		// Use global enrollment configuration
-		enrollmentConfig = request.EnrollmentConfig
-		if certType == "sign" && enrollmentConfig.Sign != nil {
-			certConfig = enrollmentConfig.Sign
-		} else if certType == "tls" && enrollmentConfig.TLS != nil {
-			certConfig = enrollmentConfig.TLS
-		}
-	}
-
-	if certConfig == nil {
-		return nil, fmt.Errorf("no certificate configuration found for type %s", certType)
-	}
-
-	// Get CA certificate
-	caCert, err := getCACertificate(ctx, nil, certConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
-	}
-
-	// Generate component-specific enrollment parameters
-	hosts := generateComponentHosts(request.ComponentName, request.OrdererGroupName, request.Namespace)
-	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
-
-	// Create enrollment request
-	enrollRequest := EnrollUserRequest{
-		TLSCert:    caCert,
-		URL:        fmt.Sprintf("https://%s:%d", certConfig.CA.CAHost, certConfig.CA.CAPort),
-		Name:       certConfig.CA.CAName,
-		MSPID:      certConfig.MSPID,
-		User:       request.CertConfig.CA.EnrollID,
-		Secret:     request.CertConfig.CA.EnrollSecret,
-		Hosts:      hosts,
-		CN:         cn,
-		Attributes: []*api.AttributeRequest{},
-	}
-
-	// Enroll the component
-	userCert, userKey, rootCert, err := EnrollUser(ctx, enrollRequest)
-	if err != nil {
-		log.Error(err, "Failed to enroll component", "component", request.ComponentName, "enrollID", request.CertConfig.CA.EnrollID)
-		return nil, fmt.Errorf("failed to enroll component %s (enrollID: %s): %w", request.ComponentName, enrollRequest.User, err)
-	}
-
-	// Convert certificates to PEM format
-	userCertPEM := utils.EncodeX509Certificate(userCert)
-	userKeyPEM, err := utils.EncodePrivateKey(userKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode private key: %w", err)
-	}
-	rootCertPEM := utils.EncodeX509Certificate(rootCert)
-
-	return &ComponentCertificateData{
-		ComponentName: request.ComponentName,
-		CertType:      certType,
-		Cert:          userCertPEM,
-		Key:           userKeyPEM,
-		CACert:        rootCertPEM,
-	}, nil
 }
 
 // provisionComponentCertificateWithClient provisions a certificate for a specific component and type with client context
@@ -796,21 +704,12 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 	// Generate component-specific enrollment parameters
 	enrollID := request.CertConfig.CA.EnrollID
 	secret := request.CertConfig.CA.EnrollSecret
-	hosts := generateComponentHosts(request.ComponentName, request.OrdererGroupName, request.Namespace)
-	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
-
-	// Add SANS configuration to hosts only for TLS certificates
+	hosts := []string{}
 	if certType == "tls" && certConfig.SANS != nil {
-		// Add DNS names from SANS
-		if certConfig.SANS.DNSNames != nil {
-			hosts = append(hosts, certConfig.SANS.DNSNames...)
-		}
-
-		// Add IP addresses from SANS
-		if certConfig.SANS.IPAddresses != nil {
-			hosts = append(hosts, certConfig.SANS.IPAddresses...)
-		}
+		hosts = append(hosts, certConfig.SANS.DNSNames...)
+		hosts = append(hosts, certConfig.SANS.IPAddresses...)
 	}
+	cn := generateComponentCN(request.ComponentName, request.OrdererGroupName, certType)
 
 	// Create enrollment request
 	enrollRequest := EnrollUserRequest{
@@ -823,6 +722,11 @@ func provisionComponentCertificateWithClient(ctx context.Context, k8sClient clie
 		Hosts:      hosts,
 		CN:         cn,
 		Attributes: []*api.AttributeRequest{},
+	}
+	if certType == "tls" {
+		enrollRequest.Profile = "tls"
+	} else {
+		enrollRequest.Profile = "ca"
 	}
 
 	// Enroll the component

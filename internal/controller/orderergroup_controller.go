@@ -375,83 +375,6 @@ func (r *OrdererGroupReconciler) reconcileConsenterCRDs(ctx context.Context, ord
 	return nil
 }
 
-// buildConsenterSpec builds the Consenter spec from OrdererGroup configuration
-func (r *OrdererGroupReconciler) buildConsenterSpec(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ComponentConfig) fabricxv1alpha1.OrdererConsenterSpec {
-	// Determine bootstrap mode
-	bootstrapMode := ordererGroup.Spec.BootstrapMode
-	if bootstrapMode == "" {
-		bootstrapMode = "configure" // Default to configure mode
-	}
-
-	spec := fabricxv1alpha1.OrdererConsenterSpec{
-		BootstrapMode: bootstrapMode,
-		MSPID:         ordererGroup.Spec.MSPID,
-		PartyID:       ordererGroup.Spec.PartyID,
-		Genesis:       ordererGroup.Spec.Genesis,
-	}
-
-	// Merge common configuration
-	if ordererGroup.Spec.Common != nil {
-		spec.Replicas = ordererGroup.Spec.Common.Replicas
-		spec.Storage = ordererGroup.Spec.Common.Storage
-		spec.Resources = ordererGroup.Spec.Common.Resources
-		spec.SecurityContext = ordererGroup.Spec.Common.SecurityContext
-		spec.PodAnnotations = ordererGroup.Spec.Common.PodAnnotations
-		spec.PodLabels = ordererGroup.Spec.Common.PodLabels
-		spec.Volumes = ordererGroup.Spec.Common.Volumes
-		spec.Affinity = ordererGroup.Spec.Common.Affinity
-		spec.VolumeMounts = ordererGroup.Spec.Common.VolumeMounts
-		spec.ImagePullSecrets = ordererGroup.Spec.Common.ImagePullSecrets
-		spec.Tolerations = ordererGroup.Spec.Common.Tolerations
-	}
-
-	// Override with component-specific configuration
-	if config != nil {
-		if config.Replicas != 0 {
-			spec.Replicas = config.Replicas
-		}
-		if config.Storage != nil {
-			spec.Storage = config.Storage
-		}
-		if config.Resources != nil {
-			spec.Resources = config.Resources
-		}
-		if config.SecurityContext != nil {
-			spec.SecurityContext = config.SecurityContext
-		}
-		if config.PodAnnotations != nil {
-			spec.PodAnnotations = config.PodAnnotations
-		}
-		if config.PodLabels != nil {
-			spec.PodLabels = config.PodLabels
-		}
-		if config.Volumes != nil {
-			spec.Volumes = config.Volumes
-		}
-		if config.Affinity != nil {
-			spec.Affinity = config.Affinity
-		}
-		if config.VolumeMounts != nil {
-			spec.VolumeMounts = config.VolumeMounts
-		}
-		if config.ImagePullSecrets != nil {
-			spec.ImagePullSecrets = config.ImagePullSecrets
-		}
-		if config.Tolerations != nil {
-			spec.Tolerations = config.Tolerations
-		}
-		spec.Ingress = config.Ingress
-		spec.Enrollment = config.Enrollment
-		spec.SANS = config.SANS
-		spec.Endpoints = config.Endpoints
-		spec.Env = config.Env
-		spec.Command = config.Command
-		spec.Args = config.Args
-	}
-
-	return spec
-}
-
 // buildConsenterSpecFromInstance builds the Consenter spec from OrdererGroup configuration with ConsenterInstance
 func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fabricxv1alpha1.OrdererGroup, config *fabricxv1alpha1.ConsenterInstance) fabricxv1alpha1.OrdererConsenterSpec {
 	// Determine bootstrap mode
@@ -466,6 +389,7 @@ func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fa
 		PartyID:       ordererGroup.Spec.PartyID,
 		ConsenterID:   config.ConsenterID,
 		Genesis:       ordererGroup.Spec.Genesis,
+		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
 
 	// Merge common configuration
@@ -518,8 +442,10 @@ func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fa
 		if config.Tolerations != nil {
 			spec.Tolerations = config.Tolerations
 		}
+		if config.Enrollment != nil {
+			spec.Enrollment = config.Enrollment
+		}
 		spec.Ingress = config.Ingress
-		spec.Enrollment = config.Enrollment
 		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
@@ -543,6 +469,7 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       ordererGroup.Spec.PartyID,
 		Genesis:       ordererGroup.Spec.Genesis,
+		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
 
 	// Merge common configuration
@@ -596,11 +523,13 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 			spec.Tolerations = config.Tolerations
 		}
 		spec.Ingress = config.Ingress
-		spec.Enrollment = config.Enrollment
 		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
 		spec.Command = config.Command
+		if config.Enrollment != nil {
+			spec.Enrollment = config.Enrollment
+		}
 		spec.Args = config.Args
 	}
 
@@ -620,6 +549,7 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       ordererGroup.Spec.PartyID,
 		Genesis:       ordererGroup.Spec.Genesis,
+		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
 
 	// Merge common configuration
@@ -672,8 +602,10 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 		if config.Tolerations != nil {
 			spec.Tolerations = config.Tolerations
 		}
+		if config.Enrollment != nil {
+			spec.Enrollment = config.Enrollment
+		}
 		spec.Ingress = config.Ingress
-		spec.Enrollment = config.Enrollment
 		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env
@@ -701,6 +633,7 @@ func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.
 		PartyID:       partyID,
 		ShardID:       config.ShardID,
 		Genesis:       ordererGroup.Spec.Genesis,
+		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
 
 	// Merge common configuration
@@ -753,8 +686,10 @@ func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.
 		if config.Tolerations != nil {
 			spec.Tolerations = config.Tolerations
 		}
+		if config.Enrollment != nil {
+			spec.Enrollment = config.Enrollment
+		}
 		spec.Ingress = config.Ingress
-		spec.Enrollment = config.Enrollment
 		spec.SANS = config.SANS
 		spec.Endpoints = config.Endpoints
 		spec.Env = config.Env

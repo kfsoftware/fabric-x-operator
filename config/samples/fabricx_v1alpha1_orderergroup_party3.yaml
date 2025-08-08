@@ -39,20 +39,9 @@ spec:
                       secretName: fabric-x-certs
     components:
         assembler:
-            certificates:
-                ca:
-                    cahost: test-ca2.default
-                    caport: 7054
-                    catls:
-                        secretRef:
-                            key: tls.crt
-                            name: test-ca2-tls-crypto
-                            namespace: default
-                    enrollid: admin
-                    enrollsecret: adminpw
-                sans:
-                    dnsNames:
-                        - assembler-org3.localho.st
+            sans:
+                dnsNames:
+                    - assembler-org3.localho.st
             env:
                 - name: ASSEMBLER_MAX_MESSAGE_COUNT
                   value: '500'
@@ -65,10 +54,9 @@ spec:
             replicas: 1
         batchers:
             - shardID: 1
-              certificates:
-                  sans:
-                      dnsNames:
-                          - batcher-1-org3.localho.st
+              sans:
+                  dnsNames:
+                      - batcher-1-org3.localho.st
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -90,10 +78,9 @@ spec:
                     operator: Equal
                     value: batcher
             - shardID: 2
-              certificates:
-                  sans:
-                      dnsNames:
-                          - batcher-2-org3.localho.st
+              sans:
+                  dnsNames:
+                      - batcher-2-org3.localho.st
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -116,10 +103,9 @@ spec:
                     value: batcher
         consenter:
             consenterID: 1
-            certificates:
-                sans:
-                    dnsNames:
-                        - consenter-1-org3.localho.st
+            sans:
+                dnsNames:
+                    - consenter-1-org3.localho.st
             endpoints:
                 - consenter-1-org3.localho.st:7050
             env:
@@ -140,10 +126,9 @@ spec:
             volumeMounts: []
             volumes: []
         router:
-            certificates:
-                sans:
-                    dnsNames:
-                        - router-org3.localho.st
+            sans:
+                dnsNames:
+                    - router-org3.localho.st
             env:
                 - name: ROUTER_CHANNEL_BUFFER_SIZE
                   value: '1000'
@@ -164,6 +149,7 @@ spec:
     enrollment:
         sign:
             ca:
+                caname: ca
                 cahost: test-ca2.default
                 caport: 7054
                 catls:
@@ -175,6 +161,7 @@ spec:
                 enrollsecret: adminpw
         tls:
             ca:
+                caname: tlsca
                 cahost: test-ca2.default
                 caport: 7054
                 catls:

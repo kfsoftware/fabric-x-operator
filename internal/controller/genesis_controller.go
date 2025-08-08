@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -28,11 +29,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
@@ -197,7 +200,7 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 	genesisService := genesis.NewGenesisService(r.Client, log, genesisCR.Spec.ChannelID)
 
 	// Create genesis block with additional error handling
-	genesisBlock, err := genesisService.CreateGenesisBlock(ctx, &genesis.GenesisRequest{
+	genesisResult, err := genesisService.CreateGenesisBlock(ctx, &genesis.GenesisRequest{
 		Genesis:   genesisCR,
 		ChannelID: genesisCR.Spec.ChannelID,
 	})
@@ -208,23 +211,31 @@ func (r *GenesisReconciler) reconcileGenesis(ctx context.Context, genesisCR *fab
 		return fmt.Errorf("failed to create genesis block: %w", err)
 	}
 
+	// Validate that genesis result is not nil
+	if genesisResult == nil {
+		errorMsg := "Generated genesis result is nil"
+		log.Error(nil, "Generated genesis result is nil")
+		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
+		return fmt.Errorf("generated genesis result is nil")
+	}
+
 	// Validate that genesis block is not nil or empty
-	if genesisBlock == nil {
+	if genesisResult.GenesisBlock == nil {
 		errorMsg := "Generated genesis block is nil"
 		log.Error(nil, "Generated genesis block is nil")
 		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
 		return fmt.Errorf("generated genesis block is nil")
 	}
 
-	if len(genesisBlock) == 0 {
+	if len(genesisResult.GenesisBlock) == 0 {
 		errorMsg := "Generated genesis block is empty"
 		log.Error(nil, "Generated genesis block is empty")
 		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
 		return fmt.Errorf("generated genesis block is empty")
 	}
 
-	// Store genesis block in Kubernetes Secret
-	if err := genesisService.StoreGenesisBlock(ctx, genesisCR, genesisBlock); err != nil {
+	// Store genesis block and shared config in Kubernetes Secret
+	if err := r.storeGenesisBlock(ctx, genesisCR, genesisResult); err != nil {
 		errorMsg := fmt.Sprintf("Failed to store genesis block: %v", err)
 		log.Error(err, "Failed to store genesis block")
 		r.updateGenesisStatus(ctx, genesisCR, "FAILED", errorMsg)
@@ -297,6 +308,111 @@ func (r *GenesisReconciler) validateGenesisSpec(genesisCR *fabricxv1alpha1.Genes
 	}
 
 	return nil
+}
+
+// storeGenesisBlock stores the genesis block and shared config in a Kubernetes Secret
+func (r *GenesisReconciler) storeGenesisBlock(ctx context.Context, genesis *fabricxv1alpha1.Genesis, genesisResult *genesis.GenesisResult) error {
+	log := logf.FromContext(ctx)
+
+	// Decode protobuf to JSON for genesis block
+	genesisJSON, err := r.decodeProtoToJSON("common.Block", genesisResult.GenesisBlock)
+	if err != nil {
+		log.Info("Failed to decode genesis block to JSON", "error", err)
+		// Continue with binary storage even if JSON conversion fails
+		genesisJSON = []byte("{}")
+	}
+
+	// Prepare secret data
+	secretData := map[string][]byte{
+		genesis.Spec.Output.BlockKey: genesisResult.GenesisBlock,
+		"genesis.json":               genesisJSON,
+	}
+
+	// Add shared config in protobuf format
+	if genesisResult.SharedConfigProto != nil {
+		secretData["shared-config.pb"] = genesisResult.SharedConfigProto
+	}
+
+	// Add shared config in JSON format for debug purposes
+	if genesisResult.SharedConfigJSON != nil {
+		secretData["shared-config.json"] = genesisResult.SharedConfigJSON
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      genesis.Spec.Output.SecretName,
+			Namespace: genesis.Namespace,
+		},
+		Data: secretData,
+	}
+
+	// Check if secret already exists
+	existingSecret := &corev1.Secret{}
+	err = r.Client.Get(ctx, client.ObjectKey{
+		Namespace: secret.Namespace,
+		Name:      secret.Name,
+	}, existingSecret)
+
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Secret doesn't exist, create it
+			// Set the controller reference
+			if err := controllerutil.SetControllerReference(genesis, secret, r.Scheme); err != nil {
+				return fmt.Errorf("failed to set controller reference for secret %s: %w", genesis.Spec.Output.SecretName, err)
+			}
+
+			if err := r.Client.Create(ctx, secret); err != nil {
+				return fmt.Errorf("failed to create genesis block secret: %w", err)
+			}
+			log.Info("Created genesis block secret", "secret", genesis.Spec.Output.SecretName)
+		} else {
+			return fmt.Errorf("failed to check existing secret: %w", err)
+		}
+	} else {
+		// Secret exists, update it
+		existingSecret.Data = secret.Data
+
+		// Ensure controller reference is set
+		if err := controllerutil.SetControllerReference(genesis, existingSecret, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set controller reference for existing secret %s: %w", genesis.Spec.Output.SecretName, err)
+		}
+
+		if err := r.Client.Update(ctx, existingSecret); err != nil {
+			return fmt.Errorf("failed to update genesis block secret: %w", err)
+		}
+		log.Info("Updated genesis block secret", "secret", genesis.Spec.Output.SecretName)
+	}
+
+	return nil
+}
+
+// decodeProtoToJSON decodes a protobuf message and converts it to JSON
+func (r *GenesisReconciler) decodeProtoToJSON(msgName string, protobufData []byte) ([]byte, error) {
+	mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(msgName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find message type %s: %w", msgName, err)
+	}
+
+	msgType := reflect.TypeOf(mt.Zero().Interface())
+	if msgType == nil {
+		return nil, fmt.Errorf("message of type %s unknown", msgType)
+	}
+
+	msg := reflect.New(msgType.Elem()).Interface().(proto.Message)
+
+	err = proto.Unmarshal(protobufData, msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal protobuf data: %w", err)
+	}
+
+	// Use protolator to convert to JSON
+	var buf bytes.Buffer
+	err = protolator.DeepMarshalJSON(&buf, msg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal to JSON: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 // handleDeletion handles the deletion of a Genesis

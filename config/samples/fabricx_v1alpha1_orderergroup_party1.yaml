@@ -39,7 +39,6 @@ spec:
             secretName: fabric-x-certs
   components:
     assembler:
-      # Component-specific SANS configuration (overrides enrollment SANS)
       sans:
         dnsNames:
           - assembler-org1.localho.st
@@ -164,9 +163,6 @@ spec:
             namespace: default
         enrollid: admin
         enrollsecret: adminpw
-      sans:
-        dnsNames:
-          - default-sign.localho.st
     tls:
       ca:
         caname: tlsca
@@ -179,9 +175,6 @@ spec:
             namespace: default
         enrollid: admin
         enrollsecret: adminpw
-      sans:
-        dnsNames:
-          - default-tls.localho.st
   genesis:
     secretKey: genesis.block
     secretName: fabricx-shared-genesis

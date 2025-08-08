@@ -37,7 +37,6 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -82,12 +81,18 @@ type GenesisResult struct {
 	// Genesis block bytes
 	GenesisBlock []byte
 
+	// Shared config in protobuf format
+	SharedConfigProto []byte
+
+	// Shared config in JSON format for debug purposes
+	SharedConfigJSON []byte
+
 	// Error if any
 	Error error
 }
 
 // CreateGenesisBlock creates a genesis block based on the Genesis resource
-func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisRequest) ([]byte, error) {
+func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisRequest) (*GenesisResult, error) {
 	s.logger.Info("Creating genesis block", "namespace", req.Genesis.Namespace, "name", req.Genesis.Name, "channel", s.ChannelID)
 
 	// Validate that we have at least some organizations
@@ -104,7 +109,7 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 	defer os.RemoveAll(tempDir)
 
 	// Process organizations
-	organizations, err := s.processOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations, tempDir)
+	organizations, err := s.processOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process organizations")
 	}
@@ -159,11 +164,23 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 		return nil, errors.Wrap(err, "failed to create genesis block")
 	}
 
-	return genesisBlock, nil
+	// Convert shared config to JSON for debug purposes
+	sharedConfigJSON, err := s.decodeProtoToJSON("protos.SharedConfig", sharedConfigBytes)
+	if err != nil {
+		s.logger.Info("Failed to decode shared config to JSON", "error", err)
+		// Continue with empty JSON if conversion fails
+		sharedConfigJSON = []byte("{}")
+	}
+
+	return &GenesisResult{
+		GenesisBlock:      genesisBlock,
+		SharedConfigProto: sharedConfigBytes,
+		SharedConfigJSON:  sharedConfigJSON,
+	}, nil
 }
 
 // processOrganizations processes organizations with certificates from secrets
-func (s *GenesisService) processOrganizations(ctx context.Context, organizations []v1alpha1.OrdererOrganization, tempDir string) ([]*genesisconfig.Organization, error) {
+func (s *GenesisService) processOrganizations(ctx context.Context, organizations []v1alpha1.OrdererOrganization) ([]*genesisconfig.Organization, error) {
 	var orgConfigs []*genesisconfig.Organization
 
 	for _, org := range organizations {
@@ -637,51 +654,6 @@ func (s *GenesisService) decodeProtoToJSON(msgName string, protobufData []byte) 
 	}
 
 	return buf.Bytes(), nil
-}
-
-// StoreGenesisBlock stores the genesis block in a Kubernetes Secret
-func (s *GenesisService) StoreGenesisBlock(ctx context.Context, genesis *v1alpha1.Genesis, genesisBlock []byte) error {
-	// Decode protobuf to JSON
-	genesisJSON, err := s.decodeProtoToJSON("common.Block", genesisBlock)
-	if err != nil {
-		s.logger.Info("Failed to decode genesis block to JSON", "error", err)
-		// Continue with binary storage even if JSON conversion fails
-		genesisJSON = []byte("{}")
-	}
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      genesis.Spec.Output.SecretName,
-			Namespace: genesis.Namespace,
-		},
-		Data: map[string][]byte{
-			genesis.Spec.Output.BlockKey: genesisBlock,
-			"genesis.json":               genesisJSON,
-		},
-	}
-
-	// Check if secret already exists
-	existingSecret := &corev1.Secret{}
-	err = s.client.Get(ctx, client.ObjectKey{
-		Namespace: secret.Namespace,
-		Name:      secret.Name,
-	}, existingSecret)
-
-	if err != nil {
-		// Secret doesn't exist, create it
-		if err := s.client.Create(ctx, secret); err != nil {
-			return errors.Wrap(err, "failed to create genesis block secret")
-		}
-	} else {
-		// Secret exists, update it
-		existingSecret.Data = secret.Data
-		if err := s.client.Update(ctx, existingSecret); err != nil {
-			return errors.Wrap(err, "failed to update genesis block secret")
-		}
-	}
-
-	s.logger.Info("Stored genesis block (binary and JSON) in secret", "namespace", secret.Namespace, "name", secret.Name)
-	return nil
 }
 
 // GetConfigTemplate retrieves the config template from ConfigMap

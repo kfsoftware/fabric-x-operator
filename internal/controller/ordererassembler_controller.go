@@ -275,19 +275,13 @@ func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, 
 	signCertConfig := &fabricxv1alpha1.CertificateConfig{
 		CA: ordererAssembler.Spec.Enrollment.Sign.CA,
 	}
-	// Use component-specific SANS if available, otherwise use enrollment SANS
-	if ordererAssembler.Spec.SANS != nil {
-		signCertConfig.SANS = ordererAssembler.Spec.SANS
-	} else if ordererAssembler.Spec.Enrollment.Sign.SANS != nil {
-		signCertConfig.SANS = ordererAssembler.Spec.Enrollment.Sign.SANS
-	}
 
 	signRequest := certs.OrdererGroupCertificateRequest{
 		ComponentName:    ordererAssembler.Name,
 		ComponentType:    "assembler",
 		Namespace:        ordererAssembler.Namespace,
 		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, signCertConfig),
+		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, signCertConfig, "sign"),
 		EnrollmentConfig: r.convertToEnrollmentConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Enrollment),
 	}
 	signCertData, err := certs.CreateSignCertificate(ctx, r.Client, signRequest)
@@ -314,7 +308,7 @@ func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, 
 		ComponentType:    "assembler",
 		Namespace:        ordererAssembler.Namespace,
 		OrdererGroupName: ordererAssembler.Name, // Using assembler name as orderer group name for individual instances
-		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, tlsCertConfig),
+		CertConfig:       r.convertToCertConfigAssembler(ordererAssembler.Spec.MSPID, tlsCertConfig, "tls"),
 		EnrollmentConfig: r.convertToEnrollmentConfigAssembler(ordererAssembler.Spec.MSPID, ordererAssembler.Spec.Enrollment),
 	}
 	tlsCertData, err := certs.CreateTLSCertificate(ctx, r.Client, tlsRequest)
@@ -337,7 +331,7 @@ func (r *OrdererAssemblerReconciler) reconcileCertificates(ctx context.Context, 
 }
 
 // convertToCertConfigAssembler converts API certificate config to internal format
-func (r *OrdererAssemblerReconciler) convertToCertConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig) *certs.CertificateConfig {
+func (r *OrdererAssemblerReconciler) convertToCertConfigAssembler(mspID string, apiConfig *fabricxv1alpha1.CertificateConfig, certType string) *certs.CertificateConfig {
 	if apiConfig == nil {
 		return nil
 	}
@@ -372,7 +366,7 @@ func (r *OrdererAssemblerReconciler) convertToCertConfigAssembler(mspID string, 
 	}
 
 	// Add SANS configuration if provided
-	if apiConfig.SANS != nil {
+	if certType == "tls" && apiConfig.SANS != nil {
 		config.SANS = &certs.SANSConfig{
 			DNSNames:    apiConfig.SANS.DNSNames,
 			IPAddresses: apiConfig.SANS.IPAddresses,
@@ -391,11 +385,11 @@ func (r *OrdererAssemblerReconciler) convertToEnrollmentConfigAssembler(mspID st
 	config := &certs.EnrollmentConfig{}
 
 	if apiConfig.Sign != nil {
-		config.Sign = r.convertToCertConfigAssembler(mspID, apiConfig.Sign)
+		config.Sign = r.convertToCertConfigAssembler(mspID, apiConfig.Sign, "sign")
 	}
 
 	if apiConfig.TLS != nil {
-		config.TLS = r.convertToCertConfigAssembler(mspID, apiConfig.TLS)
+		config.TLS = r.convertToCertConfigAssembler(mspID, apiConfig.TLS, "tls")
 	}
 
 	return config
