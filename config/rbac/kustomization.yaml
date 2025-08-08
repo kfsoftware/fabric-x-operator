@@ -22,6 +22,18 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the fabric-x-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- committerverifier_admin_role.yaml
+- committerverifier_editor_role.yaml
+- committerverifier_viewer_role.yaml
+- committervalidator_admin_role.yaml
+- committervalidator_editor_role.yaml
+- committervalidator_viewer_role.yaml
+- committersidecar_admin_role.yaml
+- committersidecar_editor_role.yaml
+- committersidecar_viewer_role.yaml
+- committercoordinator_admin_role.yaml
+- committercoordinator_editor_role.yaml
+- committercoordinator_viewer_role.yaml
 - ordererassembler_admin_role.yaml
 - ordererassembler_editor_role.yaml
 - ordererassembler_viewer_role.yaml

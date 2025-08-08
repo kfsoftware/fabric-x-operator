@@ -9,4 +9,8 @@ resources:
 - fabricx_v1alpha1_ordererconsenter.yaml
 - fabricx_v1alpha1_ordererrouter.yaml
 - fabricx_v1alpha1_ordererassembler.yaml
+- fabricx_v1alpha1_committercoordinator.yaml
+- fabricx_v1alpha1_committersidecar.yaml
+- fabricx_v1alpha1_committervalidator.yaml
+- fabricx_v1alpha1_committerverifier.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

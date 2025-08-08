@@ -1,206 +1,160 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Committer
 metadata:
-  labels:
-    app.kubernetes.io/name: fabric-x-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: committer-sample
+  name: fabric-x-committer
+  namespace: default
+
 spec:
-  # Bootstrap mode: "configure" or "deploy"
-  bootstrapMode: "configure"
-  
-  # MSP ID for the committer
-  mspid: "Org1MSP"
-  
-  # Common configuration applied to all components
+  bootstrapMode: deploy
+  mspid: CommitterMSP
   common:
     replicas: 1
-    storage:
-      size: "1Gi"
-      storageClass: "local-storage"
-      accessMode: "ReadWriteOnce"
     resources:
       requests:
-        memory: "256Mi"
-        cpu: "100m"
+        cpu: 100m
+        memory: 128Mi
       limits:
-        memory: "512Mi"
-        cpu: "200m"
-  
-  # Genesis block configuration for Sidecar
+        cpu: 500m
+        memory: 512Mi
+    podAnnotations:
+      prometheus.io/port: '8080'
+      prometheus.io/scrape: 'true'
+    podLabels:
+      app.kubernetes.io/component: fabric-x
+      app.kubernetes.io/part-of: committer
   genesis:
-    secretName: "genesis-block-secret"
-    secretKey: "genesis.block"
-    secretNamespace: "default"
-  
-  # Component-specific configurations
+    secretName: fabricx-shared-genesis
+    secretKey: genesis.block
+    secretNamespace: default
   components:
-    # Sidecar configuration
-    sidecar:
-      replicas: 1
-      storage:
-        size: "1Gi"
-        storageClass: "local-storage"
-        accessMode: "ReadWriteOnce"
-      resources:
-        requests:
-          memory: "256Mi"
-          cpu: "100m"
-        limits:
-          memory: "512Mi"
-          cpu: "200m"
-      ingress:
-        istio:
-          hosts:
-            - "sidecar.org1.localho.st"
-          port: 7054
-          ingressGateway: "istio-ingressgateway"
-          tls:
-            enabled: true
-            secretName: "sidecar-tls-secret"
-      certificates:
-        cahost: "test-ca2.default"
-        caname: "ca"
-        caport: 7054
-        catls:
-          secretRef:
-            name: "test-ca2-tls-crypto"
-            key: "tls.crt"
-            namespace: "default"
-        enrollid: "sidecar"
-        enrollsecret: "sidecarpw"
-    
-    # Coordinator configuration
+    # Global endpoints used by sidecar and coordinator
+    ordererEndpoints:
+      - orderergroup-party1-consenter:7052
+      - orderergroup-party2-consenter:7052
+      - orderergroup-party3-consenter:7052
+      - orderergroup-party4-consenter:7052
+    committerHost: fabric-x-committer-coordinator-service.default.svc.cluster.local
+    committerPort: 9001
+
+    # Coordinator-specific upstream endpoints
+    coordinatorVerifierEndpoints:
+      - fabric-x-committer-verifier-service.default.svc.cluster.local:5001
+    coordinatorValidatorCommitterEndpoints:
+      - fabric-x-committer-validator-service.default.svc.cluster.local:6001
     coordinator:
       replicas: 1
-      storage:
-        size: "1Gi"
-        storageClass: "local-storage"
-        accessMode: "ReadWriteOnce"
       resources:
         requests:
-          memory: "256Mi"
-          cpu: "100m"
+          cpu: 200m
+          memory: 256Mi
         limits:
-          memory: "512Mi"
-          cpu: "200m"
+          cpu: 1000m
+          memory: 1Gi
+      env:
+        - name: COORDINATOR_LOG_LEVEL
+          value: INFO
       ingress:
         istio:
           hosts:
-            - "coordinator.org1.localho.st"
-          port: 7054
-          ingressGateway: "istio-ingressgateway"
-          tls:
-            enabled: true
-            secretName: "coordinator-tls-secret"
-      certificates:
-        cahost: "test-ca2.default"
-        caname: "ca"
-        caport: 7054
-        catls:
-          secretRef:
-            name: "test-ca2-tls-crypto"
-            key: "tls.crt"
-            namespace: "default"
-        enrollid: "coordinator"
-        enrollsecret: "coordinatorpw"
-        
-    
-    # Verifier Service configuration
-    verifierService:
+            - coordinator-committer.localho.st
+          ingressGateway: ingressgateway
+          port: 443
+    sidecar:
       replicas: 1
-      storage:
-        size: "1Gi"
-        storageClass: "local-storage"
-        accessMode: "ReadWriteOnce"
       resources:
         requests:
-          memory: "256Mi"
-          cpu: "100m"
+          cpu: 300m
+          memory: 512Mi
         limits:
-          memory: "512Mi"
-          cpu: "200m"
+          cpu: 1500m
+          memory: 2Gi
+      env:
+        - name: SIDECAR_LOG_LEVEL
+          value: INFO
+        - name: SIDECAR_CHANNEL_ID
+          value: arma
       ingress:
         istio:
           hosts:
-            - "verifier.org1.localho.st"
-          port: 7054
-          ingressGateway: "istio-ingressgateway"
-          tls:
-            enabled: true
-            secretName: "verifier-tls-secret"
-      certificates:
-        cahost: "test-ca2.default"
-        caname: "ca"
-        caport: 7054
-        catls:
-          secretRef:
-            name: "test-ca2-tls-crypto"
-            key: "tls.crt"
-            namespace: "default"
-        enrollid: "verifier"
-        enrollsecret: "verifierpw"
-        
-    
-    # Validator configuration
+            - sidecar-committer.localho.st
+          ingressGateway: ingressgateway
+          port: 443
     validator:
       replicas: 1
-      storage:
-        size: "1Gi"
-        storageClass: "local-storage"
-        accessMode: "ReadWriteOnce"
+      postgresql:
+        host: 192.168.0.20
+        port: 5432
+        database: kubernetes_validator
+        username: postgres
+        passwordSecret:
+          name: postgres-password-secret
+          key: password
+          namespace: default
+        maxConnections: 100
+        minConnections: 10
+        loadBalance: false
+        retry:
+          maxElapsedTime: 30s
+        
       resources:
         requests:
-          memory: "256Mi"
-          cpu: "100m"
+          cpu: 200m
+          memory: 256Mi
         limits:
-          memory: "512Mi"
-          cpu: "200m"
+          cpu: 1000m
+          memory: 1Gi
+      env:
+        - name: VALIDATOR_LOG_LEVEL
+          value: INFO
       ingress:
         istio:
           hosts:
-            - "validator.org1.localho.st"
-          port: 7054
-          ingressGateway: "istio-ingressgateway"
-          tls:
-            enabled: true
-            secretName: "validator-tls-secret"
-      certificates:
-        cahost: "test-ca2.default"
-        caname: "ca"
+            - validator-committer.localho.st
+          ingressGateway: ingressgateway
+          port: 443
+    verifierService:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+      env:
+        - name: VERIFIER_LOG_LEVEL
+          value: INFO
+        - name: VERIFIER_PARALLELISM
+          value: "80"
+      ingress:
+        istio:
+          hosts:
+            - verifier-committer.localho.st
+          ingressGateway: ingressgateway
+          port: 443
+  enrollment:
+    sign:
+      ca:
+        caname: ca
+        cahost: test-ca2.default
         caport: 7054
         catls:
           secretRef:
-            name: "test-ca2-tls-crypto"
-            key: "tls.crt"
-            namespace: "default"
-        enrollid: "validator"
-        enrollsecret: "validatorpw"
-        
-  
-  # Global enrollment configuration (inherited by components)
-  enrollment:
-    sign:
-      cahost: "test-ca2.default"
-      caname: "ca"
-      caport: 7054
-      catls:
-        secretRef:
-          name: "test-ca2-tls-crypto"
-          key: "tls.crt"
-          namespace: "default"
-      enrollid: "admin"
-      enrollsecret: "adminpw"
-      
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
     tls:
-      cahost: "test-ca2.default"
-      caname: "ca"
-      caport: 7054
-      catls:
-        secretRef:
-          name: "test-ca2-tls-crypto"
-          key: "tls.crt"
-          namespace: "default"
-      enrollid: "admin"
-      enrollsecret: "adminpw"
-      
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+

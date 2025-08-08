@@ -267,6 +267,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := (&controller.CommitterCoordinatorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterCoordinator")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterSidecarReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterSidecar")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterValidatorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterValidator")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterVerifierReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterVerifier")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

@@ -92,4 +92,40 @@ resources:
   kind: OrdererAssembler
   path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterCoordinator
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterSidecar
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterValidator
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterVerifier
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

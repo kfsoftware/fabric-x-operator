@@ -35,7 +35,11 @@ rules:
   - fabricx.kfsoft.tech
   resources:
   - cas
+  - committercoordinators
   - committers
+  - committersidecars
+  - committervalidators
+  - committerverifiers
   - endorsers
   - geneses
   - ordererassemblers
@@ -55,7 +59,11 @@ rules:
   - fabricx.kfsoft.tech
   resources:
   - cas/finalizers
+  - committercoordinators/finalizers
   - committers/finalizers
+  - committersidecars/finalizers
+  - committervalidators/finalizers
+  - committerverifiers/finalizers
   - endorsers/finalizers
   - geneses/finalizers
   - ordererassemblers/finalizers
@@ -68,7 +76,11 @@ rules:
   - fabricx.kfsoft.tech
   resources:
   - cas/status
+  - committercoordinators/status
   - committers/status
+  - committersidecars/status
+  - committervalidators/status
+  - committerverifiers/status
   - endorsers/status
   - geneses/status
   - ordererassemblers/status

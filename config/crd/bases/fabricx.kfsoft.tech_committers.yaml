@@ -703,6 +703,13 @@ spec:
               components:
                 description: Component-specific configurations
                 properties:
+                  committerHost:
+                    description: Committer coordinator endpoint exposed to sidecar
+                      (host and port)
+                    type: string
+                  committerPort:
+                    format: int32
+                    type: integer
                   coordinator:
                     description: Coordinator configuration
                     properties:
@@ -1579,6 +1586,23 @@ spec:
                           type: object
                         type: array
                     type: object
+                  coordinatorValidatorCommitterEndpoints:
+                    description: Coordinator Validator/Committer endpoints (host:port)
+                      used by coordinator
+                    items:
+                      type: string
+                    type: array
+                  coordinatorVerifierEndpoints:
+                    description: Coordinator Verifier endpoints (host:port) used by
+                      coordinator
+                    items:
+                      type: string
+                    type: array
+                  ordererEndpoints:
+                    description: Orderer endpoints shared by sidecar (host:port)
+                    items:
+                      type: string
+                    type: array
                   sidecar:
                     description: Sidecar configuration
                     properties:
@@ -3053,6 +3077,57 @@ spec:
                         additionalProperties:
                           type: string
                         description: Pod labels
+                        type: object
+                      postgresql:
+                        description: PostgreSQL configuration
+                        properties:
+                          database:
+                            description: Database name
+                            type: string
+                          host:
+                            description: Database host
+                            type: string
+                          loadBalance:
+                            description: Load balance setting
+                            type: boolean
+                          maxConnections:
+                            description: Maximum number of connections
+                            format: int32
+                            type: integer
+                          minConnections:
+                            description: Minimum number of connections
+                            format: int32
+                            type: integer
+                          passwordSecret:
+                            description: Database password secret reference
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Secret namespace
+                                type: string
+                            required:
+                            - key
+                            - name
+                            type: object
+                          port:
+                            description: Database port
+                            format: int32
+                            type: integer
+                          retry:
+                            description: Retry configuration
+                            properties:
+                              maxElapsedTime:
+                                description: Maximum elapsed time for retries
+                                type: string
+                            type: object
+                          username:
+                            description: Database username
+                            type: string
                         type: object
                       replicas:
                         description: Replicas for this component

@@ -53,7 +53,86 @@ type CommitterComponents struct {
 	VerifierService *ComponentConfig `json:"verifierService,omitempty"`
 
 	// Validator configuration
-	Validator *ComponentConfig `json:"validator,omitempty"`
+	Validator *ValidatorComponentConfig `json:"validator,omitempty"`
+
+	// Orderer endpoints shared by sidecar (host:port)
+	OrdererEndpoints []string `json:"ordererEndpoints,omitempty"`
+
+	// Committer coordinator endpoint exposed to sidecar (host and port)
+	CommitterHost string `json:"committerHost,omitempty"`
+	CommitterPort int32  `json:"committerPort,omitempty"`
+
+	// Coordinator Verifier endpoints (host:port) used by coordinator
+	CoordinatorVerifierEndpoints []string `json:"coordinatorVerifierEndpoints,omitempty"`
+
+	// Coordinator Validator/Committer endpoints (host:port) used by coordinator
+	CoordinatorValidatorCommitterEndpoints []string `json:"coordinatorValidatorCommitterEndpoints,omitempty"`
+}
+
+// ValidatorComponentConfig provides validator-specific configuration with PostgreSQL support
+type ValidatorComponentConfig struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+
+	// PostgreSQL configuration
+	PostgreSQL *PostgreSQLConfig `json:"postgresql,omitempty"`
+}
+
+// PostgreSQLConfig defines PostgreSQL database configuration
+type PostgreSQLConfig struct {
+	// Database host
+	Host string `json:"host,omitempty"`
+
+	// Database port
+	Port int32 `json:"port,omitempty"`
+
+	// Database name
+	Database string `json:"database,omitempty"`
+
+	// Database username
+	Username string `json:"username,omitempty"`
+
+	// Database password secret reference
+	PasswordSecret *SecretRef `json:"passwordSecret,omitempty"`
+
+	// Maximum number of connections
+	MaxConnections int32 `json:"maxConnections,omitempty"`
+
+	// Minimum number of connections
+	MinConnections int32 `json:"minConnections,omitempty"`
+
+	// Load balance setting
+	LoadBalance bool `json:"loadBalance,omitempty"`
+
+	// Retry configuration
+	Retry *PostgreSQLRetryConfig `json:"retry,omitempty"`
+}
+
+// PostgreSQLRetryConfig defines retry configuration for PostgreSQL
+type PostgreSQLRetryConfig struct {
+	// Maximum elapsed time for retries
+	MaxElapsedTime string `json:"maxElapsedTime,omitempty"`
 }
 
 // CommitterStatus defines the observed state of Committer.

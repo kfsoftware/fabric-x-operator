@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: kfsoftware/fabricx-operator
-  newTag: v0.0.1-early-17546370153N
+  newTag: v0.0.1-early-17546560623N

@@ -1359,7 +1359,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          "consenter-port",
+									Name:          "consent-port",
 									ContainerPort: int32(r.getTargetPort()),
 									Protocol:      corev1.ProtocolTCP,
 								},

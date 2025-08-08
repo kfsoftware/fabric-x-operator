@@ -11,6 +11,10 @@ resources:
 - bases/fabricx.kfsoft.tech_ordererconsenters.yaml
 - bases/fabricx.kfsoft.tech_ordererrouters.yaml
 - bases/fabricx.kfsoft.tech_ordererassemblers.yaml
+- bases/fabricx.kfsoft.tech_committercoordinators.yaml
+- bases/fabricx.kfsoft.tech_committersidecars.yaml
+- bases/fabricx.kfsoft.tech_committervalidators.yaml
+- bases/fabricx.kfsoft.tech_committerverifiers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

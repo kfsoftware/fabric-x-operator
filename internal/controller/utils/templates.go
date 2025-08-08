@@ -100,6 +100,89 @@ func ExecuteTemplateWithValidation(templateStr string, data interface{}) (string
 	return result, nil
 }
 
+// CommitterCoordinatorTemplateData represents data specific to coordinator templates
+type CommitterCoordinatorTemplateData struct {
+	Name                        string
+	PartyID                     int32
+	MSPID                       string
+	Port                        int32
+	VerifierEndpoints           []string
+	ValidatorCommitterEndpoints []string
+}
+
+// BuildCoordinatorConfig returns a Coordinator config template with provided endpoints
+func BuildCoordinatorConfig(data CommitterCoordinatorTemplateData, verifier []string, validatorCommitter []string) string {
+	v := "\n"
+	for _, e := range verifier {
+		v += "    - " + e + "\n"
+	}
+	vc := "\n"
+	for _, e := range validatorCommitter {
+		vc += "    - " + e + "\n"
+	}
+	return `server:
+  endpoint:
+    host: 0.0.0.0
+    port: {{.Port}}
+verifier:
+  endpoints:` + v + `
+validator-committer:
+  endpoints:` + vc + `
+dependency-graph:
+  num-of-local-dep-constructors: 4
+  waiting-txs-limit: 20000000
+  num-of-workers-for-global-dep-manager: 1
+per-channel-buffer-size-per-goroutine: 10
+monitoring:
+  prometheus:
+    enabled: true
+    port: 2120
+logging:
+  level: INFO
+  format: json`
+}
+
+// CommitterSidecarTemplateData represents data specific to sidecar templates
+type CommitterSidecarTemplateData struct {
+	Name             string
+	PartyID          int32
+	MSPID            string
+	Port             int32
+	OrdererEndpoints []string
+	CommitterHost    string
+	CommitterPort    int32
+}
+
+// CommitterValidatorTemplateData represents data specific to validator templates
+type CommitterValidatorTemplateData struct {
+	Name       string
+	PartyID    int32
+	MSPID      string
+	Port       int32
+	PostgreSQL *PostgreSQLTemplateData
+}
+
+// PostgreSQLTemplateData represents PostgreSQL configuration data
+type PostgreSQLTemplateData struct {
+	Host           string
+	Port           int32
+	Password       string
+	Database       string
+	Username       string
+	MaxConnections int32
+	MinConnections int32
+	LoadBalance    bool
+	MaxElapsedTime string
+}
+
+// CommitterVerifierTemplateData represents data specific to verifier templates
+type CommitterVerifierTemplateData struct {
+	Name    string
+	PartyID int32
+	MSPID   string
+	Port    int32
+}
+
 // Common template constants that can be reused across controllers
 const (
 	// BatcherConfigTemplate is the Go template for batcher configuration
@@ -262,4 +345,116 @@ Assembler:
     ReplicationChannelSize: 120
     BatchRequestsChannelSize: 1200
 `
+
+	// CoordinatorConfigTemplate is the Go template for coordinator configuration
+	CoordinatorConfigTemplate = `server:
+  endpoint:
+    host: 0.0.0.0
+    port: {{.Port}}
+verifier:
+  endpoints:
+{{- range .VerifierEndpoints }}
+    - {{ . }}
+{{- end }}
+
+validator-committer:
+  endpoints:
+{{- range .ValidatorCommitterEndpoints }}
+    - {{ . }}
+{{- end }}
+
+dependency-graph:
+  num-of-local-dep-constructors: 4
+  waiting-txs-limit: 20000000
+  num-of-workers-for-global-dep-manager: 1
+per-channel-buffer-size-per-goroutine: 10
+monitoring:
+  prometheus:
+    enabled: true
+    port: 2120
+logging:
+  level: INFO
+  format: json`
+
+	// SidecarConfigTemplate is the Go template for sidecar configuration
+	SidecarConfigTemplate = `server:
+  endpoint: 0.0.0.0:{{.Port}}
+  keep-alive:
+    params:
+      time: 300s
+      timeout: 600s
+    enforcement-policy:
+      min-time: 60s
+      permit-without-stream: false
+orderer:
+  channel-id: arma
+  consensus-type: BFT
+  connection:
+    endpoints:
+{{- range .OrdererEndpoints }}
+      - broadcast,deliver,{{ . }}
+{{- end }}
+
+committer:
+  endpoint:
+    host: {{ .CommitterHost }}
+    port: {{ .CommitterPort }}
+ledger: 
+  path: /var/hyperledger/fabricx/ledger
+last-committed-block-set-interval: 5s
+bootstrap:
+  genesis-block-file-path: 
+monitoring:
+  prometheus:
+    enabled: true
+    port: 2111
+logging:
+  level: INFO
+  format: json`
+
+	// ValidatorConfigTemplate is the Go template for validator configuration
+	ValidatorConfigTemplate = `server:
+  endpoint:
+    host: 0.0.0.0
+    port: {{.Port}}
+database:
+  endpoints:
+    - {{.PostgreSQL.Host}}:{{.PostgreSQL.Port}}
+
+  username: {{.PostgreSQL.Username}}
+  password: {{.PostgreSQL.Password}}
+  database: {{.PostgreSQL.Database}}
+  max-connections: {{.PostgreSQL.MaxConnections}}
+  min-connections: {{.PostgreSQL.MinConnections}}
+  load-balance: {{.PostgreSQL.LoadBalance}}
+  retry:
+    max-elapsed-time: {{.PostgreSQL.MaxElapsedTime}}
+resource-limits:
+  max-workers-for-preparer: 2
+  max-workers-for-validator: 2
+  max-workers-for-committer: 20
+  min-transaction-batch-size: 1000
+monitoring:
+  prometheus:
+    enabled: true
+    port: 2116
+logging:
+  level: INFO
+  format: json`
+
+	// VerifierConfigTemplate is the Go template for verifier configuration
+	VerifierConfigTemplate = `server:
+  endpoint: 0.0.0.0:{{.Port}}
+parallel-executor:
+  batch-size-cutoff: 500
+  batch-time-cutoff: 2ms
+  channel-buffer-size: 1000
+  parallelism: 80
+monitoring:
+  prometheus:
+    enabled: true
+    port: 2115
+logging:
+  level: INFO
+  format: json`
 )
