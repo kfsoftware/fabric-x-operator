@@ -702,11 +702,11 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 									ReadOnly:  true,
 									MountPath: "/etc/hyperledger/fabricx/sidecar",
 								},
-							{
-								Name:      "data",
-								ReadOnly:  false,
-								MountPath: "/var/hyperledger/fabricx/ledger",
-							},
+								{
+									Name:      "data",
+									ReadOnly:  false,
+									MountPath: "/var/hyperledger/fabricx/ledger",
+								},
 								{
 									Name:      "genesis-block",
 									ReadOnly:  true,
@@ -730,7 +730,7 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 							}(),
 						},
 					},
-						Volumes: []corev1.Volume{
+					Volumes: []corev1.Volume{
 						{
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
@@ -739,12 +739,12 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 								},
 							},
 						},
-							{
-								Name: "data",
-								VolumeSource: corev1.VolumeSource{
-									EmptyDir: &corev1.EmptyDirVolumeSource{},
-								},
+						{
+							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
+						},
 						{
 							Name: "genesis-block",
 							VolumeSource: corev1.VolumeSource{
