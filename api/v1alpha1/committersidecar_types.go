@@ -32,6 +32,14 @@ type CommitterSidecarSpec struct {
 	// Party ID
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Image for committer component
+	// +kubebuilder:default="hyperledger/fabric-x-committer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for committer component
+	// +kubebuilder:default="0.1.5"
+	ImageTag string `json:"imageTag,omitempty"`
+
 	// Genesis block configuration
 	Genesis GenesisConfig `json:"genesis"`
 
@@ -88,7 +96,7 @@ type CommitterSidecarSpec struct {
 	CommitterPort int32  `json:"committerPort,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,6 +28,14 @@ type CommitterSpec struct {
 
 	// MSP ID
 	MSPID string `json:"mspid,omitempty"`
+
+	// Image for committer components
+	// +kubebuilder:default="hyperledger/fabric-x-committer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for committer components
+	// +kubebuilder:default="0.1.5"
+	ImageTag string `json:"imageTag,omitempty"`
 
 	// Common configuration applied to all components
 	Common *CommonComponentConfig `json:"common,omitempty"`
@@ -54,6 +63,9 @@ type CommitterComponents struct {
 
 	// Validator configuration
 	Validator *ValidatorComponentConfig `json:"validator,omitempty"`
+
+	// Query Service configuration
+	QueryService *ComponentConfig `json:"queryService,omitempty"`
 
 	// Orderer endpoints shared by sidecar (host:port)
 	OrdererEndpoints []string `json:"ordererEndpoints,omitempty"`
@@ -87,7 +99,7 @@ type ValidatorComponentConfig struct {
 	Endpoints []string `json:"endpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`

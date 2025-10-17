@@ -436,7 +436,9 @@ spec:
                     description: Sign certificate configuration
                     properties:
                       ca:
-                        description: CA configuration
+                        description: |-
+                          CA configuration (for Fabric CA provider)
+                          Deprecated: Use Provider field with type "fabric-ca" for new deployments
                         properties:
                           cahost:
                             description: CA host
@@ -478,6 +480,152 @@ spec:
                             description: Enrollment secret
                             type: string
                         type: object
+                      provider:
+                        description: Provider configuration (new multi-provider support)
+                        properties:
+                          fabricCA:
+                            description: FabricCA contains Fabric CA specific configuration
+                            properties:
+                              caHost:
+                                description: CA server hostname
+                                type: string
+                              caName:
+                                description: CA name (for multi-CA servers)
+                                type: string
+                              caPort:
+                                description: CA server port
+                                format: int32
+                                type: integer
+                              caTLS:
+                                description: CA TLS certificate configuration
+                                properties:
+                                  cacert:
+                                    description: CA certificate (base64 encoded)
+                                    type: string
+                                  secretRef:
+                                    description: Secret reference for CA certificate
+                                    properties:
+                                      key:
+                                        description: Secret key
+                                        type: string
+                                      name:
+                                        description: Secret name
+                                        type: string
+                                      namespace:
+                                        description: Secret namespace
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                              enrollID:
+                                description: Enrollment ID
+                                type: string
+                              enrollSecret:
+                                description: Enrollment secret
+                                type: string
+                            required:
+                            - caHost
+                            - caPort
+                            - enrollID
+                            - enrollSecret
+                            type: object
+                          manual:
+                            description: Manual contains manual certificate management
+                              configuration
+                            properties:
+                              caKey:
+                                description: 'Key in the secret for the CA certificate
+                                  (default: "ca.pem")'
+                                type: string
+                              certKey:
+                                description: 'Key in the secret for the certificate
+                                  (default: "cert.pem")'
+                                type: string
+                              keyKey:
+                                description: 'Key in the secret for the private key
+                                  (default: "key.pem")'
+                                type: string
+                              secretRef:
+                                description: Secret reference containing the certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            required:
+                            - secretRef
+                            type: object
+                          vault:
+                            description: Vault contains Hashicorp Vault specific configuration
+                            properties:
+                              address:
+                                description: Vault server address (e.g., "https://vault.example.com:8200")
+                                type: string
+                              authMethod:
+                                description: |-
+                                  Authentication method: "kubernetes" or "token"
+                                  - kubernetes: Uses Kubernetes service account token
+                                  - token: Uses Vault token from a secret
+                                type: string
+                              namespace:
+                                description: Vault namespace (for Vault Enterprise)
+                                type: string
+                              pkiPath:
+                                description: PKI mount path (e.g., "pki" or "fabric-pki")
+                                type: string
+                              role:
+                                description: Role name for certificate issuance
+                                type: string
+                              serviceAccount:
+                                description: Kubernetes service account name (required
+                                  if authMethod is "kubernetes")
+                                type: string
+                              tokenSecretRef:
+                                description: Vault token secret reference (required
+                                  if authMethod is "token")
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                              ttl:
+                                description: |-
+                                  Certificate TTL (e.g., "8760h" for 1 year)
+                                  If not specified, uses Vault role default
+                                type: string
+                            required:
+                            - address
+                            - authMethod
+                            - pkiPath
+                            - role
+                            type: object
+                        type: object
+                      providerType:
+                        description: |-
+                          Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+                          If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+                          If not specified and CA is nil, defaults to "manual"
+                        type: string
                       sans:
                         description: |-
                           Subject Alternative Names (SANS) for TLS certificates
@@ -499,7 +647,9 @@ spec:
                     description: TLS certificate configuration
                     properties:
                       ca:
-                        description: CA configuration
+                        description: |-
+                          CA configuration (for Fabric CA provider)
+                          Deprecated: Use Provider field with type "fabric-ca" for new deployments
                         properties:
                           cahost:
                             description: CA host
@@ -541,6 +691,152 @@ spec:
                             description: Enrollment secret
                             type: string
                         type: object
+                      provider:
+                        description: Provider configuration (new multi-provider support)
+                        properties:
+                          fabricCA:
+                            description: FabricCA contains Fabric CA specific configuration
+                            properties:
+                              caHost:
+                                description: CA server hostname
+                                type: string
+                              caName:
+                                description: CA name (for multi-CA servers)
+                                type: string
+                              caPort:
+                                description: CA server port
+                                format: int32
+                                type: integer
+                              caTLS:
+                                description: CA TLS certificate configuration
+                                properties:
+                                  cacert:
+                                    description: CA certificate (base64 encoded)
+                                    type: string
+                                  secretRef:
+                                    description: Secret reference for CA certificate
+                                    properties:
+                                      key:
+                                        description: Secret key
+                                        type: string
+                                      name:
+                                        description: Secret name
+                                        type: string
+                                      namespace:
+                                        description: Secret namespace
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                              enrollID:
+                                description: Enrollment ID
+                                type: string
+                              enrollSecret:
+                                description: Enrollment secret
+                                type: string
+                            required:
+                            - caHost
+                            - caPort
+                            - enrollID
+                            - enrollSecret
+                            type: object
+                          manual:
+                            description: Manual contains manual certificate management
+                              configuration
+                            properties:
+                              caKey:
+                                description: 'Key in the secret for the CA certificate
+                                  (default: "ca.pem")'
+                                type: string
+                              certKey:
+                                description: 'Key in the secret for the certificate
+                                  (default: "cert.pem")'
+                                type: string
+                              keyKey:
+                                description: 'Key in the secret for the private key
+                                  (default: "key.pem")'
+                                type: string
+                              secretRef:
+                                description: Secret reference containing the certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            required:
+                            - secretRef
+                            type: object
+                          vault:
+                            description: Vault contains Hashicorp Vault specific configuration
+                            properties:
+                              address:
+                                description: Vault server address (e.g., "https://vault.example.com:8200")
+                                type: string
+                              authMethod:
+                                description: |-
+                                  Authentication method: "kubernetes" or "token"
+                                  - kubernetes: Uses Kubernetes service account token
+                                  - token: Uses Vault token from a secret
+                                type: string
+                              namespace:
+                                description: Vault namespace (for Vault Enterprise)
+                                type: string
+                              pkiPath:
+                                description: PKI mount path (e.g., "pki" or "fabric-pki")
+                                type: string
+                              role:
+                                description: Role name for certificate issuance
+                                type: string
+                              serviceAccount:
+                                description: Kubernetes service account name (required
+                                  if authMethod is "kubernetes")
+                                type: string
+                              tokenSecretRef:
+                                description: Vault token secret reference (required
+                                  if authMethod is "token")
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                              ttl:
+                                description: |-
+                                  Certificate TTL (e.g., "8760h" for 1 year)
+                                  If not specified, uses Vault role default
+                                type: string
+                            required:
+                            - address
+                            - authMethod
+                            - pkiPath
+                            - role
+                            type: object
+                        type: object
+                      providerType:
+                        description: |-
+                          Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+                          If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+                          If not specified and CA is nil, defaults to "manual"
+                        type: string
                       sans:
                         description: |-
                           Subject Alternative Names (SANS) for TLS certificates
@@ -607,6 +903,10 @@ spec:
                 - secretKey
                 - secretName
                 type: object
+              image:
+                default: hyperledger/fabric-x-orderer
+                description: Image for orderer component
+                type: string
               imagePullSecrets:
                 description: Image pull secrets
                 items:
@@ -619,6 +919,10 @@ spec:
                   - name
                   type: object
                 type: array
+              imageTag:
+                default: 0.0.19
+                description: ImageTag for orderer component
+                type: string
               ingress:
                 description: Component-specific ingress configuration
                 properties:

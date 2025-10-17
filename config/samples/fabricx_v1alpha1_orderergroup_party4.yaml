@@ -8,6 +8,8 @@ spec:
     partyID: 4
     bootstrapMode: configure
     mspid: OrdererMSP
+    image: hyperledger/fabric-x-orderer
+    imageTag: "0.0.19"
     common:
         imagePullSecrets: []
         podAnnotations:

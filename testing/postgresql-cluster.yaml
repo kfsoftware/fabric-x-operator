@@ -1,0 +1,46 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgresql
+  namespace: default
+spec:
+  instances: 1
+
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "256MB"
+
+  storage:
+    size: 5Gi
+    storageClass: local-path
+
+  bootstrap:
+    initdb:
+      database: queryservice
+      owner: queryservice
+      secret:
+        name: postgresql-credentials
+
+  superuserSecret:
+    name: postgresql-superuser
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-credentials
+  namespace: default
+type: kubernetes.io/basic-auth
+stringData:
+  username: queryservice
+  password: queryservice123
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgresql-superuser
+  namespace: default
+type: kubernetes.io/basic-auth
+stringData:
+  username: postgres
+  password: postgres123

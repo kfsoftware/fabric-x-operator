@@ -631,14 +631,47 @@ func (r *CommitterSidecarReconciler) updateService(ctx context.Context, committe
 func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, committerSidecar *fabricxv1alpha1.CommitterSidecar) error {
 	log := logf.FromContext(ctx)
 
-	// Compute Secret hash to trigger deployment updates when config changes
-	configMapHash := ""
+	// Compute combined hash of all mounted secrets/configmaps for rollout on change
+	var hashParts []string
+
+	// Hash config secret
 	configSecretName := fmt.Sprintf("%s-config", committerSidecar.Name)
 	if hash, err := r.computeSecretHash(ctx, configSecretName, committerSidecar.Namespace); err != nil {
-		log.Error(err, "Failed to compute Secret hash, continuing without hash", "secretName", configSecretName, "namespace", committerSidecar.Namespace)
+		log.Error(err, "Failed to compute config secret hash", "secretName", configSecretName)
 	} else {
-		configMapHash = hash
+		hashParts = append(hashParts, hash)
 	}
+
+	// Hash sign certificate secret
+	signCertSecretName := fmt.Sprintf("%s-sign-cert", committerSidecar.Name)
+	if hash, err := r.computeSecretHash(ctx, signCertSecretName, committerSidecar.Namespace); err != nil {
+		log.V(1).Info("Sign cert secret not found or failed to hash", "secretName", signCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Hash TLS certificate secret
+	tlsCertSecretName := fmt.Sprintf("%s-tls-cert", committerSidecar.Name)
+	if hash, err := r.computeSecretHash(ctx, tlsCertSecretName, committerSidecar.Namespace); err != nil {
+		log.V(1).Info("TLS cert secret not found or failed to hash", "secretName", tlsCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Hash environment variables to trigger rollout on env change
+	if len(committerSidecar.Spec.Env) > 0 {
+		envString := ""
+		for _, env := range committerSidecar.Spec.Env {
+			envString += fmt.Sprintf("%s=%s|", env.Name, env.Value)
+		}
+		envHashSum := sha256.Sum256([]byte(envString))
+		hashParts = append(hashParts, hex.EncodeToString(envHashSum[:]))
+	}
+
+	// Combine all hashes
+	sort.Strings(hashParts)
+	combinedHashSum := sha256.Sum256([]byte(strings.Join(hashParts, "|")))
+	configMapHash := hex.EncodeToString(combinedHashSum[:])
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -681,7 +714,9 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 					Containers: []corev1.Container{
 						{
 							Name:  "sidecar",
-							Image: "hyperledger/fabric-x-committer:0.1.4",
+							Image: fmt.Sprintf("%s:%s",
+								func() string { if committerSidecar.Spec.Image != "" { return committerSidecar.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
+								func() string { if committerSidecar.Spec.ImageTag != "" { return committerSidecar.Spec.ImageTag }; return "0.1.5" }()),
 							Command: []string{
 								"committer",
 							},
@@ -728,6 +763,7 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 									},
 								}
 							}(),
+							Env: committerSidecar.Spec.Env,
 						},
 					},
 					Volumes: []corev1.Volume{

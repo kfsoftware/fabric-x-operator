@@ -383,11 +383,23 @@ func (r *OrdererGroupReconciler) buildConsenterSpecFromInstance(ordererGroup *fa
 		bootstrapMode = "configure" // Default to configure mode
 	}
 
+	// Set image and tag with defaults
+	image := ordererGroup.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-orderer"
+	}
+	imageTag := ordererGroup.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.0.19"
+	}
+
 	spec := fabricxv1alpha1.OrdererConsenterSpec{
 		BootstrapMode: bootstrapMode,
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       ordererGroup.Spec.PartyID,
 		ConsenterID:   config.ConsenterID,
+		Image:         image,
+		ImageTag:      imageTag,
 		Genesis:       ordererGroup.Spec.Genesis,
 		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
@@ -464,10 +476,22 @@ func (r *OrdererGroupReconciler) buildAssemblerSpec(ordererGroup *fabricxv1alpha
 		bootstrapMode = "configure" // Default to configure mode
 	}
 
+	// Set image and tag with defaults
+	image := ordererGroup.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-orderer"
+	}
+	imageTag := ordererGroup.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.0.19"
+	}
+
 	spec := fabricxv1alpha1.OrdererAssemblerSpec{
 		BootstrapMode: bootstrapMode,
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       ordererGroup.Spec.PartyID,
+		Image:         image,
+		ImageTag:      imageTag,
 		Genesis:       ordererGroup.Spec.Genesis,
 		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
@@ -544,10 +568,22 @@ func (r *OrdererGroupReconciler) buildRouterSpec(ordererGroup *fabricxv1alpha1.O
 		bootstrapMode = "configure" // Default to configure mode
 	}
 
+	// Set image and tag with defaults
+	image := ordererGroup.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-orderer"
+	}
+	imageTag := ordererGroup.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.0.19"
+	}
+
 	spec := fabricxv1alpha1.OrdererRouterSpec{
 		BootstrapMode: bootstrapMode,
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       ordererGroup.Spec.PartyID,
+		Image:         image,
+		ImageTag:      imageTag,
 		Genesis:       ordererGroup.Spec.Genesis,
 		Enrollment:    ordererGroup.Spec.Enrollment,
 	}
@@ -627,11 +663,23 @@ func (r *OrdererGroupReconciler) buildBatcherSpec(ordererGroup *fabricxv1alpha1.
 	// Determine PartyID - use BatcherInstance PartyID if set, otherwise use OrdererGroup PartyID
 	partyID := ordererGroup.Spec.PartyID
 
+	// Set image and tag with defaults
+	image := ordererGroup.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-orderer"
+	}
+	imageTag := ordererGroup.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.0.19"
+	}
+
 	spec := fabricxv1alpha1.OrdererBatcherSpec{
 		BootstrapMode: bootstrapMode,
 		MSPID:         ordererGroup.Spec.MSPID,
 		PartyID:       partyID,
 		ShardID:       config.ShardID,
+		Image:         image,
+		ImageTag:      imageTag,
 		Genesis:       ordererGroup.Spec.Genesis,
 		Enrollment:    ordererGroup.Spec.Enrollment,
 	}

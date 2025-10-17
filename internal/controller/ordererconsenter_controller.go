@@ -588,6 +588,23 @@ func (r *OrdererConsenterReconciler) reconcileConfigMap(ctx context.Context, ord
 		return fmt.Errorf("failed to execute consenter config template: %w", err)
 	}
 
+	// MSP config.yaml content
+	mspConfigContent := `NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+`
+
 	template := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-config", ordererConsenter.Name),
@@ -595,6 +612,7 @@ func (r *OrdererConsenterReconciler) reconcileConfigMap(ctx context.Context, ord
 		},
 		Data: map[string]string{
 			"node_config.yaml": configContent,
+			"msp_config.yaml":  mspConfigContent,
 		},
 	}
 
@@ -1298,16 +1316,27 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 										"mkdir -p %s && "+
 										"cp /sign-certs/cert.pem %s/signcerts/ && "+
 										"cp /sign-certs/key.pem %s/keystore/sign-privateKey.pem && "+
+										"cp /sign-certs/key.pem %s/keystore/priv_sk && "+
 										"cp /sign-certs/ca.pem %s/cacerts/ && "+
+										"cp /config/msp_config.yaml %s/config.yaml && "+
 										"cp /tls-certs/cert.pem %s/server.crt && "+
 										"cp /tls-certs/key.pem %s/server.key && "+
-										"cp /tls-certs/ca.pem %s/ca.crt",
+										"cp /tls-certs/ca.pem %s/ca.crt && "+
+										"echo 'MSP Directory contents:' && ls -lR %s && "+
+										"echo 'TLS Directory contents:' && ls -lR %s",
 									ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir, ConsenterTLSDir,
-									ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir,
+									ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir, ConsenterMSPDir,
+									ConsenterMSPDir,
 									ConsenterTLSDir, ConsenterTLSDir, ConsenterTLSDir,
+									ConsenterMSPDir, ConsenterTLSDir,
 								),
 							},
 							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "config",
+									ReadOnly:  true,
+									MountPath: "/config",
+								},
 								{
 									Name:      "sign-certs",
 									ReadOnly:  true,
@@ -1351,8 +1380,20 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "consenter",
-							Image: "hyperledger/fabric-x-orderer:0.0.17",
+							Name: "consenter",
+							Image: fmt.Sprintf("%s:%s",
+								func() string {
+									if ordererConsenter.Spec.Image != "" {
+										return ordererConsenter.Spec.Image
+									}
+									return "hyperledger/fabric-x-orderer"
+								}(),
+								func() string {
+									if ordererConsenter.Spec.ImageTag != "" {
+										return ordererConsenter.Spec.ImageTag
+									}
+									return "0.0.19"
+								}()),
 							Args: []string{
 								"consensus",
 								fmt.Sprintf("--config=%s/node_config.yaml", ConsenterConfigDir),

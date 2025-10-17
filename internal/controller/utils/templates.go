@@ -110,6 +110,62 @@ type CommitterCoordinatorTemplateData struct {
 	ValidatorCommitterEndpoints []string
 }
 
+// CommitterQueryServiceTemplateData holds configuration data for CommitterQueryService
+type CommitterQueryServiceTemplateData struct {
+	Name       string
+	PartyID    int32
+	MSPID      string
+	Port       int32
+	PostgreSQL *PostgreSQLTemplateData
+}
+
+// BuildQueryServiceConfig returns a Query Service config template
+func BuildQueryServiceConfig(data CommitterQueryServiceTemplateData) string {
+	config := fmt.Sprintf(`server:
+  # The server's endpoint configuration
+  endpoint: 0.0.0.0:%d
+
+# Resource limit configurations
+# A batch will execute once it accumulated this number of keys.
+min-batch-keys: 1024
+# A batch will execute once it waited this much time.
+max-batch-wait: 100ms
+# A new view will be created if the previous view was created before this much time.
+view-aggregation-window: 100ms
+# A new view will be created if the previous view aggregated this number of views.
+max-aggregated-views: 1024
+# A view will be closed if it was opened for longer than this time.
+max-view-timeout: 10s
+`, data.Port)
+
+	// Add database configuration if provided
+	if data.PostgreSQL != nil {
+		config += fmt.Sprintf(`
+database:
+  endpoints:
+    - %s:%d
+  username: %s
+  password: %s
+  database: %s
+  max-connections: %d
+  min-connections: %d
+  load-balance: %t
+  retry:
+    max-elapsed-time: %s
+`, data.PostgreSQL.Host, data.PostgreSQL.Port, data.PostgreSQL.Username,
+			data.PostgreSQL.Password, data.PostgreSQL.Database,
+			data.PostgreSQL.MaxConnections, data.PostgreSQL.MinConnections,
+			data.PostgreSQL.LoadBalance, data.PostgreSQL.MaxElapsedTime)
+	}
+
+	config += fmt.Sprintf(`
+party-id: %d
+msp-id: %s
+`, data.PartyID, data.MSPID)
+
+	return config
+}
+
 // BuildCoordinatorConfig returns a Coordinator config template with provided endpoints
 func BuildCoordinatorConfig(data CommitterCoordinatorTemplateData, verifier []string, validatorCommitter []string) string {
 	v := "\n"

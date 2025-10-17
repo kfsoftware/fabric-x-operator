@@ -128,4 +128,13 @@ resources:
   kind: CommitterVerifier
   path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterQueryService
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

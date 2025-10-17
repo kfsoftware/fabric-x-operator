@@ -1171,8 +1171,20 @@ func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, 
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "assembler",
-							Image: "hyperledger/fabric-x-orderer:0.0.17",
+							Name: "assembler",
+							Image: fmt.Sprintf("%s:%s",
+								func() string {
+									if ordererAssembler.Spec.Image != "" {
+										return ordererAssembler.Spec.Image
+									}
+									return "hyperledger/fabric-x-orderer"
+								}(),
+								func() string {
+									if ordererAssembler.Spec.ImageTag != "" {
+										return ordererAssembler.Spec.ImageTag
+									}
+									return "0.0.19"
+								}()),
 							Args: []string{
 								"assembler",
 								"--config",

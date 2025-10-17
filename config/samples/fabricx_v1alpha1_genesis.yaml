@@ -305,6 +305,7 @@ spec:
             namespace: default
           tlsCert:
             key: cert.pem
+            
             name: orderergroup-party4-batcher-1-tls-cert
             namespace: default
       consenterConfig:

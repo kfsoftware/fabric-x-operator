@@ -1,0 +1,77 @@
+# Example: Endorser in CONFIGURE mode
+# This mode only enrolls certificates and creates secrets
+# It does NOT deploy the endorser application
+# Use this when you want to bootstrap identities first
+
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Endorser
+metadata:
+  labels:
+    app.kubernetes.io/name: fabric-x-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: endorser1
+  namespace: default
+spec:
+  # CONFIGURE MODE: Only create certificates and secrets
+  # Switch to "deploy" after certificates are created
+  bootstrapMode: configure
+
+  mspid: Org1MSP
+  command:
+    - "app"
+  args:
+    - "--conf=/var/hyperledger/fabric/config"
+    - "--port=9000"
+
+  # Enrollment configuration for automatic certificate generation
+  # In configure mode, this will:
+  # 1. Enroll certificates with Fabric CA
+  # 2. Create secrets:
+  #    - endorser1-sign-cert (cert.pem, key.pem, ca.pem)
+  #    - endorser1-tls-cert (cert.pem, key.pem, ca.pem)
+  # 3. NOT deploy the application
+  enrollment:
+    sign:
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: endorser1
+        enrollsecret: endorser1pw
+    tls:
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: endorser1
+        enrollsecret: endorser1pw
+      sans:
+        dnsNames:
+          - endorser1
+          - endorser1.default
+          - endorser1.default.svc.cluster.local
+          - endorser1.example.com
+          - endorser1.localho.st
+
+---
+# After configure mode completes, you can:
+# 1. Check that secrets were created:
+#    kubectl get secret endorser1-sign-cert endorser1-tls-cert
+#
+# 2. Verify certificate contents:
+#    kubectl get secret endorser1-sign-cert -o jsonpath='{.data.cert\.pem}' | base64 -d
+#
+# 3. Switch to deploy mode by changing bootstrapMode to "deploy"
+#    kubectl patch endorser endorser1 --type merge -p '{"spec":{"bootstrapMode":"deploy"}}'
+#
+# Or update the YAML file and apply it again with the full configuration

@@ -379,9 +379,17 @@ type TLSConfig struct {
 
 // CertificateConfig defines full certificate configuration including CA
 type CertificateConfig struct {
+	// Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+	// If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+	// If not specified and CA is nil, defaults to "manual"
+	ProviderType string `json:"providerType,omitempty"`
 
-	// CA configuration
+	// CA configuration (for Fabric CA provider)
+	// Deprecated: Use Provider field with type "fabric-ca" for new deployments
 	CA *CACertificateConfig `json:"ca,omitempty"`
+
+	// Provider configuration (new multi-provider support)
+	Provider *CertificateProviderConfig `json:"provider,omitempty"`
 
 	// Subject Alternative Names (SANS) for TLS certificates
 	// This includes hostnames and IP addresses to be included in the certificate
@@ -457,13 +465,16 @@ type ComponentConfig struct {
 	Endpoints []string `json:"endpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`
 
 	// Component-specific args
 	Args []string `json:"args,omitempty"`
+
+	// PostgreSQL configuration (used by query service and validator)
+	PostgreSQL *PostgreSQLConfig `json:"postgresql,omitempty"`
 }
 
 // ComponentCertificateConfig defines certificate configuration for components
@@ -472,33 +483,6 @@ type ComponentCertificateConfig struct {
 	// Subject Alternative Names (SANS) for TLS certificates
 	// This includes hostnames and IP addresses to be included in the certificate
 	SANS *SANSConfig `json:"sans,omitempty"`
-}
-
-// EnvVar defines an environment variable
-type EnvVar struct {
-	// Variable name
-	Name string `json:"name"`
-
-	// Variable value
-	Value string `json:"value,omitempty"`
-
-	// Value from secret
-	ValueFrom *EnvVarSource `json:"valueFrom,omitempty"`
-}
-
-// EnvVarSource defines the source of an environment variable
-type EnvVarSource struct {
-	// Secret key reference
-	SecretKeyRef *SecretKeySelector `json:"secretKeyRef,omitempty"`
-}
-
-// SecretKeySelector defines a secret key reference
-type SecretKeySelector struct {
-	// Secret name
-	Name string `json:"name"`
-
-	// Secret key
-	Key string `json:"key"`
 }
 
 // GenesisConfig defines genesis block configuration
@@ -523,6 +507,14 @@ type OrdererGroupSpec struct {
 
 	// Party ID for this orderer group
 	PartyID int32 `json:"partyID,omitempty"`
+
+	// Image for orderer components
+	// +kubebuilder:default="hyperledger/fabric-x-orderer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for orderer components
+	// +kubebuilder:default="0.0.19"
+	ImageTag string `json:"imageTag,omitempty"`
 
 	// Common configuration applied to all components
 	Common *CommonComponentConfig `json:"common,omitempty"`
@@ -572,7 +564,7 @@ type BatcherInstance struct {
 	Endpoints []string `json:"endpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`
@@ -602,7 +594,7 @@ type ConsenterInstance struct {
 	Endpoints []string `json:"endpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`
@@ -690,6 +682,84 @@ type ComponentStatus struct {
 
 	// Last update time
 	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+}
+
+// CertificateProviderConfig defines configuration for certificate providers
+type CertificateProviderConfig struct {
+	// FabricCA contains Fabric CA specific configuration
+	FabricCA *FabricCAProviderConfig `json:"fabricCA,omitempty"`
+
+	// Manual contains manual certificate management configuration
+	Manual *ManualProviderConfig `json:"manual,omitempty"`
+
+	// Vault contains Hashicorp Vault specific configuration
+	Vault *VaultProviderConfig `json:"vault,omitempty"`
+}
+
+// FabricCAProviderConfig contains Fabric CA specific configuration
+type FabricCAProviderConfig struct {
+	// CA server hostname
+	CAHost string `json:"caHost"`
+
+	// CA server port
+	CAPort int32 `json:"caPort"`
+
+	// CA name (for multi-CA servers)
+	CAName string `json:"caName,omitempty"`
+
+	// Enrollment ID
+	EnrollID string `json:"enrollID"`
+
+	// Enrollment secret
+	EnrollSecret string `json:"enrollSecret"`
+
+	// CA TLS certificate configuration
+	CATLS *CATLSConfig `json:"caTLS,omitempty"`
+}
+
+// ManualProviderConfig contains configuration for manually provided certificates
+type ManualProviderConfig struct {
+	// Secret reference containing the certificate
+	SecretRef *SecretRef `json:"secretRef"`
+
+	// Key in the secret for the certificate (default: "cert.pem")
+	CertKey string `json:"certKey,omitempty"`
+
+	// Key in the secret for the private key (default: "key.pem")
+	KeyKey string `json:"keyKey,omitempty"`
+
+	// Key in the secret for the CA certificate (default: "ca.pem")
+	CAKey string `json:"caKey,omitempty"`
+}
+
+// VaultProviderConfig contains Hashicorp Vault specific configuration
+type VaultProviderConfig struct {
+	// Vault server address (e.g., "https://vault.example.com:8200")
+	Address string `json:"address"`
+
+	// PKI mount path (e.g., "pki" or "fabric-pki")
+	PKIPath string `json:"pkiPath"`
+
+	// Role name for certificate issuance
+	Role string `json:"role"`
+
+	// Authentication method: "kubernetes" or "token"
+	// - kubernetes: Uses Kubernetes service account token
+	// - token: Uses Vault token from a secret
+	AuthMethod string `json:"authMethod"`
+
+	// Kubernetes service account name (required if authMethod is "kubernetes")
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+
+	// Vault token secret reference (required if authMethod is "token")
+	TokenSecretRef *SecretRef `json:"tokenSecretRef,omitempty"`
+
+	// Vault namespace (for Vault Enterprise)
+	Namespace string `json:"namespace,omitempty"`
+
+	// Certificate TTL (e.g., "8760h" for 1 year)
+	// If not specified, uses Vault role default
+	TTL string `json:"ttl,omitempty"`
 }
 
 // +genclient

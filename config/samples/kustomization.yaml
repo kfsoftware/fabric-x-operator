@@ -13,4 +13,5 @@ resources:
 - fabricx_v1alpha1_committersidecar.yaml
 - fabricx_v1alpha1_committervalidator.yaml
 - fabricx_v1alpha1_committerverifier.yaml
+- fabricx_v1alpha1_committerqueryservice.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

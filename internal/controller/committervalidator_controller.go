@@ -681,14 +681,37 @@ func (r *CommitterValidatorReconciler) updateService(ctx context.Context, commit
 func (r *CommitterValidatorReconciler) reconcileDeployment(ctx context.Context, committerValidator *fabricxv1alpha1.CommitterValidator) error {
 	log := logf.FromContext(ctx)
 
-	// Compute Secret hash to trigger rollout on config change
-	configMapHash := ""
-	secretName := fmt.Sprintf("%s-config", committerValidator.Name)
-	if hash, err := r.computeSecretHash(ctx, secretName, committerValidator.Namespace); err != nil {
-		log.Error(err, "Failed to compute Secret hash, continuing without hash", "secretName", secretName, "namespace", committerValidator.Namespace)
+	// Compute combined hash of all mounted secrets/configmaps for rollout on change
+	var hashParts []string
+
+	// Hash config secret
+	configSecretName := fmt.Sprintf("%s-config", committerValidator.Name)
+	if hash, err := r.computeSecretHash(ctx, configSecretName, committerValidator.Namespace); err != nil {
+		log.Error(err, "Failed to compute config secret hash", "secretName", configSecretName)
 	} else {
-		configMapHash = hash
+		hashParts = append(hashParts, hash)
 	}
+
+	// Hash sign certificate secret
+	signCertSecretName := fmt.Sprintf("%s-sign-cert", committerValidator.Name)
+	if hash, err := r.computeSecretHash(ctx, signCertSecretName, committerValidator.Namespace); err != nil {
+		log.V(1).Info("Sign cert secret not found or failed to hash", "secretName", signCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Hash TLS certificate secret
+	tlsCertSecretName := fmt.Sprintf("%s-tls-cert", committerValidator.Name)
+	if hash, err := r.computeSecretHash(ctx, tlsCertSecretName, committerValidator.Namespace); err != nil {
+		log.V(1).Info("TLS cert secret not found or failed to hash", "secretName", tlsCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Combine all hashes
+	sort.Strings(hashParts)
+	combinedHashSum := sha256.Sum256([]byte(strings.Join(hashParts, "|")))
+	configMapHash := hex.EncodeToString(combinedHashSum[:])
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -742,7 +765,9 @@ func (r *CommitterValidatorReconciler) reconcileDeployment(ctx context.Context, 
 					Containers: []corev1.Container{
 						{
 							Name:  "validator",
-							Image: "hyperledger/fabric-x-committer:0.1.4",
+							Image: fmt.Sprintf("%s:%s",
+								func() string { if committerValidator.Spec.Image != "" { return committerValidator.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
+								func() string { if committerValidator.Spec.ImageTag != "" { return committerValidator.Spec.ImageTag }; return "0.1.5" }()),
 							Command: []string{
 								"committer",
 							},

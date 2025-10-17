@@ -625,14 +625,37 @@ func (r *CommitterCoordinatorReconciler) updateService(ctx context.Context, comm
 func (r *CommitterCoordinatorReconciler) reconcileDeployment(ctx context.Context, committerCoordinator *fabricxv1alpha1.CommitterCoordinator) error {
 	log := logf.FromContext(ctx)
 
-	// Compute Secret hash for rollout on change
-	configMapHash := ""
-	secretName := fmt.Sprintf("%s-config", committerCoordinator.Name)
-	if hash, err := r.computeSecretHash(ctx, secretName, committerCoordinator.Namespace); err != nil {
-		log.Error(err, "Failed to compute Secret hash, continuing without hash", "secretName", secretName, "namespace", committerCoordinator.Namespace)
+	// Compute combined hash of all mounted secrets/configmaps for rollout on change
+	var hashParts []string
+
+	// Hash config secret
+	configSecretName := fmt.Sprintf("%s-config", committerCoordinator.Name)
+	if hash, err := r.computeSecretHash(ctx, configSecretName, committerCoordinator.Namespace); err != nil {
+		log.Error(err, "Failed to compute config secret hash", "secretName", configSecretName)
 	} else {
-		configMapHash = hash
+		hashParts = append(hashParts, hash)
 	}
+
+	// Hash sign certificate secret
+	signCertSecretName := fmt.Sprintf("%s-sign-cert", committerCoordinator.Name)
+	if hash, err := r.computeSecretHash(ctx, signCertSecretName, committerCoordinator.Namespace); err != nil {
+		log.V(1).Info("Sign cert secret not found or failed to hash", "secretName", signCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Hash TLS certificate secret
+	tlsCertSecretName := fmt.Sprintf("%s-tls-cert", committerCoordinator.Name)
+	if hash, err := r.computeSecretHash(ctx, tlsCertSecretName, committerCoordinator.Namespace); err != nil {
+		log.V(1).Info("TLS cert secret not found or failed to hash", "secretName", tlsCertSecretName)
+	} else {
+		hashParts = append(hashParts, hash)
+	}
+
+	// Combine all hashes
+	sort.Strings(hashParts)
+	combinedHashSum := sha256.Sum256([]byte(strings.Join(hashParts, "|")))
+	configMapHash := hex.EncodeToString(combinedHashSum[:])
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -675,7 +698,9 @@ func (r *CommitterCoordinatorReconciler) reconcileDeployment(ctx context.Context
 					Containers: []corev1.Container{
 						{
 							Name:  "coordinator",
-							Image: "hyperledger/fabric-x-committer:0.1.4",
+							Image: fmt.Sprintf("%s:%s",
+								func() string { if committerCoordinator.Spec.Image != "" { return committerCoordinator.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
+								func() string { if committerCoordinator.Spec.ImageTag != "" { return committerCoordinator.Spec.ImageTag }; return "0.1.5" }()),
 							Command: []string{
 								"committer",
 							},

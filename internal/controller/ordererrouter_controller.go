@@ -886,8 +886,20 @@ func (r *OrdererRouterReconciler) getDeploymentTemplate(ctx context.Context, ord
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "router",
-							Image: "hyperledger/fabric-x-orderer:0.0.17",
+							Name: "router",
+							Image: fmt.Sprintf("%s:%s",
+								func() string {
+									if ordererRouter.Spec.Image != "" {
+										return ordererRouter.Spec.Image
+									}
+									return "hyperledger/fabric-x-orderer"
+								}(),
+								func() string {
+									if ordererRouter.Spec.ImageTag != "" {
+										return ordererRouter.Spec.ImageTag
+									}
+									return "0.0.19"
+								}()),
 							Args: []string{
 								"router",
 								"--config=/etc/hyperledger/fabricx/router/config/node_config.yaml",

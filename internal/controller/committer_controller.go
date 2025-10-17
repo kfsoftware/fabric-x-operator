@@ -169,6 +169,11 @@ func (r *CommitterReconciler) reconcileChildCRDs(ctx context.Context, committer 
 		return fmt.Errorf("failed to reconcile verifier CRD: %w", err)
 	}
 
+	// Reconcile Query Service CRD
+	if err := r.reconcileQueryServiceCRD(ctx, committer); err != nil {
+		return fmt.Errorf("failed to reconcile query service CRD: %w", err)
+	}
+
 	return nil
 }
 
@@ -211,10 +216,22 @@ func (r *CommitterReconciler) reconcileCoordinatorCRD(ctx context.Context, commi
 
 // buildCoordinatorSpec builds the Coordinator spec from Committer spec
 func (r *CommitterReconciler) buildCoordinatorSpec(committer *fabricxv1alpha1.Committer) fabricxv1alpha1.CommitterCoordinatorSpec {
+	// Set image and tag with defaults
+	image := committer.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-committer"
+	}
+	imageTag := committer.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.1.5"
+	}
+
 	spec := fabricxv1alpha1.CommitterCoordinatorSpec{
 		BootstrapMode: committer.Spec.BootstrapMode,
 		MSPID:         committer.Spec.MSPID,
 		PartyID:       1, // Default PartyID for committer components
+		Image:         image,
+		ImageTag:      imageTag,
 		Replicas:      1,
 	}
 
@@ -289,10 +306,22 @@ func (r *CommitterReconciler) reconcileSidecarCRD(ctx context.Context, committer
 
 // buildSidecarSpec builds the Sidecar spec from Committer spec
 func (r *CommitterReconciler) buildSidecarSpec(committer *fabricxv1alpha1.Committer) fabricxv1alpha1.CommitterSidecarSpec {
+	// Set image and tag with defaults
+	image := committer.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-committer"
+	}
+	imageTag := committer.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.1.5"
+	}
+
 	spec := fabricxv1alpha1.CommitterSidecarSpec{
 		BootstrapMode: committer.Spec.BootstrapMode,
 		MSPID:         committer.Spec.MSPID,
 		PartyID:       1, // Default PartyID for committer components
+		Image:         image,
+		ImageTag:      imageTag,
 		Replicas:      1,
 		Genesis:       committer.Spec.Genesis,
 	}
@@ -380,10 +409,22 @@ func (r *CommitterReconciler) reconcileValidatorCRD(ctx context.Context, committ
 
 // buildValidatorSpec builds the Validator spec from Committer spec
 func (r *CommitterReconciler) buildValidatorSpec(committer *fabricxv1alpha1.Committer) fabricxv1alpha1.CommitterValidatorSpec {
+	// Set image and tag with defaults
+	image := committer.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-committer"
+	}
+	imageTag := committer.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.1.5"
+	}
+
 	spec := fabricxv1alpha1.CommitterValidatorSpec{
 		BootstrapMode: committer.Spec.BootstrapMode,
 		MSPID:         committer.Spec.MSPID,
 		PartyID:       1, // Default PartyID for committer components
+		Image:         image,
+		ImageTag:      imageTag,
 		Replicas:      1,
 	}
 
@@ -456,10 +497,22 @@ func (r *CommitterReconciler) reconcileVerifierCRD(ctx context.Context, committe
 
 // buildVerifierSpec builds the Verifier spec from Committer spec
 func (r *CommitterReconciler) buildVerifierSpec(committer *fabricxv1alpha1.Committer) fabricxv1alpha1.CommitterVerifierSpec {
+	// Set image and tag with defaults
+	image := committer.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-committer"
+	}
+	imageTag := committer.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.1.5"
+	}
+
 	spec := fabricxv1alpha1.CommitterVerifierSpec{
 		BootstrapMode: committer.Spec.BootstrapMode,
 		MSPID:         committer.Spec.MSPID,
 		PartyID:       1, // Default PartyID for committer components
+		Image:         image,
+		ImageTag:      imageTag,
 		Replicas:      1,
 	}
 
@@ -487,6 +540,94 @@ func (r *CommitterReconciler) buildVerifierSpec(committer *fabricxv1alpha1.Commi
 		spec.Env = committer.Spec.Components.VerifierService.Env
 		spec.Command = committer.Spec.Components.VerifierService.Command
 		spec.Args = committer.Spec.Components.VerifierService.Args
+	}
+
+	return spec
+}
+
+// reconcileQueryServiceCRD creates or updates the Query Service CRD
+func (r *CommitterReconciler) reconcileQueryServiceCRD(ctx context.Context, committer *fabricxv1alpha1.Committer) error {
+	log := logf.FromContext(ctx)
+
+	queryServiceName := fmt.Sprintf("%s-query-service", committer.Name)
+	queryService := &fabricxv1alpha1.CommitterQueryService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      queryServiceName,
+			Namespace: committer.Namespace,
+		},
+	}
+
+	// Check if query service already exists
+	err := r.Get(ctx, client.ObjectKey{Name: queryServiceName, Namespace: committer.Namespace}, queryService)
+	if err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			// Query service doesn't exist, create it
+			queryService.Spec = r.buildQueryServiceSpec(committer)
+			if err := r.Create(ctx, queryService); err != nil {
+				return fmt.Errorf("failed to create query service CRD: %w", err)
+			}
+			log.Info("Created query service CRD", "name", queryServiceName)
+		} else {
+			return fmt.Errorf("failed to check query service CRD: %w", err)
+		}
+	} else {
+		// Query service exists, update it
+		queryService.Spec = r.buildQueryServiceSpec(committer)
+		if err := r.Update(ctx, queryService); err != nil {
+			return fmt.Errorf("failed to update query service CRD: %w", err)
+		}
+		log.Info("Updated query service CRD", "name", queryServiceName)
+	}
+
+	return nil
+}
+
+// buildQueryServiceSpec builds the Query Service spec from Committer spec
+func (r *CommitterReconciler) buildQueryServiceSpec(committer *fabricxv1alpha1.Committer) fabricxv1alpha1.CommitterQueryServiceSpec {
+	// Set image and tag with defaults
+	image := committer.Spec.Image
+	if image == "" {
+		image = "hyperledger/fabric-x-committer"
+	}
+	imageTag := committer.Spec.ImageTag
+	if imageTag == "" {
+		imageTag = "0.1.5"
+	}
+
+	spec := fabricxv1alpha1.CommitterQueryServiceSpec{
+		BootstrapMode: committer.Spec.BootstrapMode,
+		MSPID:         committer.Spec.MSPID,
+		PartyID:       1, // Default PartyID for committer components
+		Image:         image,
+		ImageTag:      imageTag,
+		Replicas:      1,
+	}
+
+	// Copy common configuration if available
+	if committer.Spec.Common != nil {
+		spec.Replicas = committer.Spec.Common.Replicas
+		spec.Storage = committer.Spec.Common.Storage
+		spec.Resources = committer.Spec.Common.Resources
+		spec.SecurityContext = committer.Spec.Common.SecurityContext
+		spec.PodAnnotations = committer.Spec.Common.PodAnnotations
+		spec.PodLabels = committer.Spec.Common.PodLabels
+		spec.Volumes = committer.Spec.Common.Volumes
+		spec.Affinity = committer.Spec.Common.Affinity
+		spec.VolumeMounts = committer.Spec.Common.VolumeMounts
+		spec.ImagePullSecrets = committer.Spec.Common.ImagePullSecrets
+		spec.Tolerations = committer.Spec.Common.Tolerations
+	}
+
+	// Copy component-specific configuration if available
+	if committer.Spec.Components.QueryService != nil {
+		spec.Ingress = committer.Spec.Components.QueryService.Ingress
+		spec.Enrollment = committer.Spec.Components.QueryService.Enrollment
+		spec.SANS = committer.Spec.Components.QueryService.SANS
+		spec.Endpoints = committer.Spec.Components.QueryService.Endpoints
+		spec.Env = committer.Spec.Components.QueryService.Env
+		spec.Command = committer.Spec.Components.QueryService.Command
+		spec.Args = committer.Spec.Components.QueryService.Args
+		spec.PostgreSQL = committer.Spec.Components.QueryService.PostgreSQL
 	}
 
 	return spec

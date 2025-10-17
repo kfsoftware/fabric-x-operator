@@ -1,0 +1,224 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Endorser
+metadata:
+  labels:
+    app.kubernetes.io/name: fabric-x-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: org1-issuer
+  namespace: default
+spec:
+  bootstrapMode: configure
+  mspid: Org1MSP
+  image: token-sdk-issuer
+  version: fabricx-latest
+  command:
+    - "app"
+  args:
+    - "--conf=/var/hyperledger/fabric/config"
+    - "--port=9000"
+
+  common:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    podAnnotations:
+      prometheus.io/port: "9090"
+      prometheus.io/scrape: "true"
+    podLabels:
+      app.kubernetes.io/component: issuer
+      app.kubernetes.io/part-of: fabric-x
+
+    volumes:
+      - name: data
+        volumeSource:
+          persistentVolumeClaim:
+            claimName: org1-issuer-data
+            readOnly: false
+
+    volumeMounts:
+      - name: data
+        mountPath: /var/hyperledger/fabric/data
+        readOnly: false
+      - name: data
+        mountPath: /var/hyperledger/fabric/config/data
+        readOnly: false
+
+  core:
+    logging:
+      spec: info
+      format: "%{color}%{time:15:04:05.000} [%{module}] %{shortfunc} %{level:.4s}%{color:reset} %{message}"
+
+    fsc:
+      id: issuer
+      identity:
+        cert:
+          file: ""
+        key:
+          file: ""
+      p2p:
+        listenAddress: /ip4/0.0.0.0/tcp/9101
+        type: websocket
+        opts:
+          routing:
+            inline:
+              {
+                "issuer": { "parties": ["issuer"], "aliases": [] },
+                "auditor": { "parties": ["auditor"], "aliases": [] },
+                "endorser1": { "parties": ["endorser1"], "aliases": [] },
+                "endorser2": { "parties": ["endorser2"], "aliases": [] },
+                "owner1": { "parties": ["owner1"], "aliases": [] },
+                "owner2": { "parties": ["owner2"], "aliases": [] },
+              }
+      persistences:
+        default:
+          type: sqlite
+          opts:
+            dataSource: file:/var/hyperledger/fabric/data/fts.sqlite
+      endpoint:
+        resolvers:
+          - name: auditor
+            identity:
+              id: auditor
+              secretRef:
+                name: org1-auditor-tls-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: auditor.example.com:9201
+          - name: endorser1
+            identity:
+              id: endorser1
+              secretRef:
+                name: org1-endorser1-tls-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: endorser1.example.com:9301
+          - name: endorser2
+            identity:
+              id: endorser2
+              secretRef:
+                name: org1-endorser2-tls-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: endorser2.example.com:9401
+          - name: owner1
+            identity:
+              id: owner1
+              secretRef:
+                name: org1-owner1-tls-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: owner1.example.com:9501
+          - name: owner2
+            identity:
+              id: owner2
+              secretRef:
+                name: org1-owner2-tls-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: owner2.example.com:9601
+
+    fabric:
+      enabled: true
+      default:
+        driver: fabricx
+        defaultMSP: user
+        msps:
+          - id: user
+            mspType: bccsp
+            mspID: Org1MSP
+            path: ./keys/fabric/user
+        tls:
+          enabled: false
+        peers:
+          - address: fabric-x-committer-sidecar-service.default:5050
+            usage: delivery
+        queryService:
+          - address: fabric-x-committer-query-service-service.default:9001
+        channels:
+          - name: mychannel
+            default: true
+
+    token:
+      enabled: true
+      tms:
+        mytms:
+          network: default
+          channel: mychannel
+          namespace: token_namespace
+          driver: zkatdlog
+          services:
+            network:
+              fabric:
+                fsc_endorsement:
+                  endorser: false
+                  id: issuer
+                  policy:
+                    type: all
+                  endorsers:
+                    - endorser1
+                    - endorser2
+
+  enrollment:
+    sign:
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+    tls:
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+      sans:
+        dnsNames:
+          - org1-issuer
+          - org1-issuer.default
+          - org1-issuer.default.svc.cluster.local
+          - issuer.example.com
+
+  ingress:
+    istio:
+      hosts:
+        - issuer.localho.st
+      ingressGateway: istio-ingressgateway
+      port: 443
+      tls:
+        enabled: true
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: org1-issuer-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path

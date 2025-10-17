@@ -7,6 +7,8 @@ metadata:
 spec:
   bootstrapMode: deploy
   mspid: CommitterMSP
+  image: hyperledger/fabric-x-committer
+  imageTag: "0.1.5"
   common:
     replicas: 1
     resources:
@@ -17,8 +19,8 @@ spec:
         cpu: 500m
         memory: 512Mi
     podAnnotations:
-      prometheus.io/port: '8080'
-      prometheus.io/scrape: 'true'
+      prometheus.io/port: "8080"
+      prometheus.io/scrape: "true"
     podLabels:
       app.kubernetes.io/component: fabric-x
       app.kubernetes.io/part-of: committer
@@ -69,10 +71,10 @@ spec:
           cpu: 1500m
           memory: 2Gi
       env:
-        - name: SIDECAR_LOG_LEVEL
-          value: INFO
-        - name: SIDECAR_CHANNEL_ID
-          value: arma
+        - name: SC_SIDECAR_LOG_LEVEL
+          value: DEBUG
+        - name: SC_SIDECAR_ORDERER_CHANNEL_ID
+          value: mychannel
       ingress:
         istio:
           hosts:
@@ -82,20 +84,20 @@ spec:
     validator:
       replicas: 1
       postgresql:
-        host: 192.168.0.20
+        host: postgresql-rw.default.svc.cluster.local
         port: 5432
-        database: kubernetes_validator
-        username: postgres
+        database: queryservice
+        username: queryservice
         passwordSecret:
-          name: postgres-password-secret
-          key: password
+          name: postgresql-credentials
           namespace: default
+          key: password
         maxConnections: 100
         minConnections: 10
-        loadBalance: false
+        loadBalance: true
         retry:
-          maxElapsedTime: 30s
-        
+          maxElapsedTime: 5m
+
       resources:
         requests:
           cpu: 200m
@@ -132,6 +134,43 @@ spec:
             - verifier-committer.localho.st
           ingressGateway: ingressgateway
           port: 443
+    queryService:
+      replicas: 1
+      resources:
+        requests:
+          cpu: 200m
+          memory: 256Mi
+        limits:
+          cpu: 1000m
+          memory: 1Gi
+      env:
+        - name: QUERY_SERVICE_LOG_LEVEL
+          value: INFO
+      command:
+        - committer
+      args:
+        - start-query
+        - --config=/config/config.yaml
+      ingress:
+        istio:
+          hosts:
+            - query-service-committer.localho.st
+          ingressGateway: ingressgateway
+          port: 443
+      postgresql:
+        host: postgresql-rw.default.svc.cluster.local
+        port: 5432
+        database: queryservice
+        username: queryservice
+        passwordSecret:
+          name: postgresql-credentials
+          namespace: default
+          key: password
+        maxConnections: 50
+        minConnections: 10
+        loadBalance: false
+        retry:
+          maxElapsedTime: 5m
   enrollment:
     sign:
       ca:
@@ -157,4 +196,3 @@ spec:
             namespace: default
         enrollid: admin
         enrollsecret: adminpw
-

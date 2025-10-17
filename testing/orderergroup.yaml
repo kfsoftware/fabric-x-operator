@@ -4,13 +4,15 @@ metadata:
   name: orderergroup-sample
   namespace: default
 spec:
-  bootstrapMode: deploy
+  bootstrapMode: configure
+  image: hyperledger/fabric-x-orderer
+  imageTag: 0.0.19
   common:
     imagePullSecrets:
       - name: fabric-x-registry
     podAnnotations:
-      prometheus.io/port: '8080'
-      prometheus.io/scrape: 'true'
+      prometheus.io/port: "8080"
+      prometheus.io/scrape: "true"
     podLabels:
       app.kubernetes.io/component: fabric-x
       app.kubernetes.io/part-of: orderergroup
@@ -66,7 +68,7 @@ spec:
         enrollsecret: ordererpw
       env:
         - name: ASSEMBLER_MAX_MESSAGE_COUNT
-          value: '500'
+          value: "500"
       ingress:
         istio:
           hosts:
@@ -89,7 +91,7 @@ spec:
           - name: BATCHER_TIMEOUT
             value: 2s
           - name: BATCHER_PREFERRED_MAX_BYTES
-            value: '2097152'
+            value: "2097152"
         ingress:
           istio:
             hosts:
@@ -98,7 +100,7 @@ spec:
             port: 443
         podLabels:
           fabric-x/batcher-type: high-throughput
-          fabric-x/shard-id: '1'
+          fabric-x/shard-id: "1"
         replicas: 1
         shardID: 1
         tolerations:
@@ -120,7 +122,7 @@ spec:
           - name: BATCHER_TIMEOUT
             value: 2s
           - name: BATCHER_PREFERRED_MAX_BYTES
-            value: '2097152'
+            value: "2097152"
         ingress:
           istio:
             hosts:
@@ -129,7 +131,7 @@ spec:
             port: 443
         podLabels:
           fabric-x/batcher-type: high-throughput
-          fabric-x/shard-id: '2'
+          fabric-x/shard-id: "2"
         replicas: 1
         shardID: 2
         tolerations:
@@ -161,7 +163,7 @@ spec:
         - name: CONSENTER_TYPE
           value: raft
         - name: CONSENTER_BATCH_SIZE
-          value: '500'
+          value: "500"
       ingress:
         istio:
           hosts:
@@ -169,7 +171,7 @@ spec:
           ingressGateway: istio-ingressgateway
           port: 443
       podAnnotations:
-        fabric-x/consenter-batch-size: '500'
+        fabric-x/consenter-batch-size: "500"
         fabric-x/consenter-type: raft
       replicas: 4
       volumeMounts:
@@ -193,7 +195,7 @@ spec:
         enrollsecret: ordererpw
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
-          value: '1000'
+          value: "1000"
       imagePullSecrets:
         - name: router-registry
         - name: fabric-x-registry

@@ -32,6 +32,14 @@ type CommitterCoordinatorSpec struct {
 	// Party ID
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Image for committer component
+	// +kubebuilder:default="hyperledger/fabric-x-committer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for committer component
+	// +kubebuilder:default="0.1.5"
+	ImageTag string `json:"imageTag,omitempty"`
+
 	// Replicas for this component
 	Replicas int32 `json:"replicas,omitempty"`
 
@@ -84,7 +92,7 @@ type CommitterCoordinatorSpec struct {
 	ValidatorCommitterEndpoints []string `json:"validatorCommitterEndpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`

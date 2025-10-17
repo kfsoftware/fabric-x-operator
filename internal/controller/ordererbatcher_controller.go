@@ -529,6 +529,23 @@ func (r *OrdererBatcherReconciler) reconcileConfigMap(ctx context.Context, order
 		return fmt.Errorf("failed to execute batcher config template: %w", err)
 	}
 
+	// MSP config.yaml content
+	mspConfigContent := `NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+`
+
 	template := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-config", ordererBatcher.Name),
@@ -536,6 +553,7 @@ func (r *OrdererBatcherReconciler) reconcileConfigMap(ctx context.Context, order
 		},
 		Data: map[string]string{
 			"node_config.yaml": configContent,
+			"msp_config.yaml":  mspConfigContent,
 		},
 	}
 
@@ -1401,16 +1419,27 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 										"mkdir -p /%s/tls && "+
 										"cp /sign-certs/cert.pem /%s/msp/signcerts/ && "+
 										"cp /sign-certs/key.pem /%s/msp/keystore/sign-privateKey.pem && "+
+										"cp /sign-certs/key.pem /%s/msp/keystore/priv_sk && "+
 										"cp /sign-certs/ca.pem /%s/msp/cacerts/ && "+
+										"cp /config/msp_config.yaml /%s/msp/config.yaml && "+
 										"cp /tls-certs/cert.pem /%s/tls/server.crt && "+
 										"cp /tls-certs/key.pem /%s/tls/server.key && "+
-										"cp /tls-certs/ca.pem /%s/tls/ca.crt",
+										"cp /tls-certs/ca.pem /%s/tls/ca.crt && "+
+										"echo 'MSP Directory contents:' && ls -lR /%s/msp && "+
+										"echo 'TLS Directory contents:' && ls -lR /%s/tls",
 									ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name,
+									ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name,
+									ordererBatcher.Name,
 									ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name,
-									ordererBatcher.Name, ordererBatcher.Name, ordererBatcher.Name,
+									ordererBatcher.Name, ordererBatcher.Name,
 								),
 							},
 							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "config",
+									ReadOnly:  true,
+									MountPath: "/config",
+								},
 								{
 									Name:      "sign-certs",
 									ReadOnly:  true,
@@ -1453,8 +1482,20 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "batcher",
-							Image: "hyperledger/fabric-x-orderer:0.0.17",
+							Name: "batcher",
+							Image: fmt.Sprintf("%s:%s",
+								func() string {
+									if ordererBatcher.Spec.Image != "" {
+										return ordererBatcher.Spec.Image
+									}
+									return "hyperledger/fabric-x-orderer"
+								}(),
+								func() string {
+									if ordererBatcher.Spec.ImageTag != "" {
+										return ordererBatcher.Spec.ImageTag
+									}
+									return "0.0.19"
+								}()),
 							Args: []string{
 								"batcher",
 								"--config=/config/node_config.yaml",

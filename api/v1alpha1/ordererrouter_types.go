@@ -34,6 +34,14 @@ type OrdererRouterSpec struct {
 	// Party ID for this router
 	PartyID int32 `json:"partyID,omitempty"`
 
+	// Image for orderer component
+	// +kubebuilder:default="hyperledger/fabric-x-orderer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for orderer component
+	// +kubebuilder:default="0.0.19"
+	ImageTag string `json:"imageTag,omitempty"`
+
 	// Genesis block configuration
 	Genesis GenesisConfig `json:"genesis"`
 
@@ -85,7 +93,7 @@ type OrdererRouterSpec struct {
 	Endpoints []string `json:"endpoints,omitempty"`
 
 	// Component-specific environment variables
-	Env []EnvVar `json:"env,omitempty"`
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Component-specific command
 	Command []string `json:"command,omitempty"`

@@ -36,6 +36,7 @@ rules:
   resources:
   - cas
   - committercoordinators
+  - committerqueryservices
   - committers
   - committersidecars
   - committervalidators
@@ -60,6 +61,7 @@ rules:
   resources:
   - cas/finalizers
   - committercoordinators/finalizers
+  - committerqueryservices/finalizers
   - committers/finalizers
   - committersidecars/finalizers
   - committervalidators/finalizers
@@ -77,6 +79,7 @@ rules:
   resources:
   - cas/status
   - committercoordinators/status
+  - committerqueryservices/status
   - committers/status
   - committersidecars/status
   - committervalidators/status
