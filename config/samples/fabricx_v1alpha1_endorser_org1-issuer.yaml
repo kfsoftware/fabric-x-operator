@@ -145,7 +145,7 @@ spec:
         queryService:
           - address: fabric-x-committer-query-service-service.default:9001
         channels:
-          - name: mychannel
+          - name: arma
             default: true
 
     token:

@@ -755,6 +755,793 @@ The endorser pod has multiple volume mounts:
 
 ---
 
+## MSP Configuration for Orderer Components
+
+### Problem
+Orderer consenter and batcher pods were failing with error:
+```
+administrators must be declared when no admin ou classification is set
+```
+
+This occurred because the MSP directory structure was missing the `config.yaml` file that defines NodeOUs (Node Organizational Units).
+
+### Solution
+Create a `config.yaml` file with NodeOUs configuration and mount it in the MSP directory structure.
+
+### Implementation
+
+#### 1. Add msp_config.yaml to ConfigMap
+
+For both consenter and batcher controllers, add the MSP config content to the ConfigMap:
+
+**OrdererConsenter** ([internal/controller/ordererconsenter_controller.go:591-617](internal/controller/ordererconsenter_controller.go)):
+
+```go
+// MSP config.yaml content
+mspConfigContent := `NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+`
+
+template := &corev1.ConfigMap{
+    ObjectMeta: metav1.ObjectMeta{
+        Name:      fmt.Sprintf("%s-config", ordererConsenter.Name),
+        Namespace: ordererConsenter.Namespace,
+    },
+    Data: map[string]string{
+        "node_config.yaml": configContent,
+        "msp_config.yaml":  mspConfigContent,  // Added MSP config
+    },
+}
+```
+
+#### 2. Update Init Container to Copy config.yaml
+
+Modify the init container command to copy the MSP config file:
+
+```go
+// In init container command
+"cp /config/msp_config.yaml %s/config.yaml && "+
+```
+
+#### 3. Mount Config Volume in Init Container
+
+Add the config volume mount to the init container:
+
+```go
+{
+    Name:      "config",
+    ReadOnly:  true,
+    MountPath: "/config",
+},
+```
+
+### Same Pattern for Batcher
+
+The exact same implementation was applied to OrdererBatcher controller ([internal/controller/ordererbatcher_controller.go:532-558](internal/controller/ordererbatcher_controller.go)).
+
+### Result
+
+After applying this fix:
+- Consenter pods: Running (1/1)
+- Batcher pods: Running (1/1)
+- MSP structure now includes:
+  - `msp/cacerts/ca.pem`
+  - `msp/signcerts/sign-cert.pem`
+  - `msp/keystore/priv_sk`
+  - `msp/config.yaml` ✓ (added)
+
+### MSP Directory Structure
+
+The complete MSP directory structure mounted in orderer pods:
+
+```
+/var/hyperledger/fabricx/msp/
+├── cacerts/
+│   └── ca.pem
+├── signcerts/
+│   └── sign-cert.pem
+├── keystore/
+│   └── priv_sk
+└── config.yaml (defines NodeOUs)
+```
+
+---
+
+## MSP Configuration for Endorser Components
+
+### Problem
+Endorser applications were failing with:
+```
+stat /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts: no such file or directory
+```
+
+Endorsers expected MSP files at a specific path but had no mechanism to create them.
+
+### Solution
+Add an init container to create the MSP directory structure with certificates and config.yaml inline.
+
+### Implementation
+
+#### 1. Add Init Container to Endorser Deployment
+
+In [internal/controller/endorser_controller.go:517-566](internal/controller/endorser_controller.go):
+
+```go
+mspBasePath := "/var/hyperledger/fabric/config/keys/fabric/user"
+deployment.Spec.Template.Spec.InitContainers = append(deployment.Spec.Template.Spec.InitContainers, corev1.Container{
+    Name:  "setup-msp",
+    Image: "busybox:1.35",
+    Command: []string{
+        "/bin/sh",
+        "-c",
+        fmt.Sprintf(
+            "echo 'Creating MSP directory at: %s' && "+
+                "mkdir -p %s/signcerts && "+
+                "mkdir -p %s/keystore && "+
+                "mkdir -p %s/cacerts && "+
+                "echo 'Copying certificates...' && "+
+                "cp /sign-certs/cert.pem %s/signcerts/cert.pem && "+
+                "cp /sign-certs/key.pem %s/keystore/key.pem && "+
+                "cp /sign-certs/key.pem %s/keystore/priv_sk && "+
+                "cp /sign-certs/ca.pem %s/cacerts/ca.pem && "+
+                "echo 'Creating config.yaml...' && "+
+                "cat > %s/config.yaml <<'MSPEOF'\n"+
+                "NodeOUs:\n"+
+                "  Enable: true\n"+
+                "  ClientOUIdentifier:\n"+
+                "    Certificate: cacerts/ca.pem\n"+
+                "    OrganizationalUnitIdentifier: client\n"+
+                "  PeerOUIdentifier:\n"+
+                "    Certificate: cacerts/ca.pem\n"+
+                "    OrganizationalUnitIdentifier: peer\n"+
+                "  AdminOUIdentifier:\n"+
+                "    Certificate: cacerts/ca.pem\n"+
+                "    OrganizationalUnitIdentifier: admin\n"+
+                "  OrdererOUIdentifier:\n"+
+                "    Certificate: cacerts/ca.pem\n"+
+                "    OrganizationalUnitIdentifier: orderer\n"+
+                "MSPEOF\n"+
+                "echo 'MSP Directory contents:' && ls -lR /var/hyperledger/fabric/config/keys",
+            mspBasePath,
+            mspBasePath, mspBasePath, mspBasePath,
+            mspBasePath, mspBasePath, mspBasePath, mspBasePath,
+            mspBasePath,
+        ),
+    },
+    VolumeMounts: []corev1.VolumeMount{
+        {
+            Name:      "sign-cert",
+            ReadOnly:  true,
+            MountPath: "/sign-certs",
+        },
+        {
+            Name:      "shared-msp",
+            MountPath: "/var/hyperledger/fabric/config/keys",
+        },
+    },
+})
+```
+
+#### 2. Add ca.pem to Sign-Cert Secret Items
+
+```go
+{
+    Key:  "ca.pem",
+    Path: "ca.pem",
+},
+```
+
+#### 3. Create Shared MSP EmptyDir Volume
+
+```go
+deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Volumes, corev1.Volume{
+    Name: "shared-msp",
+    VolumeSource: corev1.VolumeSource{
+        EmptyDir: &corev1.EmptyDirVolumeSource{},
+    },
+})
+```
+
+#### 4. Mount Shared Volume in Main Container
+
+```go
+{
+    Name:      "shared-msp",
+    MountPath: "/var/hyperledger/fabric/config/keys",
+    ReadOnly:  true,
+},
+```
+
+### Key Design Decisions
+
+1. **Inline config.yaml**: Used heredoc syntax to create config.yaml directly in the shell script, avoiding the need for a separate ConfigMap
+2. **EmptyDir Volume**: Shared between init container (write) and main container (read)
+3. **Correct MSP Path**: Set to `/var/hyperledger/fabric/config/keys/fabric/user` (NOT `/var/hyperledger/fabric/config/keys/fabric/user/msp`)
+4. **priv_sk File**: Created as a copy of key.pem to support both naming conventions
+
+### Troubleshooting Init Container Issues
+
+**Issue**: Init container failed with busybox find command error
+```
+Init:Error - find: unrecognized: -ls
+```
+
+**Solution**: Remove `find -ls` command, use only `ls -lR` which is supported by busybox:1.35
+
+### Result
+
+All endorser pods now start successfully with proper MSP configuration:
+- org1-issuer: Running (1/1)
+- org1-owner1: Running (1/1)
+- org1-owner2: Running (1/1)
+- org1-endorser1: Running (1/1)
+- org1-endorser2: Running (1/1)
+- org1-auditor: ErrImagePull (image issue unrelated to MSP)
+
+---
+
+## Environment Variable Configuration for Committer Components
+
+### Problem
+Environment variables defined in CommitterSidecar spec were being hashed for rollout detection but were NOT being added to the container specification. Changes to env vars would trigger a hash change but the actual values wouldn't appear in pods.
+
+### Root Cause
+The `Env` field was completely missing from the container spec in `reconcileDeployment` function.
+
+### Solution - Three Steps
+
+#### Step 1: Add Env Field to Container Spec
+
+In [internal/controller/committersidecar_controller.go:766](internal/controller/committersidecar_controller.go):
+
+```go
+Env: committerSidecar.Spec.Env,
+```
+
+#### Step 2: Eliminate Custom Type Duplication
+
+Instead of maintaining custom `EnvVar`, `EnvVarSource`, and `SecretKeySelector` types, use Kubernetes native types directly.
+
+**Removed custom types** from [api/v1alpha1/orderergroup_types.go:488-513](api/v1alpha1/orderergroup_types.go):
+
+```go
+// DELETED these custom types:
+type EnvVar struct { ... }
+type EnvVarSource struct { ... }
+type SecretKeySelector struct { ... }
+```
+
+**Updated all API type files** to use `corev1.EnvVar`:
+
+```bash
+# Changed in 14 files:
+Env []EnvVar          # OLD
+Env []corev1.EnvVar   # NEW
+```
+
+Files updated:
+- committer_types.go
+- committercoordinator_types.go
+- committersidecar_types.go
+- committerqueryservice_types.go
+- committervalidator_types.go
+- committerverifier_types.go
+- ordererassembler_types.go
+- ordererbatcher_types.go
+- ordererconsenter_types.go
+- ordererrouter_types.go
+- orderergroup_types.go
+
+**Added corev1 imports** to API files missing it:
+
+```go
+import (
+    corev1 "k8s.io/api/core/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+```
+
+#### Step 3: Regenerate DeepCopy Code
+
+```bash
+make generate
+```
+
+### Benefits
+
+1. **No Type Conversion**: Direct assignment `Env: committerSidecar.Spec.Env` works
+2. **Cleaner Code**: Removed ~30 lines of type conversion logic
+3. **Kubernetes Native**: Using standard types improves compatibility
+4. **Less Maintenance**: No need to keep custom types in sync with Kubernetes
+
+### Environment Variable Hashing
+
+The env variable hashing (lines 662-669) now works correctly:
+
+```go
+// Hash environment variables to trigger rollout on env change
+if len(committerSidecar.Spec.Env) > 0 {
+    envString := ""
+    for _, env := range committerSidecar.Spec.Env {
+        envString += fmt.Sprintf("%s=%s|", env.Name, env.Value)
+    }
+    envHashSum := sha256.Sum256([]byte(envString))
+    hashParts = append(hashParts, hex.EncodeToString(envHashSum[:]))
+}
+```
+
+### Verification
+
+```bash
+# Check env vars in pod spec
+kubectl get pod <sidecar-pod> -o json | jq '.spec.containers[0].env'
+
+# Output:
+[
+  {
+    "name": "SIDECAR_LOG_LEVEL",
+    "value": "DEBUG"
+  },
+  {
+    "name": "SIDECAR_CHANNEL_ID",
+    "value": "mychannel"
+  }
+]
+
+# Verify in running container
+kubectl exec <sidecar-pod> -- env | grep SIDECAR
+
+# Output:
+SIDECAR_LOG_LEVEL=DEBUG
+SIDECAR_CHANNEL_ID=mychannel
+```
+
+### Hash-Based Rollout Behavior
+
+When env vars change:
+1. New hash is computed from env values
+2. Pod template annotation updated with new hash
+3. Deployment triggers rolling update
+4. New pod created with updated env vars
+5. Old pod terminated after new pod is ready
+
+**Example**:
+```bash
+# Before: SIDECAR_LOG_LEVEL=INFO
+# Hash: 8f5a500ac1d63dd623ffb32eadc83b4de3f0c8232a736eeaee9b49767c35912f
+
+# After: SIDECAR_LOG_LEVEL=DEBUG
+# Hash: e455532e4898e1f0d8faff1e266d889fb2deb08de4eddcacac6203077e6fef20
+
+# Result: New pod created with DEBUG value
+```
+
+---
+
+## Service Address Configuration for Endorsers
+
+### Problem
+Endorsers were configured with `localhost` addresses for committer services, causing connection failures:
+
+```yaml
+peers:
+  address: localhost:5400
+queryService:
+  address: localhost:5500
+```
+
+### Solution
+Update all endorser samples to use actual Kubernetes service names.
+
+### Implementation
+
+Updated 6 endorser sample files:
+
+```bash
+# Changed from:
+peers.address: localhost:5400
+queryService.address: localhost:5500
+
+# Changed to:
+peers.address: fabric-x-committer-sidecar-service.default:5050
+queryService.address: fabric-x-committer-query-service-service.default:9001
+```
+
+Files updated:
+- fabricx_v1alpha1_endorser_org1-auditor.yaml
+- fabricx_v1alpha1_endorser_org1-endorser1.yaml
+- fabricx_v1alpha1_endorser_org1-endorser2.yaml
+- fabricx_v1alpha1_endorser_org1-issuer.yaml
+- fabricx_v1alpha1_endorser_org1-owner1.yaml
+- fabricx_v1alpha1_endorser_org1-owner2.yaml
+
+### Service Discovery
+
+```bash
+# Find committer services
+kubectl get svc | grep fabric-x-committer
+
+# Output:
+fabric-x-committer-sidecar-service          ClusterIP   10.43.x.x    <none>   5050/TCP
+fabric-x-committer-query-service-service    ClusterIP   10.43.x.x    <none>   9001/TCP
+```
+
+### Service Name Format
+
+Format: `<component-name>-service.<namespace>:<port>`
+
+Examples:
+- `fabric-x-committer-sidecar-service.default:5050`
+- `fabric-x-committer-query-service-service.default:9001`
+- `fabric-x-committer-coordinator-service.default:9001`
+
+---
+
+## Quick Start Deployment Guide
+
+### Complete Deployment Steps
+
+This is the tested and working deployment sequence for a complete Fabric-X network.
+
+#### Prerequisites
+- K3D cluster with ports mapped: 80→30949, 443→30950
+- Istio installed
+- PostgreSQL deployed for committer validator
+
+#### Step 1: Deploy Certificate Authority
+
+```bash
+kubectl apply -f config/samples/fabricx_v1alpha1_ca.yaml
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fabric-ca --timeout=120s
+```
+
+#### Step 2: Deploy Orderer Groups (Configure Mode)
+
+```bash
+for i in 1 2 3 4; do
+  kubectl apply -f config/samples/fabricx_v1alpha1_orderergroup_party${i}.yaml
+done
+
+kubectl get orderergroups
+# Wait for all to be RUNNING
+```
+
+#### Step 3: Create Genesis Block
+
+```bash
+kubectl apply -f config/samples/fabricx_v1alpha1_genesis.yaml
+kubectl get genesis
+kubectl get secret fabricx-shared-genesis
+```
+
+#### Step 4: Patch Orderer Groups to Deploy Mode
+
+```bash
+for i in 1 2 3 4; do
+  kubectl patch orderergroup orderergroup-party${i} --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
+done
+
+# Wait for all components to be ready
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=fabric-x --timeout=600s
+```
+
+Expected pods (18 total):
+- 4 Routers
+- 8 Batchers (2 per party)
+- 4 Consenters
+- 4 Assemblers
+
+#### Step 5: Deploy Committer (Already in Deploy Mode)
+
+```bash
+kubectl apply -f config/samples/fabricx_v1alpha1_committer.yaml
+kubectl get committer
+
+# Committer automatically starts in deploy mode
+kubectl get pods | grep fabric-x-committer
+```
+
+Expected pods (5 total):
+- Coordinator
+- Sidecar
+- Query Service
+- Validator
+- Verifier
+
+#### Step 6: Deploy Endorsers (Configure Mode)
+
+```bash
+for endorser in org1-auditor org1-issuer org1-endorser1 org1-endorser2 org1-owner1 org1-owner2; do
+  kubectl apply -f config/samples/fabricx_v1alpha1_endorser_${endorser}.yaml
+done
+
+kubectl get endorser
+# Wait for all to be RUNNING
+```
+
+#### Step 7: Patch Endorsers to Deploy Mode
+
+```bash
+for endorser in org1-auditor org1-issuer org1-endorser1 org1-endorser2 org1-owner1 org1-owner2; do
+  kubectl patch endorser ${endorser} --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
+done
+
+kubectl get pods | grep org1-
+```
+
+Expected pods (6 total):
+- org1-issuer
+- org1-auditor (may have image issue)
+- org1-owner1
+- org1-owner2
+- org1-endorser1
+- org1-endorser2
+
+### Verification Commands
+
+```bash
+# Check all resources
+kubectl get cas,orderergroups,genesis,committer,endorser
+
+# Check all pods
+kubectl get pods
+
+# Count running pods
+kubectl get pods | grep -E "test-ca2|orderergroup|fabric-x-committer|org1-" | grep -c Running
+
+# Check environment variables in sidecar
+kubectl get pod -l app=sidecar,release=fabric-x-committer-sidecar -o jsonpath='{.items[0].metadata.name}' | xargs -I {} kubectl exec {} -- env | grep SIDECAR
+```
+
+### Channel Configuration
+
+All components point to channel: `mychannel`
+
+Verify in samples:
+- Endorsers: `channels[0].name: mychannel`
+- Committer Sidecar: `SIDECAR_CHANNEL_ID: mychannel`
+- Genesis: `channelName: mychannel`
+
+### Expected Final State
+
+Total: **32 pods**
+- 1 CA pod
+- 18 orderer component pods
+- 5 committer component pods
+- 6 endorser pods (1 may have image issue)
+- PostgreSQL pod(s)
+
+Success rate: **31/32 Running** (97%)
+
+---
+
+## Operator Image Build and Deployment
+
+### Standard Workflow
+
+```bash
+# 1. Make code changes
+vim internal/controller/committersidecar_controller.go
+
+# 2. Build operator image
+make docker-build IMG=kfsoftware/fabric-x-operator:latest
+
+# 3. Import to K3D cluster
+k3d image import kfsoftware/fabric-x-operator:latest -c k8s-hlf
+
+# 4. Restart operator pod
+kubectl delete pod -n fabric-x-operator-system -l control-plane=controller-manager
+
+# 5. Wait for new pod
+kubectl wait --for=condition=Ready pod -l control-plane=controller-manager -n fabric-x-operator-system --timeout=60s
+```
+
+### When API Types Change
+
+```bash
+# 1. Make API changes
+vim api/v1alpha1/committersidecar_types.go
+
+# 2. Regenerate deepcopy code
+make generate
+
+# 3. Update CRDs (if needed)
+make manifests
+
+# 4. Build and deploy operator (same as above)
+make docker-build IMG=kfsoftware/fabric-x-operator:latest
+k3d image import kfsoftware/fabric-x-operator:latest -c k8s-hlf
+kubectl delete pod -n fabric-x-operator-system -l control-plane=controller-manager
+```
+
+### Makefile Targets
+
+```bash
+make generate   # Generate deepcopy code
+make manifests  # Generate CRD manifests (not available in this project)
+make docker-build IMG=<image>  # Build operator image
+```
+
+---
+
+## Common Debugging Patterns
+
+### Check Operator Logs
+
+```bash
+# Get operator pod name
+kubectl get pods -n fabric-x-operator-system
+
+# View logs
+kubectl logs -n fabric-x-operator-system <operator-pod-name>
+
+# Follow logs
+kubectl logs -n fabric-x-operator-system <operator-pod-name> -f
+
+# Check for errors
+kubectl logs -n fabric-x-operator-system <operator-pod-name> | grep -i error
+```
+
+### Check Resource Status
+
+```bash
+# Get detailed status
+kubectl describe orderergroup orderergroup-party1
+kubectl describe committer fabric-x-committer
+kubectl describe endorser org1-issuer
+
+# Check conditions
+kubectl get orderergroup orderergroup-party1 -o jsonpath='{.status.conditions}' | jq
+```
+
+### Check Init Container Issues
+
+```bash
+# View init container logs
+kubectl logs <pod-name> -c <init-container-name>
+
+# Example for endorser
+kubectl logs org1-issuer-xxxxx -c setup-msp
+
+# Check init container status
+kubectl get pod org1-issuer-xxxxx -o jsonpath='{.status.initContainerStatuses}' | jq
+```
+
+### Check Secret Contents
+
+```bash
+# List secrets
+kubectl get secrets | grep org1-issuer
+
+# Decode secret data
+kubectl get secret org1-issuer-core-config -o jsonpath='{.data.core\.yaml}' | base64 -d
+
+# Check MSP config
+kubectl get secret orderergroup-party1-consenter-config -o jsonpath='{.data.msp_config\.yaml}' | base64 -d
+```
+
+### Check Volume Mounts
+
+```bash
+# Exec into pod
+kubectl exec -it <pod-name> -- /bin/sh
+
+# Check MSP directory
+ls -lR /var/hyperledger/fabric/config/keys/fabric/user/
+
+# Check if files exist
+cat /var/hyperledger/fabric/config/keys/fabric/user/config.yaml
+```
+
+### Network Connectivity
+
+```bash
+# Test service connectivity from endorser
+kubectl exec -it org1-issuer-xxxxx -- sh
+wget -O- http://fabric-x-committer-sidecar-service.default:5050/healthz
+
+# Check DNS resolution
+nslookup fabric-x-committer-sidecar-service.default
+```
+
+---
+
+## Performance Considerations
+
+### Hash-Based Rollout Detection
+
+The operator uses SHA256 hashes of mounted secrets/configs to trigger pod rollouts:
+
+```go
+// Compute combined hash
+hashParts := []string{}
+
+// Hash config secret
+hashParts = append(hashParts, computeSecretHash(configSecret))
+
+// Hash certificate secrets
+hashParts = append(hashParts, computeSecretHash(signCertSecret))
+hashParts = append(hashParts, computeSecretHash(tlsCertSecret))
+
+// Hash environment variables
+if len(spec.Env) > 0 {
+    envString := ""
+    for _, env := range spec.Env {
+        envString += fmt.Sprintf("%s=%s|", env.Name, env.Value)
+    }
+    envHashSum := sha256.Sum256([]byte(envString))
+    hashParts = append(hashParts, hex.EncodeToString(envHashSum[:]))
+}
+
+// Combine all hashes
+sort.Strings(hashParts)
+combinedHashSum := sha256.Sum256([]byte(strings.Join(hashParts, "|")))
+configMapHash := hex.EncodeToString(combinedHashSum[:])
+```
+
+This hash is added as a pod template annotation:
+
+```go
+annotations["fabricx.kfsoft.tech/config-hash"] = configMapHash
+```
+
+Any change to secrets or env vars changes the hash, triggering a rolling update.
+
+### Reconciliation Loop
+
+The operator reconciles resources in this order:
+
+1. **Certificates** (if in configure mode)
+2. **Genesis Block** (for orderers)
+3. **Secrets/ConfigMaps**
+4. **Services**
+5. **Deployments** (if in deploy mode)
+6. **Ingress** (if configured)
+
+This ordering ensures dependencies are created before dependents.
+
+### Resource Limits
+
+Default resource limits for committer components:
+
+```yaml
+requests:
+  cpu: 100m
+  memory: 128Mi
+limits:
+  cpu: 500m
+  memory: 512Mi
+```
+
+These can be overridden in the spec:
+
+```yaml
+spec:
+  components:
+    sidecar:
+      resources:
+        requests:
+          cpu: 300m
+          memory: 512Mi
+        limits:
+          cpu: 1500m
+          memory: 2Gi
+```
+
+---
+
 ## Contributors
 
 This document captures learnings from active development. Keep it updated as new patterns and solutions emerge!

@@ -406,7 +406,7 @@ kubectl apply -f config/samples/fabricx_v1alpha1_genesis.yaml
 ```
 
 This creates:
-- The genesis block configuration for channel `mychannel`
+- The genesis block configuration for channel `arma`
 - Configuration for 4 consenters (SmartBFT consensus)
 - Configuration for 4 parties with their batchers, routers, and assemblers
 - Application organization configuration (Org1MSP)
@@ -804,7 +804,7 @@ env:
     value: arma
 ```
 
-Update this to match your channel name (default is `mychannel` from the genesis block).
+Update this to match your channel name (default is `arma` from the genesis block).
 
 ## Verification
 

@@ -74,7 +74,7 @@ spec:
         - name: SC_SIDECAR_LOG_LEVEL
           value: DEBUG
         - name: SC_SIDECAR_ORDERER_CHANNEL_ID
-          value: mychannel
+          value: arma
       ingress:
         istio:
           hosts:
