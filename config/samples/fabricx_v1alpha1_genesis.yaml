@@ -20,6 +20,13 @@ spec:
   configTemplate:
     configMapName: fabricx-config-template
     key: configtx.yaml
+  # Meta namespace verification CA certificate (required)
+  # This CA will be used for MetaNamespaceVerificationKeyPath in the genesis block
+  # Using the sign CA certificate from Fabric CA MSP
+  metaNamespaceCA:
+    key: certfile
+    name: test-ca2-msp-crypto
+    namespace: default
   consenters:
     - clientTlsCertRef:
         key: cert.pem

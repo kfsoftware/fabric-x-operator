@@ -1,0 +1,56 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: admin-org1
+  namespace: default
+spec:
+  # Type of identity
+  type: admin
+
+  # MSPID for this identity
+  mspID: Org1MSP
+
+  # Enroll with Fabric CA
+  enrollment:
+    # Reference to the Fabric CA
+    caRef:
+      name: test-ca2
+      namespace: default
+
+    # Admin enrollment ID
+    enrollID: admin
+
+    # Enrollment secret reference
+    enrollSecretRef:
+      name: admin-password
+      key: password
+      namespace: default
+
+    # Affiliation for the identity (optional)
+    affiliation: ""
+
+    # Attributes to include in the enrollment certificate (optional)
+    attrs:
+      - name: "hf.Registrar.Roles"
+        value: "client,orderer,peer,user"
+        ecert: true
+      - name: "hf.Revoker"
+        value: "true"
+        ecert: true
+
+    # Also enroll for TLS certificates
+    enrollTLS: true
+
+  # Output configuration
+  output:
+    # Prefix for output secrets
+    secretPrefix: admin-org1
+
+    # Optional: namespace for output secrets (defaults to identity namespace)
+    namespace: default
+
+    # Optional: labels to apply to output secrets
+    labels:
+      app: fabric-admin
+      org: org1
+      identity-type: admin

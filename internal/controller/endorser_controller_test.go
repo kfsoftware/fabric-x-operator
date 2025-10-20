@@ -441,7 +441,7 @@ var _ = Describe("Endorser Controller", func() {
 								},
 								Channels: []fabricxv1alpha1.ChannelConfig{
 									{
-										Name:    "mychannel",
+										Name:    "arma",
 										Default: true,
 									},
 								},
@@ -488,7 +488,7 @@ var _ = Describe("Endorser Controller", func() {
 							TMS: map[string]fabricxv1alpha1.TMSConfig{
 								"mytms": {
 									Network:   "default",
-									Channel:   "mychannel",
+									Channel:   "arma",
 									Namespace: "token_ns",
 									Driver:    "zkatdlog",
 									Services: &fabricxv1alpha1.TMSServices{

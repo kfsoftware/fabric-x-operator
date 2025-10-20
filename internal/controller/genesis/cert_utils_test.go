@@ -181,7 +181,7 @@ func TestGenerateGenesisSpec(t *testing.T) {
 	// Create genesis spec
 	genesis := &v1alpha1.Genesis{
 		Spec: v1alpha1.GenesisSpec{
-			ChannelID: "mychannel",
+			ChannelID: "arma",
 			ConfigTemplate: v1alpha1.ConfigTemplateReference{
 				ConfigMapName: "config-template",
 				Key:           "configtx.yaml",

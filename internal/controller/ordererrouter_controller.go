@@ -1128,6 +1128,8 @@ func (r *OrdererRouterReconciler) reconcileIstioGateway(ctx context.Context, ord
 					Hosts: istioConfig.Hosts,
 					Tls: &istioapinetworkingv1alpha3.ServerTLSSettings{
 						Mode: istioapinetworkingv1alpha3.ServerTLSSettings_PASSTHROUGH,
+						// Set MinProtocolVersion to ensure TLS config is not treated as empty
+						MinProtocolVersion: istioapinetworkingv1alpha3.ServerTLSSettings_TLSV1_2,
 					},
 				},
 			},

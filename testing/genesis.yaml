@@ -16,7 +16,7 @@ spec:
         key: certfile
         name: test-ca2-tlsca-crypto
         namespace: default
-  channelID: mychannel
+  channelID: arma
   configTemplate:
     configMapName: fabricx-config-template
     key: configtx.yaml

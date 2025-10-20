@@ -16,6 +16,8 @@ resources:
 - bases/fabricx.kfsoft.tech_committervalidators.yaml
 - bases/fabricx.kfsoft.tech_committerverifiers.yaml
 - bases/fabricx.kfsoft.tech_committerqueryservices.yaml
+- bases/fabricx.kfsoft.tech_caenrollments.yaml
+- bases/fabricx.kfsoft.tech_identities.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

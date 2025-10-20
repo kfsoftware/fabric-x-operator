@@ -34,6 +34,7 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - caenrollments
   - cas
   - committercoordinators
   - committerqueryservices
@@ -43,6 +44,7 @@ rules:
   - committerverifiers
   - endorsers
   - geneses
+  - identities
   - ordererassemblers
   - ordererbatchers
   - ordererconsenters
@@ -59,6 +61,7 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - caenrollments/finalizers
   - cas/finalizers
   - committercoordinators/finalizers
   - committerqueryservices/finalizers
@@ -68,6 +71,7 @@ rules:
   - committerverifiers/finalizers
   - endorsers/finalizers
   - geneses/finalizers
+  - identities/finalizers
   - ordererassemblers/finalizers
   - ordererbatchers/finalizers
   - ordererconsenters/finalizers
@@ -77,6 +81,7 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - caenrollments/status
   - cas/status
   - committercoordinators/status
   - committerqueryservices/status
@@ -86,6 +91,7 @@ rules:
   - committerverifiers/status
   - endorsers/status
   - geneses/status
+  - identities/status
   - ordererassemblers/status
   - ordererbatchers/status
   - ordererconsenters/status

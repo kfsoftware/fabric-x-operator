@@ -402,6 +402,16 @@ func GetClient(ca FabricCAParams) (*lib.Client, error) {
 	if err != nil {
 		return nil, nil
 	}
+	// Sync to ensure data is written to disk
+	err = caCertFile.Sync()
+	if err != nil {
+		return nil, err
+	}
+	// Close the file
+	err = caCertFile.Close()
+	if err != nil {
+		return nil, err
+	}
 	client := &lib.Client{
 		HomeDir: caHomeDir,
 		Config: &lib.ClientConfig{

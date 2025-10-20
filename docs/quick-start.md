@@ -12,10 +12,11 @@ This guide will walk you through setting up a complete Hyperledger Fabric X netw
 - [Step 5: Configure Environment Variables](#step-5-configure-environment-variables)
 - [Step 6: Configure Internal DNS](#step-6-configure-internal-dns)
 - [Step 7: Deploy Certificate Authority](#step-7-deploy-certificate-authority)
-- [Step 8: Deploy Orderer Groups](#step-8-deploy-orderer-groups)
-- [Step 9: Create Genesis Block](#step-9-create-genesis-block)
-- [Step 10: Patch Orderer Groups to Deploy Mode](#step-10-patch-orderer-groups-to-deploy-mode)
-- [Step 11: Deploy Committer](#step-11-deploy-committer)
+- [Step 8: Create Admin Identity](#step-8-create-admin-identity-optional)
+- [Step 9: Deploy Orderer Groups](#step-9-deploy-orderer-groups)
+- [Step 10: Create Genesis Block](#step-10-create-genesis-block)
+- [Step 11: Patch Orderer Groups to Deploy Mode](#step-11-patch-orderer-groups-to-deploy-mode)
+- [Step 12: Deploy Committer](#step-12-deploy-committer)
 - [Verification](#verification)
 - [Next Steps](#next-steps)
 - [Troubleshooting](#troubleshooting)
@@ -43,6 +44,7 @@ k3d cluster create -p "80:30949@agent:0" -p "443:30950@agent:0" --agents 2 k8s-h
 ```
 
 This command creates a K3D cluster named `k8s-hlf` with:
+
 - Port forwarding from host port 80 to node port 30949
 - Port forwarding from host port 443 to node port 30950
 - 2 agent nodes
@@ -59,7 +61,7 @@ kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
 - role: control-plane
-  image: kindest/node:v1.30.2
+  image: kindest/node:v1.33.4
   extraPortMappings:
   - containerPort: 30949
     hostPort: 80
@@ -74,23 +76,30 @@ Then create the cluster:
 kind create cluster --config=./kind-config.yaml
 ```
 
-## Step 2: Install the Kubernetes Operator
+## Step 2: Install the Fabric X Operator
 
 The Fabric X Operator manages the deployment and lifecycle of Hyperledger Fabric components in Kubernetes.
 
-### Add the Helm Repository
+### Build and Deploy the Operator
 
 ```bash
-helm repo add kfs https://kfsoftware.github.io/hlf-helm-charts --force-update
-```
+# Generate CRDs and other manifests
+make generate
+make manifests
 
-### Install the Operator
+# Build operator image with timestamp tag
+export IMAGE=local/fabric-x-operator:$(date +%Y%m%d%H%M%S)
+make docker-build IMG=$IMAGE
 
-```bash
-helm install hlf-operator --version=1.13.0 kfs/hlf-operator
+# Import image into K3D cluster
+k3d image import $IMAGE --cluster k8s-hlf
+
+# Deploy the operator
+make deploy IMG=$IMAGE
 ```
 
 This installs:
+
 - Custom Resource Definitions (CRDs) for Fabric Peers, Orderers, and Certificate Authorities
 - The operator controller to manage these resources
 
@@ -102,125 +111,108 @@ kubectl get pods
 
 You should see the operator pod running.
 
-## Step 3: Install the Kubectl Plugin
-
-The kubectl plugin provides convenient commands for managing Hyperledger Fabric resources.
-
-### Install Krew
-
-First, install Krew (kubectl plugin manager):
-[https://krew.sigs.k8s.io/docs/user-guide/setup/install/](https://krew.sigs.k8s.io/docs/user-guide/setup/install/)
-
-### Install the HLF Plugin
-
-```bash
-kubectl krew install hlf
-```
-
-### Verify Installation
-
-```bash
-kubectl hlf --help
-```
-
-## Step 4: Install Istio
+## Step 3: Install Istio
 
 Istio provides service mesh capabilities including traffic management, security, and observability.
 
-### Download Istio
+### Download Istio 1.26
 
 ```bash
-curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.23.3 sh -
+curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.26.3 sh -
 ```
 
-### Add Istio to PATH
+### Move to Istio Directory and Add to PATH
 
 ```bash
-export ISTIO_PATH=$(echo $PWD/istio-*/bin)
-export PATH="$PATH:$ISTIO_PATH"
+cd istio-1.26.3
+export PATH=$PWD/bin:$PATH
 ```
 
 To make this permanent, add it to your `~/.bashrc` or `~/.zshrc`:
 
 ```bash
-echo 'export PATH="$PATH:'$ISTIO_PATH'"' >> ~/.bashrc
+echo 'export PATH=$PATH:'"$PWD/bin" >> ~/.bashrc
+# Or for zsh:
+echo 'export PATH=$PATH:'"$PWD/bin" >> ~/.zshrc
 ```
 
-### Create Istio Namespace
+### Verify istioctl Version
 
 ```bash
-kubectl create namespace istio-system
+istioctl version
 ```
 
-### Initialize Istio Operator
+### Create IstioOperator Configuration
+
+Create an IstioOperator manifest file with the configuration optimized for Fabric X Operator and K3D cluster:
 
 ```bash
-istioctl operator init
-```
-
-### Deploy Istio Configuration
-
-```bash
-kubectl apply -f - <<EOF
+cat <<EOF > istio-operator.yaml
 apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 metadata:
-  name: istio-gateway
-  namespace: istio-system
+  name: istio-control-plane
 spec:
-  addonComponents:
-    grafana:
-      enabled: false
-    kiali:
-      enabled: false
-    prometheus:
-      enabled: false
-    tracing:
-      enabled: false
+  profile: default
+  tag: 1.26.3
+  meshConfig:
+    accessLogFile: /dev/stdout
+    enableTracing: false
+    outboundTrafficPolicy:
+      mode: ALLOW_ANY
   components:
     ingressGateways:
-      - enabled: true
-        k8s:
-          hpaSpec:
-            minReplicas: 1
-          resources:
-            limits:
-              cpu: 500m
-              memory: 512Mi
-            requests:
-              cpu: 100m
-              memory: 128Mi
-          service:
-            ports:
-              - name: http
-                port: 80
-                targetPort: 8080
-                nodePort: 30949
-              - name: https
-                port: 443
-                targetPort: 8443
-                nodePort: 30950
-            type: NodePort
-        name: istio-ingressgateway
+    - name: istio-ingressgateway
+      enabled: true
+      k8s:
+        hpaSpec:
+          minReplicas: 1
+        service:
+          type: NodePort
+          ports:
+          - name: http
+            port: 80
+            targetPort: 8080
+            nodePort: 30949
+          - name: https
+            port: 443
+            targetPort: 8443
+            nodePort: 30950
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
     pilot:
       enabled: true
       k8s:
         hpaSpec:
           minReplicas: 1
         resources:
-          limits:
-            cpu: 300m
-            memory: 512Mi
           requests:
             cpu: 100m
             memory: 128Mi
-  meshConfig:
-    accessLogFile: /dev/stdout
-    enableTracing: false
-    outboundTrafficPolicy:
-      mode: ALLOW_ANY
-  profile: default
+          limits:
+            cpu: 300m
+            memory: 512Mi
 EOF
+```
+
+**Note**: This IstioOperator configuration:
+- Uses the `default` profile (production-ready settings)
+- Sets version to 1.26.3
+- Configures the ingress gateway with NodePort type
+- Maps ports 80→30949 and 443→30950 (matching your K3D cluster)
+- Sets resource limits for efficient resource usage
+- Enables access logging for troubleshooting
+- Sets HPA min replicas to 1 (suitable for development)
+
+### Install Istio Using the Configuration
+
+```bash
+istioctl install -f istio-operator.yaml -y
 ```
 
 ### Verify Istio Installation
@@ -229,7 +221,20 @@ EOF
 kubectl get pods -n istio-system
 ```
 
-Wait for all Istio pods to be in `Running` status.
+Wait for all Istio pods to be in `Running` status:
+
+```bash
+kubectl wait --for=condition=ready pod -l app=istiod -n istio-system --timeout=300s
+kubectl wait --for=condition=ready pod -l app=istio-ingressgateway -n istio-system --timeout=300s
+```
+
+### Verify Installation with istioctl
+
+```bash
+istioctl verify-install
+```
+
+This should output "Installation verified successfully" if all components are correctly installed.
 
 ## Step 5: Configure Environment Variables
 
@@ -301,6 +306,7 @@ kubectl apply -f config/samples/fabricx_v1alpha1_ca.yaml
 ```
 
 This deploys a Fabric CA with:
+
 - Two CA instances: one for signing certificates (`ca`) and one for TLS certificates (`tlsca`)
 - Ingress configuration for external access via Istio
 - Default admin user with credentials: `admin`/`adminpw`
@@ -321,10 +327,131 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fabric-ca --tim
 ### Check CA Endpoints
 
 The CA will be accessible at:
+
 - `https://ca.org1.localho.st` (signing CA)
 - Internal endpoint: `test-ca2.default:7054`
 
-## Step 8: Deploy Orderer Groups
+## Step 8: Create Admin Identity (Optional)
+
+The Identity CRD allows you to enroll identities with the Fabric CA. This is useful for creating admin users, application users, or any other Fabric identity.
+
+### Create Admin Password Secret
+
+First, create a secret containing the admin enrollment password:
+
+```bash
+kubectl apply -f config/samples/admin-password-secret.yaml
+```
+
+This creates a secret with the admin password (`adminpw`) that will be used for enrollment.
+
+### Deploy Admin Identity
+
+Create an admin identity by enrolling with the CA:
+
+```bash
+kubectl apply -f config/samples/fabricx_v1alpha1_identity_admin.yaml
+```
+
+This Identity resource will:
+
+- Enroll with the Fabric CA using the admin credentials
+- Generate both signing and TLS certificates
+- Create 6 output secrets containing the identity materials:
+  - `admin-org1-sign-cert`: Signing certificate
+  - `admin-org1-sign-key`: Signing private key
+  - `admin-org1-sign-cacert`: Signing CA certificate
+  - `admin-org1-tls-cert`: TLS certificate
+  - `admin-org1-tls-key`: TLS private key
+  - `admin-org1-tls-cacert`: TLS CA certificate
+
+### Verify Identity Creation
+
+```bash
+# Check identity status
+kubectl get identity admin-org1
+
+# Expected output:
+# NAME         TYPE    MSPID     STATUS   EXPIRY         AGE
+# admin-org1   admin   Org1MSP   READY    2026-10-19...  1m
+```
+
+### Verify Generated Secrets
+
+```bash
+# List all secrets created for the identity
+kubectl get secrets | grep admin-org1
+
+# Expected output shows 6 secrets:
+# admin-org1-sign-cacert
+# admin-org1-sign-cert
+# admin-org1-sign-key
+# admin-org1-tls-cacert
+# admin-org1-tls-cert
+# admin-org1-tls-key
+```
+
+### Validate Certificate
+
+You can validate the enrolled certificate:
+
+```bash
+# View certificate details
+kubectl get secret admin-org1-sign-cert -o jsonpath='{.data.cert\.pem}' | base64 -d | openssl x509 -text -noout | grep -E "(Subject:|Issuer:|Not After)"
+```
+
+Expected output:
+
+```
+        Issuer: C=US, L=Raleigh, O=Hyperledger, OU=Fabric, CN=ca
+            Not After : Oct 19 20:07:00 2026 GMT
+        Subject: OU=client, CN=admin
+```
+
+### Using Identity Secrets in Applications
+
+The generated secrets can be mounted in application pods to authenticate with the Fabric network:
+
+```yaml
+volumes:
+  - name: admin-msp
+    projected:
+      sources:
+        - secret:
+            name: admin-org1-sign-cert
+            items:
+              - key: cert.pem
+                path: signcerts/cert.pem
+        - secret:
+            name: admin-org1-sign-key
+            items:
+              - key: cert.pem
+                path: keystore/key.pem
+        - secret:
+            name: admin-org1-sign-cacert
+            items:
+              - key: cert.pem
+                path: cacerts/ca.pem
+```
+
+### Understanding the Identity Spec
+
+The Identity CRD supports the following configuration:
+
+- **type**: Type of identity (`client`, `peer`, `orderer`, `admin`, `user`)
+- **mspID**: MSP ID for the organization (e.g., `Org1MSP`)
+- **enrollment**: Configuration for enrolling with Fabric CA
+  - **caRef**: Reference to the CA resource
+  - **enrollID**: Enrollment ID (username)
+  - **enrollSecretRef**: Reference to secret containing enrollment password
+  - **attrs**: Optional attributes to include in the certificate
+  - **enrollTLS**: Whether to also enroll for TLS certificates (default: true)
+- **output**: Configuration for output secrets
+  - **secretPrefix**: Prefix for generated secret names
+  - **namespace**: Optional namespace for secrets (defaults to identity namespace)
+  - **labels**: Optional labels to apply to generated secrets
+
+## Step 9: Deploy Orderer Groups
 
 Orderer groups manage the ordering service for the Fabric network. We'll deploy 4 orderer parties to create a Byzantine Fault Tolerant (BFT) consensus network.
 
@@ -335,6 +462,7 @@ kubectl apply -f config/samples/fabricx_v1alpha1_orderergroup_party1.yaml
 ```
 
 This deploys:
+
 - **Router**: Routes transactions to appropriate batchers
 - **Batchers**: Two shards for parallel transaction batching
 - **Consenter**: Participates in consensus protocol
@@ -395,7 +523,7 @@ Each orderer group deploys several components:
 3. **Consenter** (`consenter-1-org[1-4].localho.st`): Consensus participant (SmartBFT)
 4. **Assembler** (`assembler-org[1-4].localho.st`): Assembles ordered transactions into blocks
 
-## Step 9: Create Genesis Block
+## Step 10: Create Genesis Block
 
 The genesis block contains the initial configuration for the channel and must be created before the orderers can fully function.
 
@@ -406,6 +534,7 @@ kubectl apply -f config/samples/fabricx_v1alpha1_genesis.yaml
 ```
 
 This creates:
+
 - The genesis block configuration for channel `arma`
 - Configuration for 4 consenters (SmartBFT consensus)
 - Configuration for 4 parties with their batchers, routers, and assemblers
@@ -429,7 +558,7 @@ kubectl get secret fabricx-shared-genesis
 kubectl describe genesis shared-genesis
 ```
 
-## Step 10: Patch Orderer Groups to Deploy Mode
+## Step 11: Patch Orderer Groups to Deploy Mode
 
 After the genesis block is created, you need to patch each orderer group to change from `configure` mode to `deploy` mode. This triggers the actual deployment of the orderer components.
 
@@ -524,7 +653,7 @@ kubectl get pods -l app.kubernetes.io/component=consenter
 kubectl get pods -l app.kubernetes.io/component=assembler
 ```
 
-## Step 11: Deploy Committer
+## Step 12: Deploy Committer
 
 After the orderer groups are fully deployed and operational, you can deploy the Committer component. The Committer is responsible for validating, verifying, and committing transactions to the ledger.
 
@@ -605,6 +734,7 @@ EOF
 #### Option 2: Use External PostgreSQL
 
 If you have an external PostgreSQL instance, ensure:
+
 - The database `kubernetes_validator` exists
 - The Kubernetes cluster can reach the PostgreSQL host
 - You have the connection credentials
@@ -660,6 +790,7 @@ kubectl apply -f config/samples/fabricx_v1alpha1_committer.yaml
 ```
 
 This creates a Committer resource that deploys:
+
 - **Coordinator** (1 replica): Manages the commit workflow
 - **Sidecar** (1 replica): Receives blocks from orderers
 - **Validator** (1 replica): Validates transactions
@@ -862,14 +993,13 @@ kubectl logs -l app.kubernetes.io/component=consenter | grep -i "consensus"
 
 ## Step 12: Deploy Endorsers
 
-Endorsers are Fabric Smart Client (FSC) nodes that participate in token transactions and endorsements. In this step, we'll deploy 6 endorser nodes with different roles: issuer, auditor, two owners, and two endorsers.
+Endorsers are Fabric Smart Client (FSC) nodes that participate in token transactions and endorsements. In this step, we'll deploy 5 endorser nodes with different roles: issuer, two owners, and two endorsers.
 
 ### Understanding Endorser Roles
 
 The token network consists of different participant types:
 
 - **Issuer** (`org1-issuer`): Issues tokens to participants
-- **Auditor** (`org1-auditor`): Audits and monitors transactions
 - **Owners** (`org1-owner1`, `org1-owner2`): Token holders who can transfer tokens
 - **Endorsers** (`org1-endorser1`, `org1-endorser2`): Transaction endorsers who validate and sign transactions
 
@@ -881,20 +1011,18 @@ Endorsers support two bootstrap modes, similar to orderer groups:
 - **deploy**: Full deployment with application pods
 
 This two-phase approach allows you to:
+
 1. First, create all certificates (configure mode)
 2. Then, cross-reference certificates between nodes
 3. Finally, deploy all applications (deploy mode)
 
 ### Phase 1: Deploy Endorsers in Configure Mode
 
-Deploy all 6 endorsers in configure mode to create their certificates:
+Deploy all 5 endorsers in configure mode to create their certificates:
 
 ```bash
 # Deploy issuer
 kubectl apply -f config/samples/fabricx_v1alpha1_endorser_org1-issuer.yaml
-
-# Deploy auditor
-kubectl apply -f config/samples/fabricx_v1alpha1_endorser_org1-auditor.yaml
 
 # Deploy owner1
 kubectl apply -f config/samples/fabricx_v1alpha1_endorser_org1-owner1.yaml
@@ -913,7 +1041,6 @@ Or deploy all at once:
 
 ```bash
 kubectl apply -f config/samples/fabricx_v1alpha1_endorser_org1-issuer.yaml \
-               -f config/samples/fabricx_v1alpha1_endorser_org1-auditor.yaml \
                -f config/samples/fabricx_v1alpha1_endorser_org1-owner1.yaml \
                -f config/samples/fabricx_v1alpha1_endorser_org1-owner2.yaml \
                -f config/samples/fabricx_v1alpha1_endorser_org1-endorser1.yaml \
@@ -933,7 +1060,6 @@ Expected output:
 ```
 NAME              MODE        STATUS      AGE
 org1-issuer       configure   Running     30s
-org1-auditor      configure   Running     30s
 org1-owner1       configure   Running     30s
 org1-owner2       configure   Running     30s
 org1-endorser1    configure   Running     30s
@@ -943,7 +1069,7 @@ org1-endorser2    configure   Running     30s
 Verify that certificate secrets were created:
 
 ```bash
-kubectl get secrets | grep -E "org1-(issuer|auditor|owner1|owner2|endorser1|endorser2)-(sign|tls)-cert"
+kubectl get secrets | grep -E "org1-(issuer|owner1|owner2|endorser1|endorser2)-(sign|tls)-cert"
 ```
 
 Expected output:
@@ -951,8 +1077,6 @@ Expected output:
 ```
 org1-issuer-sign-cert      Opaque   3      1m
 org1-issuer-tls-cert       Opaque   3      1m
-org1-auditor-sign-cert     Opaque   3      1m
-org1-auditor-tls-cert      Opaque   3      1m
 org1-owner1-sign-cert      Opaque   3      1m
 org1-owner1-tls-cert       Opaque   3      1m
 org1-owner2-sign-cert      Opaque   3      1m
@@ -964,6 +1088,7 @@ org1-endorser2-tls-cert    Opaque   3      1m
 ```
 
 Each secret contains:
+
 - `cert.pem`: The certificate
 - `key.pem`: The private key
 - `ca.pem`: The CA certificate
@@ -973,6 +1098,7 @@ Each secret contains:
 Each endorser needs to communicate with other endorsers using TLS certificates. The controller automatically creates resolver secrets by copying certificates from the referenced TLS cert secrets.
 
 **How it works:**
+
 - Each endorser's `secretRef` points to a remote endorser's TLS certificate (e.g., `org1-auditor-tls-cert`)
 - The controller automatically creates a resolver secret (e.g., `org1-issuer-resolver-auditor`) containing a copy of that certificate
 - The resolver secrets are named: `{endorser-name}-resolver-{remote-node-name}`
@@ -981,7 +1107,7 @@ Wait for all endorsers to complete certificate enrollment in configure mode:
 
 ```bash
 # Wait for all endorsers to be in RUNNING state
-for node in issuer auditor owner1 owner2 endorser1 endorser2; do
+for node in issuer owner1 owner2 endorser1 endorser2; do
   kubectl wait --for=jsonpath='{.status.status}'=Running endorser/org1-${node} --timeout=300s
 done
 ```
@@ -994,7 +1120,7 @@ The controller automatically creates resolver secrets once the referenced TLS ce
 kubectl get secrets | grep resolver | wc -l
 ```
 
-Expected output: `30` (6 endorsers × 5 resolvers each)
+Expected output: `20` (5 endorsers × 4 resolvers each)
 
 Check secrets for a specific endorser:
 
@@ -1005,7 +1131,6 @@ kubectl get secrets | grep "org1-issuer-resolver"
 Expected output:
 
 ```
-org1-issuer-resolver-auditor       Opaque   1      1m
 org1-issuer-resolver-endorser1     Opaque   1      1m
 org1-issuer-resolver-endorser2     Opaque   1      1m
 org1-issuer-resolver-owner1        Opaque   1      1m
@@ -1018,7 +1143,6 @@ Now that all certificates and resolver secrets have been created, patch the endo
 
 ```bash
 kubectl patch endorser org1-issuer --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
-kubectl patch endorser org1-auditor --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
 kubectl patch endorser org1-owner1 --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
 kubectl patch endorser org1-owner2 --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
 kubectl patch endorser org1-endorser1 --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
@@ -1028,7 +1152,7 @@ kubectl patch endorser org1-endorser2 --type=merge -p '{"spec":{"bootstrapMode":
 Or patch all at once:
 
 ```bash
-for node in issuer auditor owner1 owner2 endorser1 endorser2; do
+for node in issuer owner1 owner2 endorser1 endorser2; do
   kubectl patch endorser org1-${node} --type=merge -p '{"spec":{"bootstrapMode":"deploy"}}'
 done
 ```
@@ -1046,7 +1170,6 @@ Expected output:
 ```
 NAME              MODE      STATUS
 org1-issuer       deploy    Running
-org1-auditor      deploy    Running
 org1-owner1       deploy    Running
 org1-owner2       deploy    Running
 org1-endorser1    deploy    Running
@@ -1065,12 +1188,11 @@ Check all endorser pods:
 kubectl get pods -l app.kubernetes.io/component=endorser
 ```
 
-Expected output (6 pods):
+Expected output (5 pods):
 
 ```
 NAME                             READY   STATUS    RESTARTS   AGE
 org1-issuer-xxxxx               1/1     Running   0          2m
-org1-auditor-xxxxx              1/1     Running   0          2m
 org1-owner1-xxxxx               1/1     Running   0          2m
 org1-owner2-xxxxx               1/1     Running   0          2m
 org1-endorser1-xxxxx            1/1     Running   0          2m
@@ -1089,7 +1211,6 @@ Expected output:
 
 ```
 org1-issuer-service      ClusterIP   10.x.x.x   <none>   9101/TCP   3m
-org1-auditor-service     ClusterIP   10.x.x.x   <none>   9201/TCP   3m
 org1-owner1-service      ClusterIP   10.x.x.x   <none>   9501/TCP   3m
 org1-owner2-service      ClusterIP   10.x.x.x   <none>   9601/TCP   3m
 org1-endorser1-service   ClusterIP   10.x.x.x   <none>   9301/TCP   3m
@@ -1127,6 +1248,7 @@ curl -k http://org1-endorser1-service:9301
 Each endorser deployment includes:
 
 1. **Core Configuration Secret**: Contains the `core.yaml` with:
+
    - FSC identity (certificate/key paths from enrollment)
    - P2P configuration (listen address, websocket)
    - Inline routing configuration (all 6 parties)
@@ -1135,11 +1257,13 @@ Each endorser deployment includes:
    - Token TMS configuration
 
 2. **Certificate Secrets**: Mounted into the pod at:
+
    - Sign cert: `/var/hyperledger/fabric/msp/signcerts/cert.pem`
    - Sign key: `/var/hyperledger/fabric/msp/keystore/key.pem`
    - TLS cert: `/var/hyperledger/fabric/tls/`
 
 3. **Resolver Certificates**: Mounted at:
+
    - `/var/hyperledger/fabric/resolvers/{node-name}/cert.pem`
 
 4. **Persistent Volume**: For SQLite database:
@@ -1150,14 +1274,13 @@ Each endorser deployment includes:
 
 Each endorser listens on a unique P2P port:
 
-| Endorser | Port | Role |
-|----------|------|------|
-| org1-issuer | 9101 | Token Issuer |
-| org1-auditor | 9201 | Auditor |
+| Endorser       | Port | Role                 |
+| -------------- | ---- | -------------------- |
+| org1-issuer    | 9101 | Token Issuer         |
 | org1-endorser1 | 9301 | Transaction Endorser |
 | org1-endorser2 | 9401 | Transaction Endorser |
-| org1-owner1 | 9501 | Token Owner |
-| org1-owner2 | 9601 | Token Owner |
+| org1-owner1    | 9501 | Token Owner          |
+| org1-owner2    | 9601 | Token Owner          |
 
 ### Troubleshooting Endorsers
 
@@ -1183,10 +1306,10 @@ If you see an error about missing resolver secrets:
 # Check which resolver secrets are missing
 kubectl get endorser org1-issuer -o yaml | grep -A 10 status
 
-# Recreate the missing resolver secret
-kubectl get secret org1-auditor-sign-cert -o jsonpath='{.data.cert\.pem}' | \
+# Recreate the missing resolver secret (example for owner1)
+kubectl get secret org1-owner1-sign-cert -o jsonpath='{.data.cert\.pem}' | \
   base64 -d | \
-  kubectl create secret generic org1-issuer-resolver-auditor --from-file=cert.pem=/dev/stdin
+  kubectl create secret generic org1-issuer-resolver-owner1 --from-file=cert.pem=/dev/stdin
 ```
 
 #### Certificate Enrollment Failed
@@ -1215,6 +1338,210 @@ Verify resolver certificates are mounted:
 
 ```bash
 kubectl exec -it $(kubectl get pod -l app=org1-issuer -o name) -- ls -la /var/hyperledger/fabric/resolvers/
+```
+
+## Step 13: Managing Identities with Identity CRD
+
+The Identity CRD provides a declarative way to manage Fabric identities and their cryptographic materials.
+
+### Understanding Identity CRD
+
+The Identity CRD supports two modes:
+
+1. **Import Existing Certificates**: Organize existing identity materials into structured secrets
+2. **Enroll with CA**: Automatically enroll identities with Fabric CA (future feature)
+
+### Create Admin Identity Password Secret
+
+First, create a secret with the admin password for future CA enrollment:
+
+```bash
+kubectl apply -f config/samples/admin-password-secret.yaml
+```
+
+### Deploy Admin Identity
+
+Create an admin identity using existing CA certificates:
+
+```bash
+kubectl apply -f config/samples/fabricx_v1alpha1_identity_admin.yaml
+```
+
+This will create an Identity resource that:
+
+- Imports existing admin certificates from the CA
+- Creates 6 organized output secrets (sign cert/key/CA + TLS cert/key/CA)
+- Tracks certificate expiry dates
+- Applies custom labels for easy identification
+
+### Verify Identity Creation
+
+Check the identity status:
+
+```bash
+kubectl get identity admin-org1
+```
+
+Expected output:
+
+```
+NAME         TYPE    MSPID      STATUS   EXPIRY      AGE
+admin-org1   admin   Org1MSP    READY    <date>      10s
+```
+
+### Verify Generated Secrets
+
+The Identity controller creates structured secrets:
+
+```bash
+kubectl get secrets | grep admin-org1
+```
+
+Expected output:
+
+```
+admin-org1-sign-cert      Opaque   1   10s
+admin-org1-sign-key       Opaque   1   10s
+admin-org1-sign-cacert    Opaque   1   10s
+admin-org1-tls-cert       Opaque   1   10s
+admin-org1-tls-key        Opaque   1   10s
+admin-org1-tls-cacert     Opaque   1   10s
+```
+
+### Validate Certificate Chain
+
+Verify the signing certificate:
+
+```bash
+kubectl get secret admin-org1-sign-cert -o jsonpath='{.data.cert\.pem}' | base64 -d | openssl x509 -noout -subject -issuer -dates
+```
+
+Verify the certificate and key match:
+
+```bash
+# Extract public key from certificate
+kubectl get secret admin-org1-sign-cert -o jsonpath='{.data.cert\.pem}' | base64 -d | openssl x509 -noout -pubkey > /tmp/cert-pubkey.pem
+
+# Extract public key from private key
+kubectl get secret admin-org1-sign-key -o jsonpath='{.data.cert\.pem}' | base64 -d | openssl ec -pubout > /tmp/key-pubkey.pem 2>/dev/null
+
+# Compare (should be identical)
+diff /tmp/cert-pubkey.pem /tmp/key-pubkey.pem
+```
+
+### Using Identity Secrets in Applications
+
+The generated secrets can be referenced in other Fabric components:
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Endorser
+metadata:
+  name: my-endorser
+spec:
+  # Reference the identity secrets
+  signCert:
+    secretKeyRef:
+      name: admin-org1-sign-cert
+      key: cert.pem
+  signKey:
+    secretKeyRef:
+      name: admin-org1-sign-key
+      key: cert.pem
+```
+
+### Identity Lifecycle Management
+
+**Update Identity**: Modify the Identity resource to update configurations
+
+```bash
+kubectl edit identity admin-org1
+```
+
+**Delete Identity**: Automatically cleans up all generated secrets
+
+```bash
+kubectl delete identity admin-org1
+```
+
+All output secrets (`admin-org1-*`) will be automatically deleted due to owner references.
+
+### Creating User Identities
+
+Create additional user identities for different roles:
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: user1-org1
+spec:
+  type: client
+  mspID: Org1MSP
+  existingCertificates:
+    signCertRef:
+      name: user1-cert
+      key: cert.pem
+    signKeyRef:
+      name: user1-key
+      key: key.pem
+    signCACertRef:
+      name: test-ca2-msp-crypto
+      key: certfile
+  output:
+    secretPrefix: user1-org1
+    labels:
+      app: fabric-client
+      user: user1
+```
+
+### Future: CA Enrollment
+
+In a future release, the Identity CRD will support automatic enrollment:
+
+```yaml
+spec:
+  type: admin
+  mspID: Org1MSP
+
+  # Enroll with CA (future feature)
+  enrollment:
+    caRef:
+      name: test-ca2
+    enrollID: admin
+    enrollSecretRef:
+      name: admin-password
+      key: password
+    enrollTLS: true
+    attrs:
+      - name: "hf.Registrar.Roles"
+        value: "client,orderer,peer,user"
+        ecert: true
+
+  # Register new user before enrollment (future feature)
+  register:
+    registrarID: admin
+    registrarSecretRef:
+      name: admin-password
+      key: password
+    maxEnrollments: -1
+```
+
+### Identity Status Fields
+
+The Identity controller tracks:
+
+- **Status**: READY, FAILED, INVALID
+- **Message**: Detailed status message
+- **EnrollmentTime**: When the identity was created/enrolled
+- **CertificateExpiry**: Signing certificate expiration date
+- **TLSCertificateExpiry**: TLS certificate expiration date
+- **OutputSecrets**: Names of all generated secrets
+
+Check detailed status:
+
+```bash
+kubectl describe identity admin-org1
 ```
 
 ## Next Steps
@@ -1359,6 +1686,7 @@ This configuration provides a Byzantine Fault Tolerant network that can tolerate
 ### Storage
 
 All components use persistent storage with:
+
 - Access Mode: `ReadWriteOnce`
 - Size: `10Gi` (orderers), `1Gi` (CA)
 - Storage Class: `fast-ssd` (configurable)

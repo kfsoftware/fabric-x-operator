@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the fabric-x-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- caenrollment_admin_role.yaml
+- caenrollment_editor_role.yaml
+- caenrollment_viewer_role.yaml
 - committerqueryservice_admin_role.yaml
 - committerqueryservice_editor_role.yaml
 - committerqueryservice_viewer_role.yaml

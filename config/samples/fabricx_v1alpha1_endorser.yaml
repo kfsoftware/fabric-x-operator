@@ -77,30 +77,12 @@ spec:
             # Use inline routing configuration instead of file path
             inline:
               {
-                "issuer": {
-                  "parties": ["issuer"],
-                  "aliases": []
-                },
-                "auditor": {
-                  "parties": ["auditor"],
-                  "aliases": []
-                },
-                "endorser1": {
-                  "parties": ["endorser1"],
-                  "aliases": []
-                },
-                "endorser2": {
-                  "parties": ["endorser2"],
-                  "aliases": []
-                },
-                "owner1": {
-                  "parties": ["owner1"],
-                  "aliases": []
-                },
-                "owner2": {
-                  "parties": ["owner2"],
-                  "aliases": []
-                }
+                "issuer": { "parties": ["issuer"], "aliases": [] },
+                "auditor": { "parties": ["auditor"], "aliases": [] },
+                "endorser1": { "parties": ["endorser1"], "aliases": [] },
+                "endorser2": { "parties": ["endorser2"], "aliases": [] },
+                "owner1": { "parties": ["owner1"], "aliases": [] },
+                "owner2": { "parties": ["owner2"], "aliases": [] },
               }
       persistences:
         default:
@@ -177,7 +159,7 @@ spec:
       tms:
         mytms:
           network: default
-          channel: mychannel
+          channel: arma
           namespace: token_namespace
           driver: zkatdlog
           services:

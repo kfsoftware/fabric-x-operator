@@ -37,6 +37,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	fabricxkfsofttechv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller"
 	ca "github.com/kfsoftware/fabric-x-operator/internal/controller/ca"
@@ -52,6 +53,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(fabricxv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fabricxkfsofttechv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -300,6 +302,20 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CommitterQueryService")
+		os.Exit(1)
+	}
+	if err := (&controller.CAEnrollmentReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CAEnrollment")
+		os.Exit(1)
+	}
+	if err := (&controller.IdentityReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Identity")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

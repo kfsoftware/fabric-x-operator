@@ -373,6 +373,25 @@ spec:
                   - serverTlsCertRef
                   type: object
                 type: array
+              metaNamespaceCA:
+                description: |-
+                  Meta namespace verification CA certificate reference (required)
+                  This CA certificate will be used for MetaNamespaceVerificationKeyPath
+                properties:
+                  key:
+                    description: Secret key
+                    type: string
+                  name:
+                    description: Secret name
+                    type: string
+                  namespace:
+                    description: Namespace of the secret
+                    type: string
+                required:
+                - key
+                - name
+                - namespace
+                type: object
               ordererOrganizations:
                 description: OrdererOrganizations (with certificates stored in secrets)
                 items:
@@ -887,6 +906,7 @@ spec:
             required:
             - channelID
             - configTemplate
+            - metaNamespaceCA
             - output
             type: object
           status:

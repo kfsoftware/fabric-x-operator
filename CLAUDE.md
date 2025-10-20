@@ -15,9 +15,11 @@ This document contains important learnings and patterns discovered during develo
 ## Endorser Custom Command and Args
 
 ### Problem
+
 Custom Docker images for endorsers (token-sdk-issuer, token-sdk-owner, token-sdk-endorser) require specific command and arguments that differ from the default Fabric Smart Client entrypoint.
 
 ### Solution
+
 Added `command` and `args` fields to the `EndorserSpec` to allow full customization of container execution.
 
 ### Implementation
@@ -91,10 +93,12 @@ CMD ["app", "--conf", "/conf"]
 Added comprehensive unit tests in [internal/controller/endorser_controller_test.go](internal/controller/endorser_controller_test.go):
 
 1. **Test: should configure custom command and args for the container**
+
    - Verifies command and args are properly set in deployment
    - Validates container spec includes both fields
 
 2. **Test: should handle empty args field**
+
    - Ensures nil/empty command and args don't cause issues
    - Tests backward compatibility
 
@@ -116,15 +120,18 @@ kubectl apply -f config/crd/bases/fabricx.kfsoft.tech_endorsers.yaml
 ## Volume Mounts for Data Directory
 
 ### Problem
+
 The endorser application tries to create `/var/hyperledger/fabric/config/data` directory, but `/var/hyperledger/fabric/config` is mounted read-only from the core-config Secret.
 
 **Error:**
+
 ```
 error creating data directory /var/hyperledger/fabric/config/data:
 mkdir /var/hyperledger/fabric/config/data: read-only file system
 ```
 
 ### Solution
+
 Mount the same PVC to both `/var/hyperledger/fabric/data` (for backward compatibility) and `/var/hyperledger/fabric/config/data` (for the application's needs).
 
 ### Implementation
@@ -145,7 +152,7 @@ spec:
       - name: data
         mountPath: /var/hyperledger/fabric/data
         readOnly: false
-      - name: data  # Same volume mounted twice
+      - name: data # Same volume mounted twice
         mountPath: /var/hyperledger/fabric/config/data
         readOnly: false
 ```
@@ -160,6 +167,7 @@ spec:
 ### All Samples Updated
 
 All 6 endorser samples now include this dual mount pattern:
+
 - `fabricx_v1alpha1_endorser_org1-issuer.yaml`
 - `fabricx_v1alpha1_endorser_org1-auditor.yaml`
 - `fabricx_v1alpha1_endorser_org1-owner1.yaml`
@@ -227,12 +235,14 @@ The operator can be managed using Kubernetes MCP (Model Context Protocol) tools 
 ### Available MCP Tools
 
 #### Resource Management
+
 - `mcp__kubernetes__resources_list` - List resources by apiVersion and kind
 - `mcp__kubernetes__resources_get` - Get a specific resource
 - `mcp__kubernetes__resources_create_or_update` - Apply YAML/JSON
 - `mcp__kubernetes__resources_delete` - Delete a resource
 
 #### Pod Management
+
 - `mcp__kubernetes__pods_list` - List pods
 - `mcp__kubernetes__pods_list_in_namespace` - List pods in namespace
 - `mcp__kubernetes__pods_get` - Get pod details
@@ -370,11 +380,13 @@ kubectl get endorsers,pods,services
 ### Issue: CRD Schema Error
 
 **Error:**
+
 ```
 unknown field "spec.command"
 ```
 
 **Solution:**
+
 ```bash
 # Regenerate and apply CRDs
 make manifests
@@ -384,23 +396,27 @@ kubectl apply -f config/crd/bases/fabricx.kfsoft.tech_endorsers.yaml
 ### Issue: ImagePullBackOff
 
 **Error:**
+
 ```
 Back-off pulling image "hyperledger/fabric-smart-client:latest"
 ```
 
 **Solution:**
+
 - Use custom images that exist: `token-sdk-issuer:fabricx-latest`
 - Or build and import custom images into K3D cluster
 
 ### Issue: CrashLoopBackOff
 
 **Common Causes:**
+
 1. Missing required configuration
 2. Certificate enrollment failed
 3. Volume mount issues
 4. Application configuration errors
 
 **Debug:**
+
 ```bash
 # Check pod logs
 kubectl logs <pod-name>
@@ -415,6 +431,7 @@ kubectl describe endorser <endorser-name>
 ### Issue: Read-Only Filesystem
 
 **Error:**
+
 ```
 mkdir /var/hyperledger/fabric/config/data: read-only file system
 ```
@@ -443,6 +460,7 @@ When adding new features to the Endorser controller:
 ## Useful Commands Reference
 
 ### Operator Development
+
 ```bash
 # Build and deploy operator
 export IMAGE=local/fabric-x-operator:$(date +%Y%m%d%H%M%S)
@@ -458,6 +476,7 @@ kubectl apply -f config/crd/bases/fabricx.kfsoft.tech_endorsers.yaml
 ```
 
 ### Resource Management
+
 ```bash
 # List all endorsers
 kubectl get endorsers
@@ -473,6 +492,7 @@ kubectl delete endorser org1-issuer
 ```
 
 ### Debugging
+
 ```bash
 # Pod logs
 kubectl logs -l app=org1-issuer
@@ -491,6 +511,7 @@ kubectl get secret org1-issuer-core-config -o yaml
 ```
 
 ### Testing
+
 ```bash
 # Run tests
 go test ./internal/controller -v
@@ -507,9 +528,11 @@ go test ./internal/controller -cover -v
 ## Routing Configuration File
 
 ### Problem
+
 The routing configuration needs to be available as a file named `routing-conf` in the `/var/hyperledger/fabric/config` directory with a specific YAML format mapping node names to their P2P addresses.
 
 ### Solution
+
 Generate a `routing-conf` YAML file from the endpoint resolvers configuration in the Endorser spec.
 
 ### Required Format
@@ -633,6 +656,7 @@ func (r *EndorserReconciler) reconcileCoreConfigSecret(ctx context.Context, endo
 The core-config Secret now contains two files:
 
 1. **core.yaml**: Main configuration with routing reference
+
    ```yaml
    fsc:
      p2p:
@@ -645,17 +669,17 @@ The core-config Secret now contains two files:
    ```yaml
    routes:
      auditor:
-     - auditor.example.com:9201
+       - auditor.example.com:9201
      endorser1:
-     - endorser1.example.com:9301
+       - endorser1.example.com:9301
      endorser2:
-     - endorser2.example.com:9401
+       - endorser2.example.com:9401
      issuer:
-     - issuer.example.com:9101
+       - issuer.example.com:9101
      owner1:
-     - owner1.example.com:9501
+       - owner1.example.com:9501
      owner2:
-     - owner2.example.com:9601
+       - owner2.example.com:9601
    ```
 
 ### Benefits
@@ -678,7 +702,7 @@ spec:
         resolvers:
           - name: auditor
             addresses:
-              P2P: custom-auditor.domain.com:9999  # Custom route
+              P2P: custom-auditor.domain.com:9999 # Custom route
 ```
 
 ### Verification
@@ -720,11 +744,13 @@ Creates/Updates:
 ### Two-Phase Bootstrap Pattern
 
 **Configure Mode:**
+
 - Enrolls certificates with CA
 - Creates secrets
 - Does NOT create deployment
 
 **Deploy Mode:**
+
 - Creates deployment
 - Mounts all secrets
 - Starts application pod
@@ -758,7 +784,9 @@ The endorser pod has multiple volume mounts:
 ## MSP Configuration for Orderer Components
 
 ### Problem
+
 Orderer consenter and batcher pods were failing with error:
+
 ```
 administrators must be declared when no admin ou classification is set
 ```
@@ -766,6 +794,7 @@ administrators must be declared when no admin ou classification is set
 This occurred because the MSP directory structure was missing the `config.yaml` file that defines NodeOUs (Node Organizational Units).
 
 ### Solution
+
 Create a `config.yaml` file with NodeOUs configuration and mount it in the MSP directory structure.
 
 ### Implementation
@@ -834,6 +863,7 @@ The exact same implementation was applied to OrdererBatcher controller ([interna
 ### Result
 
 After applying this fix:
+
 - Consenter pods: Running (1/1)
 - Batcher pods: Running (1/1)
 - MSP structure now includes:
@@ -862,7 +892,9 @@ The complete MSP directory structure mounted in orderer pods:
 ## MSP Configuration for Endorser Components
 
 ### Problem
+
 Endorser applications were failing with:
+
 ```
 stat /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts: no such file or directory
 ```
@@ -870,6 +902,7 @@ stat /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts: no such file o
 Endorsers expected MSP files at a specific path but had no mechanism to create them.
 
 ### Solution
+
 Add an init container to create the MSP directory structure with certificates and config.yaml inline.
 
 ### Implementation
@@ -974,6 +1007,7 @@ deployment.Spec.Template.Spec.Volumes = append(deployment.Spec.Template.Spec.Vol
 ### Troubleshooting Init Container Issues
 
 **Issue**: Init container failed with busybox find command error
+
 ```
 Init:Error - find: unrecognized: -ls
 ```
@@ -983,6 +1017,7 @@ Init:Error - find: unrecognized: -ls
 ### Result
 
 All endorser pods now start successfully with proper MSP configuration:
+
 - org1-issuer: Running (1/1)
 - org1-owner1: Running (1/1)
 - org1-owner2: Running (1/1)
@@ -995,9 +1030,11 @@ All endorser pods now start successfully with proper MSP configuration:
 ## Environment Variable Configuration for Committer Components
 
 ### Problem
+
 Environment variables defined in CommitterSidecar spec were being hashed for rollout detection but were NOT being added to the container specification. Changes to env vars would trigger a hash change but the actual values wouldn't appear in pods.
 
 ### Root Cause
+
 The `Env` field was completely missing from the container spec in `reconcileDeployment` function.
 
 ### Solution - Three Steps
@@ -1032,6 +1069,7 @@ Env []corev1.EnvVar   # NEW
 ```
 
 Files updated:
+
 - committer_types.go
 - committercoordinator_types.go
 - committersidecar_types.go
@@ -1096,7 +1134,7 @@ kubectl get pod <sidecar-pod> -o json | jq '.spec.containers[0].env'
   },
   {
     "name": "SIDECAR_CHANNEL_ID",
-    "value": "mychannel"
+    "value": "arma"
   }
 ]
 
@@ -1105,12 +1143,13 @@ kubectl exec <sidecar-pod> -- env | grep SIDECAR
 
 # Output:
 SIDECAR_LOG_LEVEL=DEBUG
-SIDECAR_CHANNEL_ID=mychannel
+SIDECAR_CHANNEL_ID=arma
 ```
 
 ### Hash-Based Rollout Behavior
 
 When env vars change:
+
 1. New hash is computed from env values
 2. Pod template annotation updated with new hash
 3. Deployment triggers rolling update
@@ -1118,6 +1157,7 @@ When env vars change:
 5. Old pod terminated after new pod is ready
 
 **Example**:
+
 ```bash
 # Before: SIDECAR_LOG_LEVEL=INFO
 # Hash: 8f5a500ac1d63dd623ffb32eadc83b4de3f0c8232a736eeaee9b49767c35912f
@@ -1133,6 +1173,7 @@ When env vars change:
 ## Service Address Configuration for Endorsers
 
 ### Problem
+
 Endorsers were configured with `localhost` addresses for committer services, causing connection failures:
 
 ```yaml
@@ -1143,6 +1184,7 @@ queryService:
 ```
 
 ### Solution
+
 Update all endorser samples to use actual Kubernetes service names.
 
 ### Implementation
@@ -1160,6 +1202,7 @@ queryService.address: fabric-x-committer-query-service-service.default:9001
 ```
 
 Files updated:
+
 - fabricx_v1alpha1_endorser_org1-auditor.yaml
 - fabricx_v1alpha1_endorser_org1-endorser1.yaml
 - fabricx_v1alpha1_endorser_org1-endorser2.yaml
@@ -1183,6 +1226,7 @@ fabric-x-committer-query-service-service    ClusterIP   10.43.x.x    <none>   90
 Format: `<component-name>-service.<namespace>:<port>`
 
 Examples:
+
 - `fabric-x-committer-sidecar-service.default:5050`
 - `fabric-x-committer-query-service-service.default:9001`
 - `fabric-x-committer-coordinator-service.default:9001`
@@ -1196,6 +1240,7 @@ Examples:
 This is the tested and working deployment sequence for a complete Fabric-X network.
 
 #### Prerequisites
+
 - K3D cluster with ports mapped: 80→30949, 443→30950
 - Istio installed
 - PostgreSQL deployed for committer validator
@@ -1238,6 +1283,7 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=fabric-x -
 ```
 
 Expected pods (18 total):
+
 - 4 Routers
 - 8 Batchers (2 per party)
 - 4 Consenters
@@ -1254,6 +1300,7 @@ kubectl get pods | grep fabric-x-committer
 ```
 
 Expected pods (5 total):
+
 - Coordinator
 - Sidecar
 - Query Service
@@ -1282,6 +1329,7 @@ kubectl get pods | grep org1-
 ```
 
 Expected pods (6 total):
+
 - org1-issuer
 - org1-auditor (may have image issue)
 - org1-owner1
@@ -1307,16 +1355,18 @@ kubectl get pod -l app=sidecar,release=fabric-x-committer-sidecar -o jsonpath='{
 
 ### Channel Configuration
 
-All components point to channel: `mychannel`
+All components point to channel: `arma`
 
 Verify in samples:
-- Endorsers: `channels[0].name: mychannel`
-- Committer Sidecar: `SIDECAR_CHANNEL_ID: mychannel`
-- Genesis: `channelName: mychannel`
+
+- Endorsers: `channels[0].name: arma`
+- Committer Sidecar: `SIDECAR_CHANNEL_ID: arma`
+- Genesis: `channelName: arma`
 
 ### Expected Final State
 
 Total: **32 pods**
+
 - 1 CA pod
 - 18 orderer component pods
 - 5 committer component pods
