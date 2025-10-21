@@ -88,10 +88,27 @@ var _ = Describe("CommitterQueryService Controller", func() {
 		})
 
 		It("should create config secret in deploy mode", func() {
-			By("Setting bootstrap mode to deploy")
-			Expect(k8sClient.Get(ctx, typeNamespacedName, queryService)).To(Succeed())
-			queryService.Spec.BootstrapMode = "deploy"
-			Expect(k8sClient.Update(ctx, queryService)).To(Succeed())
+			// Use a different resource name to avoid conflict with AfterEach cleanup
+			deployResourceName := "test-query-service-deploy"
+			deployTypeNamespacedName := types.NamespacedName{
+				Name:      deployResourceName,
+				Namespace: "default",
+			}
+
+			By("Creating a resource in deploy mode")
+			resource := &fabricxv1alpha1.CommitterQueryService{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deployResourceName,
+					Namespace: "default",
+				},
+				Spec: fabricxv1alpha1.CommitterQueryServiceSpec{
+					BootstrapMode: "deploy",
+					MSPID:         "Org1MSP",
+					PartyID:       1,
+					Replicas:      1,
+				},
+			}
+			Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 
 			By("Reconciling the resource")
 			controllerReconciler := &CommitterQueryServiceReconciler{
@@ -99,13 +116,13 @@ var _ = Describe("CommitterQueryService Controller", func() {
 				Scheme: k8sClient.Scheme(),
 			}
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
+				NamespacedName: deployTypeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Checking if config secret was created")
 			secret := &corev1.Secret{}
-			secretName := resourceName + "-config"
+			secretName := deployResourceName + "-config"
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
 					Name:      secretName,
@@ -115,6 +132,9 @@ var _ = Describe("CommitterQueryService Controller", func() {
 
 			By("Verifying secret contains config.yaml")
 			Expect(secret.Data).To(HaveKey("config.yaml"))
+
+			By("Cleaning up the deploy mode resource")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 	})
 

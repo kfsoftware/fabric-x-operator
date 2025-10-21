@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("CommitterSidecar Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-sidecar"
 
 		ctx := context.Background()
 
@@ -51,7 +51,9 @@ var _ = Describe("CommitterSidecar Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: fabricxv1alpha1.CommitterSidecarSpec{
+						BootstrapMode: "configure",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

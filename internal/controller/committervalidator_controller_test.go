@@ -32,7 +32,7 @@ import (
 
 var _ = Describe("CommitterValidator Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-validator"
 
 		ctx := context.Background()
 
@@ -51,7 +51,9 @@ var _ = Describe("CommitterValidator Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: fabricxv1alpha1.CommitterValidatorSpec{
+						BootstrapMode: "configure",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}

@@ -209,6 +209,108 @@ var _ = Describe("Genesis Controller", func() {
 				}
 				Expect(k8sClient.Create(ctx, orderer2IdentitySecret)).To(Succeed())
 
+				// Create meta namespace CA secret
+				metaNamespaceCASecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-meta-ca-secret",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"ca.pem": caCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, metaNamespaceCASecret)).To(Succeed())
+
+				// Create party certificate secrets for router, batcher, consenter, assembler
+				partyRouterTLSSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-router-tls-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": tlsCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyRouterTLSSecret)).To(Succeed())
+
+				partyBatcherSignSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-batcher-sign-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": identityCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyBatcherSignSecret)).To(Succeed())
+
+				partyBatcherTLSSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-batcher-tls-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": tlsCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyBatcherTLSSecret)).To(Succeed())
+
+				partyConsenterSignSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-consenter-sign-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": identityCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyConsenterSignSecret)).To(Succeed())
+
+				partyConsenterTLSSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-consenter-tls-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": tlsCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyConsenterTLSSecret)).To(Succeed())
+
+				partyAssemblerTLSSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "party1-assembler-tls-cert",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"cert.pem": tlsCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyAssemblerTLSSecret)).To(Succeed())
+
+				// Create party CA secrets (required by party configuration)
+				partyCACertSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ordererorg-ca-secret",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"ca.crt": caCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyCACertSecret)).To(Succeed())
+
+				partyTLSCACertSecret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "ordererorg-tlsca-secret",
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"ca.crt": tlsCert,
+					},
+				}
+				Expect(k8sClient.Create(ctx, partyTLSCACertSecret)).To(Succeed())
+
 				// Generate certificates for orderer organization
 				ordererOrg, _, err := genesisutils.GenerateOrdererOrganization("ordererorg", "OrdererOrgMSP")
 				Expect(err).NotTo(HaveOccurred())
@@ -238,6 +340,81 @@ var _ = Describe("Genesis Controller", func() {
 						ApplicationOrgs: []fabricxv1alpha1.ApplicationOrganization{*appOrg},
 						// Add orderer nodes for orderer organization
 						Consenters: consenters,
+						// Add required meta namespace CA
+						MetaNamespaceCA: fabricxv1alpha1.SecretKeyNSSelector{
+							Name:      "test-meta-ca-secret",
+							Namespace: "default",
+							Key:       "ca.pem",
+						},
+						// Add at least 1 party (required for consensus)
+						Parties: []fabricxv1alpha1.PartyConfig{
+							{
+								PartyID: 1,
+								CACerts: []fabricxv1alpha1.SecretKeyNSSelector{
+									{
+										Name:      "ordererorg-ca-secret",
+										Namespace: "default",
+										Key:       "ca.crt",
+									},
+								},
+								TLSCACerts: []fabricxv1alpha1.SecretKeyNSSelector{
+									{
+										Name:      "ordererorg-tlsca-secret",
+										Namespace: "default",
+										Key:       "ca.crt",
+									},
+								},
+								RouterConfig: &fabricxv1alpha1.PartyRouterConfig{
+									Host: "party1-router.default.svc.cluster.local",
+									Port: 7150,
+									TLSCert: fabricxv1alpha1.SecretKeyNSSelector{
+										Name:      "party1-router-tls-cert",
+										Namespace: "default",
+										Key:       "cert.pem",
+									},
+								},
+								BatchersConfig: []fabricxv1alpha1.PartyBatcherConfig{
+									{
+										ShardID: 1,
+										Host:    "party1-batcher.default.svc.cluster.local",
+										Port:    7151,
+										SignCert: fabricxv1alpha1.SecretKeyNSSelector{
+											Name:      "party1-batcher-sign-cert",
+											Namespace: "default",
+											Key:       "cert.pem",
+										},
+										TLSCert: fabricxv1alpha1.SecretKeyNSSelector{
+											Name:      "party1-batcher-tls-cert",
+											Namespace: "default",
+											Key:       "cert.pem",
+										},
+									},
+								},
+								ConsenterConfig: &fabricxv1alpha1.PartyConsenterConfig{
+									Host: "party1-consenter.default.svc.cluster.local",
+									Port: 7052,
+									SignCert: fabricxv1alpha1.SecretKeyNSSelector{
+										Name:      "party1-consenter-sign-cert",
+										Namespace: "default",
+										Key:       "cert.pem",
+									},
+									TLSCert: fabricxv1alpha1.SecretKeyNSSelector{
+										Name:      "party1-consenter-tls-cert",
+										Namespace: "default",
+										Key:       "cert.pem",
+									},
+								},
+								AssemblerConfig: &fabricxv1alpha1.PartyAssemblerConfig{
+									Host: "party1-assembler.default.svc.cluster.local",
+									Port: 7153,
+									TLSCert: fabricxv1alpha1.SecretKeyNSSelector{
+										Name:      "party1-assembler-tls-cert",
+										Namespace: "default",
+										Key:       "cert.pem",
+									},
+								},
+							},
+						},
 						Output: fabricxv1alpha1.GenesisOutput{
 							SecretName: "test-genesis-secret",
 							BlockKey:   "genesis.block",

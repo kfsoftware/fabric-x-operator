@@ -165,8 +165,21 @@ func IsCertManagerCRDsInstalled() bool {
 	return false
 }
 
-// LoadImageToKindClusterWithName loads a local docker image to the kind cluster
+// LoadImageToKindClusterWithName loads a local docker image to the kind or k3d cluster
 func LoadImageToKindClusterWithName(name string) error {
+	// Check if using k3d instead of kind
+	if clusterType := os.Getenv("CLUSTER_TYPE"); clusterType == "k3d" {
+		cluster := "k8s-hlf"
+		if v, ok := os.LookupEnv("K3D_CLUSTER"); ok {
+			cluster = v
+		}
+		k3dOptions := []string{"image", "import", name, "-c", cluster}
+		cmd := exec.Command("k3d", k3dOptions...)
+		_, err := Run(cmd)
+		return err
+	}
+
+	// Default to kind
 	cluster := "kind"
 	if v, ok := os.LookupEnv("KIND_CLUSTER"); ok {
 		cluster = v
