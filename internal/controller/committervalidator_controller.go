@@ -336,7 +336,7 @@ func (r *CommitterValidatorReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, client.ObjectKey{
+		err := r.Get(ctx, client.ObjectKey{
 			Name:      secretName,
 			Namespace: committerValidator.Namespace,
 		}, existingSecret)
@@ -367,7 +367,7 @@ func (r *CommitterValidatorReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -406,7 +406,7 @@ func (r *CommitterValidatorReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -523,7 +523,7 @@ func (r *CommitterValidatorReconciler) reconcileSecret(ctx context.Context, comm
 		secretNS := committerValidator.Spec.PostgreSQL.PasswordSecret.Namespace
 		if secretName != "" && secretKey != "" {
 			secret := &corev1.Secret{}
-			if err := r.Client.Get(ctx, client.ObjectKey{
+			if err := r.Get(ctx, client.ObjectKey{
 				Name:      secretName,
 				Namespace: secretNS,
 			}, secret); err != nil {
@@ -764,10 +764,20 @@ func (r *CommitterValidatorReconciler) reconcileDeployment(ctx context.Context, 
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "validator",
+							Name: "validator",
 							Image: fmt.Sprintf("%s:%s",
-								func() string { if committerValidator.Spec.Image != "" { return committerValidator.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
-								func() string { if committerValidator.Spec.ImageTag != "" { return committerValidator.Spec.ImageTag }; return "0.1.5" }()),
+								func() string {
+									if committerValidator.Spec.Image != "" {
+										return committerValidator.Spec.Image
+									}
+									return "hyperledger/fabric-x-committer"
+								}(),
+								func() string {
+									if committerValidator.Spec.ImageTag != "" {
+										return committerValidator.Spec.ImageTag
+									}
+									return "0.1.5"
+								}()),
 							Command: []string{
 								"committer",
 							},
@@ -865,7 +875,7 @@ func (r *CommitterValidatorReconciler) updateDeployment(ctx context.Context, com
 // computeConfigMapHash computes a deterministic hash of a ConfigMap's data
 func (r *CommitterValidatorReconciler) computeSecretHash(ctx context.Context, secretName, namespace string) (string, error) {
 	sec := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
 		return "", err
 	}
 	var parts []string

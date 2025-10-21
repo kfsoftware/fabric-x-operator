@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	fabricCAImage   = "hyperledger/fabric-ca:1.5.15"
-	adminUser       = "admin"
-	adminPassword   = "adminpw"
+	fabricCAImage = "hyperledger/fabric-ca:1.5.15"
+	adminUser     = "admin"
+	adminPassword = "adminpw"
 )
 
 // TestIdemixEnrollmentWithCA tests the complete idemix enrollment flow with a real Fabric CA
@@ -137,10 +137,10 @@ func startFabricCAContainer(ctx context.Context, t *testing.T) (testcontainers.C
 		Image:        fabricCAImage,
 		ExposedPorts: []string{"7054/tcp"},
 		Env: map[string]string{
-			"FABRIC_CA_HOME":                "/etc/hyperledger/fabric-ca-server",
-			"FABRIC_CA_SERVER_CA_NAME":      "ca",
-			"FABRIC_CA_SERVER_PORT":         "7054",
-			"FABRIC_CA_SERVER_DEBUG":        "true",
+			"FABRIC_CA_HOME":           "/etc/hyperledger/fabric-ca-server",
+			"FABRIC_CA_SERVER_CA_NAME": "ca",
+			"FABRIC_CA_SERVER_PORT":    "7054",
+			"FABRIC_CA_SERVER_DEBUG":   "true",
 		},
 		Cmd: []string{
 			"sh", "-c",

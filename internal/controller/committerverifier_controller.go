@@ -336,7 +336,7 @@ func (r *CommitterVerifierReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, client.ObjectKey{
+		err := r.Get(ctx, client.ObjectKey{
 			Name:      secretName,
 			Namespace: committerVerifier.Namespace,
 		}, existingSecret)
@@ -367,7 +367,7 @@ func (r *CommitterVerifierReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -406,7 +406,7 @@ func (r *CommitterVerifierReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -693,10 +693,20 @@ func (r *CommitterVerifierReconciler) reconcileDeployment(ctx context.Context, c
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "verifier",
+							Name: "verifier",
 							Image: fmt.Sprintf("%s:%s",
-								func() string { if committerVerifier.Spec.Image != "" { return committerVerifier.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
-								func() string { if committerVerifier.Spec.ImageTag != "" { return committerVerifier.Spec.ImageTag }; return "0.1.5" }()),
+								func() string {
+									if committerVerifier.Spec.Image != "" {
+										return committerVerifier.Spec.Image
+									}
+									return "hyperledger/fabric-x-committer"
+								}(),
+								func() string {
+									if committerVerifier.Spec.ImageTag != "" {
+										return committerVerifier.Spec.ImageTag
+									}
+									return "0.1.5"
+								}()),
 							Command: []string{
 								"committer",
 							},
@@ -793,7 +803,7 @@ func (r *CommitterVerifierReconciler) updateDeployment(ctx context.Context, comm
 // computeConfigMapHash computes a deterministic hash of a ConfigMap's data
 func (r *CommitterVerifierReconciler) computeSecretHash(ctx context.Context, secretName, namespace string) (string, error) {
 	sec := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
 		return "", err
 	}
 	var parts []string

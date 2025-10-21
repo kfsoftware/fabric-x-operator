@@ -87,7 +87,7 @@ func (r *OrdererBatcherReconciler) getServiceFQDN(ordererBatcher *fabricxv1alpha
 // computeConfigMapHash computes a hash of the ConfigMap data to trigger deployment updates
 func (r *OrdererBatcherReconciler) computeConfigMapHash(ctx context.Context, configMapName, namespace string) (string, error) {
 	configMap := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name:      configMapName,
 		Namespace: namespace,
 	}, configMap)
@@ -420,7 +420,7 @@ func (r *OrdererBatcherReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      secretName,
 			Namespace: ordererBatcher.Namespace,
 		}, existingSecret)
@@ -451,7 +451,7 @@ func (r *OrdererBatcherReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -490,7 +490,7 @@ func (r *OrdererBatcherReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -618,7 +618,7 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 	}
 
 	// Check if PVC exists
-	err := r.Client.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name:      pvc.Name,
 		Namespace: pvc.Namespace,
 	}, pvc)
@@ -746,7 +746,7 @@ func (r *OrdererBatcherReconciler) reconcilePVC(ctx context.Context, ordererBatc
 func (r *OrdererBatcherReconciler) createPVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
-		err := r.Client.Create(ctx, pvc)
+		err := r.Create(ctx, pvc)
 		if err == nil {
 			return nil
 		}
@@ -770,7 +770,7 @@ func (r *OrdererBatcherReconciler) createPVCWithRetry(ctx context.Context, pvc *
 func (r *OrdererBatcherReconciler) updatePVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
-		err := r.Client.Update(ctx, pvc)
+		err := r.Update(ctx, pvc)
 		if err == nil {
 			return nil
 		}
@@ -782,7 +782,7 @@ func (r *OrdererBatcherReconciler) updatePVCWithRetry(ctx context.Context, pvc *
 
 			// Get the latest version
 			latestPVC := &corev1.PersistentVolumeClaim{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
+			if err := r.Get(ctx, types.NamespacedName{
 				Name:      pvc.Name,
 				Namespace: pvc.Namespace,
 			}, latestPVC); err != nil {
@@ -814,7 +814,7 @@ func (r *OrdererBatcherReconciler) reconcileGenesisBlock(ctx context.Context, or
 
 	// Verify that the genesis block secret exists
 	genesisSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
+	err := r.Get(ctx, client.ObjectKey{
 		Namespace: func() string {
 			if ordererBatcher.Spec.Genesis.SecretNamespace != "" {
 				return ordererBatcher.Spec.Genesis.SecretNamespace
@@ -887,7 +887,7 @@ func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, or
 		ServicePort: r.getServicePort(),
 		Labels: map[string]string{
 			"app":                      "fabric-x",
-			"ordererbatcher":              ordererBatcher.Name,
+			"ordererbatcher":           ordererBatcher.Name,
 			"fabricx.kfsoft.tech/type": "tlsroute",
 		},
 		Owner:  ordererBatcher,

@@ -215,7 +215,7 @@ func (r *OrdererAssemblerReconciler) reconcileGenesisBlock(ctx context.Context, 
 
 	// Verify that the genesis block secret exists
 	genesisSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
+	err := r.Get(ctx, client.ObjectKey{
 		Namespace: func() string {
 			if ordererAssembler.Spec.Genesis.SecretNamespace != "" {
 				return ordererAssembler.Spec.Genesis.SecretNamespace
@@ -411,7 +411,7 @@ func (r *OrdererAssemblerReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      secretName,
 			Namespace: ordererAssembler.Namespace,
 		}, existingSecret)
@@ -442,7 +442,7 @@ func (r *OrdererAssemblerReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -481,7 +481,7 @@ func (r *OrdererAssemblerReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -713,10 +713,10 @@ func (r *OrdererAssemblerReconciler) updateService(ctx context.Context, ordererA
 	}
 
 	// Try to create the Service
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If Service already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update Service: %w", err)
 			}
 		} else {
@@ -748,7 +748,7 @@ func (r *OrdererAssemblerReconciler) reconcileIstioGateway(ctx context.Context, 
 		ServicePort: r.getServicePort(),
 		Labels: map[string]string{
 			"app":                      "fabric-x",
-			"ordererassembler":              ordererAssembler.Name,
+			"ordererassembler":         ordererAssembler.Name,
 			"fabricx.kfsoft.tech/type": "tlsroute",
 		},
 		Owner:  ordererAssembler,
@@ -879,10 +879,10 @@ func (r *OrdererAssemblerReconciler) updateConfigMap(ctx context.Context, ordere
 	}
 
 	// Try to create the ConfigMap
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If ConfigMap already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update ConfigMap: %w", err)
 			}
 		} else {
@@ -1170,10 +1170,10 @@ func (r *OrdererAssemblerReconciler) updateDeployment(ctx context.Context, order
 	}
 
 	// Try to create the Deployment
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If Deployment already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update Deployment: %w", err)
 			}
 		} else {
@@ -1222,10 +1222,10 @@ func (r *OrdererAssemblerReconciler) reconcilePVC(ctx context.Context, ordererAs
 		return fmt.Errorf("failed to set controller reference for PVC: %w", err)
 	}
 
-	if err := r.Client.Create(ctx, pvc); err != nil {
+	if err := r.Create(ctx, pvc); err != nil {
 		// If PVC already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, pvc); err != nil {
+			if err := r.Update(ctx, pvc); err != nil {
 				return fmt.Errorf("failed to update PVC: %w", err)
 			}
 		} else {
@@ -1250,7 +1250,7 @@ func (r *OrdererAssemblerReconciler) cleanupDeploymentResources(ctx context.Cont
 	configMap.SetName(configMapName)
 	configMap.SetNamespace(ordererAssembler.Namespace)
 
-	if err := r.Client.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
+	if err := r.Delete(ctx, configMap); err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "Failed to delete ConfigMap", "name", configMapName)
 		return err
 	} else {
@@ -1262,7 +1262,7 @@ func (r *OrdererAssemblerReconciler) cleanupDeploymentResources(ctx context.Cont
 	deployment.SetName(deploymentName)
 	deployment.SetNamespace(ordererAssembler.Namespace)
 
-	if err := r.Client.Delete(ctx, deployment); err != nil && !errors.IsNotFound(err) {
+	if err := r.Delete(ctx, deployment); err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "Failed to delete Deployment", "name", deploymentName)
 		return err
 	} else {
@@ -1274,7 +1274,7 @@ func (r *OrdererAssemblerReconciler) cleanupDeploymentResources(ctx context.Cont
 	pvc.SetName(pvcName)
 	pvc.SetNamespace(ordererAssembler.Namespace)
 
-	if err := r.Client.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
+	if err := r.Delete(ctx, pvc); err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "Failed to delete PVC", "name", pvcName)
 		return err
 	} else {

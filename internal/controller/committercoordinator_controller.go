@@ -336,7 +336,7 @@ func (r *CommitterCoordinatorReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, client.ObjectKey{
+		err := r.Get(ctx, client.ObjectKey{
 			Name:      secretName,
 			Namespace: committerCoordinator.Namespace,
 		}, existingSecret)
@@ -367,7 +367,7 @@ func (r *CommitterCoordinatorReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -406,7 +406,7 @@ func (r *CommitterCoordinatorReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -697,10 +697,20 @@ func (r *CommitterCoordinatorReconciler) reconcileDeployment(ctx context.Context
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "coordinator",
+							Name: "coordinator",
 							Image: fmt.Sprintf("%s:%s",
-								func() string { if committerCoordinator.Spec.Image != "" { return committerCoordinator.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
-								func() string { if committerCoordinator.Spec.ImageTag != "" { return committerCoordinator.Spec.ImageTag }; return "0.1.5" }()),
+								func() string {
+									if committerCoordinator.Spec.Image != "" {
+										return committerCoordinator.Spec.Image
+									}
+									return "hyperledger/fabric-x-committer"
+								}(),
+								func() string {
+									if committerCoordinator.Spec.ImageTag != "" {
+										return committerCoordinator.Spec.ImageTag
+									}
+									return "0.1.5"
+								}()),
 							Command: []string{
 								"committer",
 							},
@@ -797,7 +807,7 @@ func (r *CommitterCoordinatorReconciler) updateDeployment(ctx context.Context, c
 // computeConfigMapHash computes a deterministic hash of a ConfigMap's data
 func (r *CommitterCoordinatorReconciler) computeSecretHash(ctx context.Context, secretName, namespace string) (string, error) {
 	sec := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
 		return "", err
 	}
 	var parts []string

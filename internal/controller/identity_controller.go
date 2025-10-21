@@ -75,7 +75,7 @@ func (r *IdentityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Handle deletion
-	if !identity.ObjectMeta.DeletionTimestamp.IsZero() {
+	if !identity.DeletionTimestamp.IsZero() {
 		return r.handleDeletion(ctx, logger, identity)
 	}
 
@@ -447,7 +447,6 @@ func (r *IdentityReconciler) createOutputSecrets(ctx context.Context, logger log
 
 	return nil
 }
-
 
 // getCertificateExpiry parses a PEM-encoded certificate and returns its expiry time
 func (r *IdentityReconciler) getCertificateExpiry(certPEM []byte) (time.Time, error) {

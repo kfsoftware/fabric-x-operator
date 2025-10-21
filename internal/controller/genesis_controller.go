@@ -348,7 +348,7 @@ func (r *GenesisReconciler) storeGenesisBlock(ctx context.Context, genesis *fabr
 
 	// Check if secret already exists
 	existingSecret := &corev1.Secret{}
-	err = r.Client.Get(ctx, client.ObjectKey{
+	err = r.Get(ctx, client.ObjectKey{
 		Namespace: secret.Namespace,
 		Name:      secret.Name,
 	}, existingSecret)
@@ -361,7 +361,7 @@ func (r *GenesisReconciler) storeGenesisBlock(ctx context.Context, genesis *fabr
 				return fmt.Errorf("failed to set controller reference for secret %s: %w", genesis.Spec.Output.SecretName, err)
 			}
 
-			if err := r.Client.Create(ctx, secret); err != nil {
+			if err := r.Create(ctx, secret); err != nil {
 				return fmt.Errorf("failed to create genesis block secret: %w", err)
 			}
 			log.Info("Created genesis block secret", "secret", genesis.Spec.Output.SecretName)
@@ -377,7 +377,7 @@ func (r *GenesisReconciler) storeGenesisBlock(ctx context.Context, genesis *fabr
 			return fmt.Errorf("failed to set controller reference for existing secret %s: %w", genesis.Spec.Output.SecretName, err)
 		}
 
-		if err := r.Client.Update(ctx, existingSecret); err != nil {
+		if err := r.Update(ctx, existingSecret); err != nil {
 			return fmt.Errorf("failed to update genesis block secret: %w", err)
 		}
 		log.Info("Updated genesis block secret", "secret", genesis.Spec.Output.SecretName)

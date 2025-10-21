@@ -94,7 +94,7 @@ func (r *OrdererConsenterReconciler) getServiceFQDN(ordererConsenter *fabricxv1a
 // computeConfigMapHash computes a hash of the ConfigMap data to trigger deployment updates
 func (r *OrdererConsenterReconciler) computeConfigMapHash(ctx context.Context, configMapName, namespace string) (string, error) {
 	configMap := &corev1.ConfigMap{}
-	err := r.Client.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name:      configMapName,
 		Namespace: namespace,
 	}, configMap)
@@ -284,7 +284,7 @@ func (r *OrdererConsenterReconciler) reconcileGenesisBlock(ctx context.Context, 
 
 	// Verify that the genesis block secret exists
 	genesisSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
+	err := r.Get(ctx, client.ObjectKey{
 		Namespace: func() string {
 			if ordererConsenter.Spec.Genesis.SecretNamespace != "" {
 				return ordererConsenter.Spec.Genesis.SecretNamespace
@@ -480,7 +480,7 @@ func (r *OrdererConsenterReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      secretName,
 			Namespace: ordererConsenter.Namespace,
 		}, existingSecret)
@@ -511,7 +511,7 @@ func (r *OrdererConsenterReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -550,7 +550,7 @@ func (r *OrdererConsenterReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -766,7 +766,7 @@ func (r *OrdererConsenterReconciler) reconcilePVC(ctx context.Context, ordererCo
 	}
 
 	// Check if PVC exists
-	err := r.Client.Get(ctx, types.NamespacedName{
+	err := r.Get(ctx, types.NamespacedName{
 		Name:      pvc.Name,
 		Namespace: pvc.Namespace,
 	}, pvc)
@@ -899,7 +899,7 @@ func (r *OrdererConsenterReconciler) reconcilePVC(ctx context.Context, ordererCo
 func (r *OrdererConsenterReconciler) createPVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
-		err := r.Client.Create(ctx, pvc)
+		err := r.Create(ctx, pvc)
 		if err == nil {
 			return nil
 		}
@@ -923,7 +923,7 @@ func (r *OrdererConsenterReconciler) createPVCWithRetry(ctx context.Context, pvc
 func (r *OrdererConsenterReconciler) updatePVCWithRetry(ctx context.Context, pvc *corev1.PersistentVolumeClaim) error {
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
-		err := r.Client.Update(ctx, pvc)
+		err := r.Update(ctx, pvc)
 		if err == nil {
 			return nil
 		}
@@ -935,7 +935,7 @@ func (r *OrdererConsenterReconciler) updatePVCWithRetry(ctx context.Context, pvc
 
 			// Get the latest version
 			latestPVC := &corev1.PersistentVolumeClaim{}
-			if err := r.Client.Get(ctx, types.NamespacedName{
+			if err := r.Get(ctx, types.NamespacedName{
 				Name:      pvc.Name,
 				Namespace: pvc.Namespace,
 			}, latestPVC); err != nil {
@@ -967,7 +967,7 @@ func (r *OrdererConsenterReconciler) waitForPVCReady(ctx context.Context, pvcNam
 
 	for elapsed < timeout {
 		pvc := &corev1.PersistentVolumeClaim{}
-		err := r.Client.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      pvcName,
 			Namespace: namespace,
 		}, pvc)

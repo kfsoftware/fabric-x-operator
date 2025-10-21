@@ -336,7 +336,7 @@ func (r *CommitterSidecarReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, client.ObjectKey{
+		err := r.Get(ctx, client.ObjectKey{
 			Name:      secretName,
 			Namespace: committerSidecar.Namespace,
 		}, existingSecret)
@@ -367,7 +367,7 @@ func (r *CommitterSidecarReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -406,7 +406,7 @@ func (r *CommitterSidecarReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -713,10 +713,20 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "sidecar",
+							Name: "sidecar",
 							Image: fmt.Sprintf("%s:%s",
-								func() string { if committerSidecar.Spec.Image != "" { return committerSidecar.Spec.Image }; return "hyperledger/fabric-x-committer" }(),
-								func() string { if committerSidecar.Spec.ImageTag != "" { return committerSidecar.Spec.ImageTag }; return "0.1.5" }()),
+								func() string {
+									if committerSidecar.Spec.Image != "" {
+										return committerSidecar.Spec.Image
+									}
+									return "hyperledger/fabric-x-committer"
+								}(),
+								func() string {
+									if committerSidecar.Spec.ImageTag != "" {
+										return committerSidecar.Spec.ImageTag
+									}
+									return "0.1.5"
+								}()),
 							Command: []string{
 								"committer",
 							},
@@ -849,7 +859,7 @@ func (r *CommitterSidecarReconciler) updateDeployment(ctx context.Context, commi
 // computeConfigMapHash computes a deterministic hash of a ConfigMap's data
 func (r *CommitterSidecarReconciler) computeSecretHash(ctx context.Context, secretName, namespace string) (string, error) {
 	sec := &corev1.Secret{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, sec); err != nil {
 		return "", err
 	}
 	var parts []string
@@ -880,7 +890,7 @@ func (r *CommitterSidecarReconciler) reconcileGenesisBlock(ctx context.Context, 
 
 	// Verify that the genesis block secret exists
 	genesisSecret := &corev1.Secret{}
-	err := r.Client.Get(ctx, client.ObjectKey{
+	err := r.Get(ctx, client.ObjectKey{
 		Namespace: func() string {
 			if committerSidecar.Spec.Genesis.SecretNamespace != "" {
 				return committerSidecar.Spec.Genesis.SecretNamespace

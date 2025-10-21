@@ -730,8 +730,8 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 	}
 
 	// Initialize pod annotations map
-	if deployment.Spec.Template.ObjectMeta.Annotations == nil {
-		deployment.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
 	}
 
 	// Add hash annotations for all mounted secrets to trigger pod restart on config changes
@@ -742,14 +742,14 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 	// Add pod annotations if specified (merge with existing annotations)
 	if endorser.Spec.Common != nil && len(endorser.Spec.Common.PodAnnotations) > 0 {
 		for k, v := range endorser.Spec.Common.PodAnnotations {
-			deployment.Spec.Template.ObjectMeta.Annotations[k] = v
+			deployment.Spec.Template.Annotations[k] = v
 		}
 	}
 
 	// Add pod labels if specified
 	if endorser.Spec.Common != nil && len(endorser.Spec.Common.PodLabels) > 0 {
 		for k, v := range endorser.Spec.Common.PodLabels {
-			deployment.Spec.Template.ObjectMeta.Labels[k] = v
+			deployment.Spec.Template.Labels[k] = v
 		}
 	}
 
@@ -784,7 +784,7 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 // addConfigHashAnnotations adds hash annotations for all mounted secrets/configmaps
 // This ensures pods are restarted when configuration changes
 func (r *EndorserReconciler) addConfigHashAnnotations(ctx context.Context, endorser *fabricxv1alpha1.Endorser, deployment *appsv1.Deployment) error {
-	annotations := deployment.Spec.Template.ObjectMeta.Annotations
+	annotations := deployment.Spec.Template.Annotations
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
@@ -825,7 +825,7 @@ func (r *EndorserReconciler) addConfigHashAnnotations(ctx context.Context, endor
 		}
 	}
 
-	deployment.Spec.Template.ObjectMeta.Annotations = annotations
+	deployment.Spec.Template.Annotations = annotations
 	return nil
 }
 
@@ -901,21 +901,21 @@ func convertVolume(apiVol fabricxv1alpha1.Volume) corev1.Volume {
 
 	// Convert volume source
 	if apiVol.VolumeSource.EmptyDir != nil {
-		vol.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{
+		vol.EmptyDir = &corev1.EmptyDirVolumeSource{
 			Medium: corev1.StorageMedium(apiVol.VolumeSource.EmptyDir.Medium),
 		}
 		// Note: SizeLimit conversion would require parsing the string to resource.Quantity
 	}
 
 	if apiVol.VolumeSource.ConfigMap != nil {
-		vol.VolumeSource.ConfigMap = &corev1.ConfigMapVolumeSource{
+		vol.ConfigMap = &corev1.ConfigMapVolumeSource{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: apiVol.VolumeSource.ConfigMap.Name,
 			},
 			DefaultMode: apiVol.VolumeSource.ConfigMap.DefaultMode,
 		}
 		for _, item := range apiVol.VolumeSource.ConfigMap.Items {
-			vol.VolumeSource.ConfigMap.Items = append(vol.VolumeSource.ConfigMap.Items, corev1.KeyToPath{
+			vol.ConfigMap.Items = append(vol.ConfigMap.Items, corev1.KeyToPath{
 				Key:  item.Key,
 				Path: item.Path,
 				Mode: item.Mode,
@@ -924,12 +924,12 @@ func convertVolume(apiVol fabricxv1alpha1.Volume) corev1.Volume {
 	}
 
 	if apiVol.VolumeSource.Secret != nil {
-		vol.VolumeSource.Secret = &corev1.SecretVolumeSource{
+		vol.Secret = &corev1.SecretVolumeSource{
 			SecretName:  apiVol.VolumeSource.Secret.SecretName,
 			DefaultMode: apiVol.VolumeSource.Secret.DefaultMode,
 		}
 		for _, item := range apiVol.VolumeSource.Secret.Items {
-			vol.VolumeSource.Secret.Items = append(vol.VolumeSource.Secret.Items, corev1.KeyToPath{
+			vol.Secret.Items = append(vol.Secret.Items, corev1.KeyToPath{
 				Key:  item.Key,
 				Path: item.Path,
 				Mode: item.Mode,
@@ -938,19 +938,19 @@ func convertVolume(apiVol fabricxv1alpha1.Volume) corev1.Volume {
 	}
 
 	if apiVol.VolumeSource.PersistentVolumeClaim != nil {
-		vol.VolumeSource.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
+		vol.PersistentVolumeClaim = &corev1.PersistentVolumeClaimVolumeSource{
 			ClaimName: apiVol.VolumeSource.PersistentVolumeClaim.ClaimName,
 			ReadOnly:  apiVol.VolumeSource.PersistentVolumeClaim.ReadOnly,
 		}
 	}
 
 	if apiVol.VolumeSource.HostPath != nil {
-		vol.VolumeSource.HostPath = &corev1.HostPathVolumeSource{
+		vol.HostPath = &corev1.HostPathVolumeSource{
 			Path: apiVol.VolumeSource.HostPath.Path,
 		}
 		if apiVol.VolumeSource.HostPath.Type != "" {
 			hpType := corev1.HostPathType(apiVol.VolumeSource.HostPath.Type)
-			vol.VolumeSource.HostPath.Type = &hpType
+			vol.HostPath.Type = &hpType
 		}
 	}
 

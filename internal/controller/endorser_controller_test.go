@@ -218,7 +218,7 @@ var _ = Describe("Endorser Controller", func() {
 
 			By("Verifying the core.yaml content exists in secret")
 			Expect(secret.Data).To(HaveKey("core.yaml"))
-			Expect(len(secret.Data["core.yaml"])).To(BeNumerically(">", 0))
+			Expect(secret.Data["core.yaml"]).ToNot(BeEmpty())
 
 			By("Verifying the Service is created")
 			service := &corev1.Service{}

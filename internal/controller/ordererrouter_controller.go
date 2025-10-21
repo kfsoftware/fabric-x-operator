@@ -318,7 +318,7 @@ func (r *OrdererRouterReconciler) createCertificateSecrets(
 
 		// Check if secret already exists
 		existingSecret := &corev1.Secret{}
-		err := r.Client.Get(ctx, types.NamespacedName{
+		err := r.Get(ctx, types.NamespacedName{
 			Name:      secretName,
 			Namespace: ordererRouter.Namespace,
 		}, existingSecret)
@@ -349,7 +349,7 @@ func (r *OrdererRouterReconciler) createCertificateSecrets(
 					return fmt.Errorf("failed to set controller reference for secret %s: %w", secretName, err)
 				}
 
-				if err := r.Client.Create(ctx, secret); err != nil {
+				if err := r.Create(ctx, secret); err != nil {
 					return fmt.Errorf("failed to create certificate secret %s: %w", secretName, err)
 				}
 
@@ -388,7 +388,7 @@ func (r *OrdererRouterReconciler) createCertificateSecrets(
 			}
 
 			if needsUpdate {
-				if err := r.Client.Update(ctx, updatedSecret); err != nil {
+				if err := r.Update(ctx, updatedSecret); err != nil {
 					return fmt.Errorf("failed to update certificate secret %s: %w", secretName, err)
 				}
 				log.Info("Updated certificate secret", "secret", secretName, "certType", certData.CertType)
@@ -675,10 +675,10 @@ func (r *OrdererRouterReconciler) updateConfigMap(ctx context.Context, ordererRo
 	}
 
 	// Try to create the ConfigMap
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If ConfigMap already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update ConfigMap: %w", err)
 			}
 		} else {
@@ -748,10 +748,10 @@ func (r *OrdererRouterReconciler) updateService(ctx context.Context, ordererRout
 	}
 
 	// Try to create the Service
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If Service already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update Service: %w", err)
 			}
 		} else {
@@ -1006,10 +1006,10 @@ func (r *OrdererRouterReconciler) updateDeployment(ctx context.Context, ordererR
 	}
 
 	// Try to create the Deployment
-	if err := r.Client.Create(ctx, template); err != nil {
+	if err := r.Create(ctx, template); err != nil {
 		// If Deployment already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, template); err != nil {
+			if err := r.Update(ctx, template); err != nil {
 				return fmt.Errorf("failed to update Deployment: %w", err)
 			}
 		} else {
@@ -1058,10 +1058,10 @@ func (r *OrdererRouterReconciler) reconcilePVC(ctx context.Context, ordererRoute
 		return fmt.Errorf("failed to set controller reference for PVC: %w", err)
 	}
 
-	if err := r.Client.Create(ctx, pvc); err != nil {
+	if err := r.Create(ctx, pvc); err != nil {
 		// If PVC already exists, update it
 		if strings.Contains(err.Error(), "already exists") {
-			if err := r.Client.Update(ctx, pvc); err != nil {
+			if err := r.Update(ctx, pvc); err != nil {
 				return fmt.Errorf("failed to update PVC: %w", err)
 			}
 		} else {
@@ -1111,7 +1111,7 @@ func (r *OrdererRouterReconciler) reconcileIstioGateway(ctx context.Context, ord
 		ServicePort: r.getServicePort(),
 		Labels: map[string]string{
 			"app":                      "fabric-x",
-			"ordererrouter":              ordererRouter.Name,
+			"ordererrouter":            ordererRouter.Name,
 			"fabricx.kfsoft.tech/type": "tlsroute",
 		},
 		Owner:  ordererRouter,
