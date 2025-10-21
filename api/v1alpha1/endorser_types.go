@@ -56,6 +56,24 @@ type EndorserSpec struct {
 
 	// Args to pass to the container (overrides image's CMD)
 	Args []string `json:"args,omitempty"`
+
+	// Ports to expose on the endorser pod and service
+	// +optional
+	Ports []EndorserPort `json:"ports,omitempty"`
+}
+
+// EndorserPort defines a port to expose on the endorser
+type EndorserPort struct {
+	// Name of the port (e.g., "grpc", "http", "metrics")
+	Name string `json:"name"`
+
+	// Port number to expose
+	Port int32 `json:"port"`
+
+	// Protocol (TCP or UDP), defaults to TCP
+	// +optional
+	// +kubebuilder:default=TCP
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // EndorserCoreConfig represents the typed structure of the core.yaml file
@@ -305,8 +323,22 @@ type TMSConfig struct {
 	// Driver type (e.g., "zkatdlog")
 	Driver string `json:"driver,omitempty"`
 
+	// Wallets configuration (pass-through to core.yaml)
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Wallets map[string]string `json:"wallets,omitempty"`
+
 	// Services configuration
 	Services *TMSServices `json:"services,omitempty"`
+
+	// Public parameters configuration
+	PublicParameters *PublicParametersConfig `json:"publicParameters,omitempty"`
+}
+
+// PublicParametersConfig defines public parameters configuration
+type PublicParametersConfig struct {
+	// Path to public parameters file
+	Path string `json:"path,omitempty"`
 }
 
 // TMSServices defines TMS services configuration

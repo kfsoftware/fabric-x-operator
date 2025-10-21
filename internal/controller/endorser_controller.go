@@ -338,6 +338,41 @@ func (r *EndorserReconciler) reconcileService(ctx context.Context, endorser *fab
 	log := logf.FromContext(ctx)
 
 	serviceName := endorser.GetServiceName()
+
+	// Build service ports from spec or use defaults
+	var servicePorts []corev1.ServicePort
+	if len(endorser.Spec.Ports) > 0 {
+		servicePorts = make([]corev1.ServicePort, 0, len(endorser.Spec.Ports))
+		for _, p := range endorser.Spec.Ports {
+			protocol := corev1.ProtocolTCP
+			if p.Protocol != "" {
+				protocol = corev1.Protocol(p.Protocol)
+			}
+			servicePorts = append(servicePorts, corev1.ServicePort{
+				Name:       p.Name,
+				Port:       p.Port,
+				TargetPort: intstr.FromInt(int(p.Port)),
+				Protocol:   protocol,
+			})
+		}
+	} else {
+		// Default ports for backward compatibility
+		servicePorts = []corev1.ServicePort{
+			{
+				Name:       "p2p",
+				Port:       9301,
+				TargetPort: intstr.FromInt(9301),
+				Protocol:   corev1.ProtocolTCP,
+			},
+			{
+				Name:       "metrics",
+				Port:       9090,
+				TargetPort: intstr.FromInt(9090),
+				Protocol:   corev1.ProtocolTCP,
+			},
+		}
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
@@ -351,21 +386,8 @@ func (r *EndorserReconciler) reconcileService(ctx context.Context, endorser *fab
 			Selector: map[string]string{
 				"app": endorser.Name,
 			},
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "p2p",
-					Port:       9301,
-					TargetPort: intstr.FromInt(9301),
-					Protocol:   corev1.ProtocolTCP,
-				},
-				{
-					Name:       "metrics",
-					Port:       9090,
-					TargetPort: intstr.FromInt(9090),
-					Protocol:   corev1.ProtocolTCP,
-				},
-			},
-			Type: corev1.ServiceTypeClusterIP,
+			Ports: servicePorts,
+			Type:  corev1.ServiceTypeClusterIP,
 		},
 	}
 
@@ -443,18 +465,6 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 							Image:   endorser.GetFullImage(),
 							Command: endorser.Spec.Command,
 							Args:    endorser.Spec.Args,
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "p2p",
-									ContainerPort: 9301,
-									Protocol:      corev1.ProtocolTCP,
-								},
-								{
-									Name:          "metrics",
-									ContainerPort: 9090,
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "core-config",
@@ -670,6 +680,9 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 		}
 	}
 
+	// Idemix credentials are now managed through the Identity CRD
+	// Endorsers can mount idemix secrets through the Common.volumeMounts field
+
 	// Add custom volume mounts if specified
 	if endorser.Spec.Common != nil && len(endorser.Spec.Common.VolumeMounts) > 0 {
 		for _, vm := range endorser.Spec.Common.VolumeMounts {
@@ -683,6 +696,37 @@ func (r *EndorserReconciler) reconcileDeployment(ctx context.Context, endorser *
 	// Add resource requirements if specified
 	if endorser.Spec.Common != nil && endorser.Spec.Common.Resources != nil {
 		deployment.Spec.Template.Spec.Containers[0].Resources = *endorser.Spec.Common.Resources
+	}
+
+	// Add ports if specified, otherwise use defaults
+	if len(endorser.Spec.Ports) > 0 {
+		ports := make([]corev1.ContainerPort, 0, len(endorser.Spec.Ports))
+		for _, p := range endorser.Spec.Ports {
+			protocol := corev1.ProtocolTCP
+			if p.Protocol != "" {
+				protocol = corev1.Protocol(p.Protocol)
+			}
+			ports = append(ports, corev1.ContainerPort{
+				Name:          p.Name,
+				ContainerPort: p.Port,
+				Protocol:      protocol,
+			})
+		}
+		deployment.Spec.Template.Spec.Containers[0].Ports = ports
+	} else {
+		// Default ports for backward compatibility
+		deployment.Spec.Template.Spec.Containers[0].Ports = []corev1.ContainerPort{
+			{
+				Name:          "p2p",
+				ContainerPort: 9301,
+				Protocol:      corev1.ProtocolTCP,
+			},
+			{
+				Name:          "metrics",
+				ContainerPort: 9090,
+				Protocol:      corev1.ProtocolTCP,
+			},
+		}
 	}
 
 	// Initialize pod annotations map

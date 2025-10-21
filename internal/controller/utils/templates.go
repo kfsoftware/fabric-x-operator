@@ -194,7 +194,7 @@ monitoring:
     enabled: true
     port: 2120
 logging:
-  level: INFO
+  level: DEBUG
   format: json`
 }
 
@@ -368,7 +368,7 @@ General:
     ListenAddress: 0.0.0.0
     ListenPort: {{.Port}}
     TLS:
-        Enabled: true
+        Enabled: false
         PrivateKey: /etc/hyperledger/fabricx/assembler/tls/server.key
         Certificate: /etc/hyperledger/fabricx/assembler/tls/server.crt
         RootCAs:
@@ -429,7 +429,7 @@ monitoring:
     enabled: true
     port: 2120
 logging:
-  level: INFO
+  level: DEBUG
   format: json`
 
 	// SidecarConfigTemplate is the Go template for sidecar configuration
@@ -448,7 +448,7 @@ orderer:
   connection:
     endpoints:
 {{- range .OrdererEndpoints }}
-      - broadcast,deliver,{{ . }}
+      - {{ . }}
 {{- end }}
 
 committer:
@@ -465,7 +465,7 @@ monitoring:
     enabled: true
     port: 2111
 logging:
-  level: INFO
+  level: DEBUG
   format: json`
 
 	// ValidatorConfigTemplate is the Go template for validator configuration
@@ -495,7 +495,7 @@ monitoring:
     enabled: true
     port: 2116
 logging:
-  level: INFO
+  level: DEBUG
   format: json`
 
 	// VerifierConfigTemplate is the Go template for verifier configuration
@@ -511,6 +511,6 @@ monitoring:
     enabled: true
     port: 2115
 logging:
-  level: INFO
+  level: DEBUG
   format: json`
 )

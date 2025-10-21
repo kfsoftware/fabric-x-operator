@@ -318,6 +318,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Identity")
 		os.Exit(1)
 	}
+	if err := (&controller.ChainNamespaceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ChainNamespace")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

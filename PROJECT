@@ -156,4 +156,13 @@ resources:
   group: fabricx
   kind: Identity
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: Namespace
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

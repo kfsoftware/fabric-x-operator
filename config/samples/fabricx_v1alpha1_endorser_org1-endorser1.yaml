@@ -90,15 +90,6 @@ spec:
                 key: cert.pem
             addresses:
               P2P: issuer.example.com:9101
-          - name: auditor
-            identity:
-              id: auditor
-              secretRef:
-                name: org1-auditor-tls-cert
-                namespace: default
-                key: cert.pem
-            addresses:
-              P2P: auditor.example.com:9201
           - name: endorser2
             identity:
               id: endorser2

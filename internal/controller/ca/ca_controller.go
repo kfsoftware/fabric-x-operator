@@ -45,8 +45,10 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 )
@@ -61,10 +63,16 @@ type CAReconciler struct {
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=cas/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=fabricx.kfsoft.tech,resources=cas/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list
+// +kubebuilder:rbac:groups=core,resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
 
@@ -385,6 +393,15 @@ func (r *CAReconciler) reconcileCA(ctx context.Context, ca *fabricxv1alpha1.CA) 
 		errorMsg := fmt.Sprintf("Deployment reconciliation failed: %v", err)
 		log.Error(err, "Failed to reconcile Deployment")
 		reconciliationErrors = append(reconciliationErrors, errorMsg)
+	}
+
+	// Reconcile idemix keys extraction Job (if idemix is enabled)
+	if ca.Spec.Idemix != nil && ca.Spec.Idemix.Curve != "" {
+		if err := r.reconcileIdemixKeysJob(ctx, ca); err != nil {
+			errorMsg := fmt.Sprintf("Idemix keys Job reconciliation failed: %v", err)
+			log.Error(err, "Failed to reconcile idemix keys Job")
+			reconciliationErrors = append(reconciliationErrors, errorMsg)
+		}
 	}
 
 	// If there were any errors, update the status to Failed
@@ -1360,18 +1377,26 @@ func (r *CAReconciler) GetDeploymentTemplate(ctx context.Context, ca *fabricxv1a
 						{
 							Name:  "ca",
 							Image: fmt.Sprintf("%s:%s", ca.Spec.Image, ca.Spec.Version),
-							Command: []string{
-								"sh",
-								"-c",
-								`mkdir -p $FABRIC_CA_HOME
+							Command: func() []string {
+								// Build the command with optional idemix flag
+								startCmd := "fabric-ca-server start"
+
+								// Add idemix flag if configured
+								if ca.Spec.Idemix != nil && ca.Spec.Idemix.Curve != "" {
+									startCmd += fmt.Sprintf(" --idemix.curve %s", ca.Spec.Idemix.Curve)
+								}
+
+								baseCmd := fmt.Sprintf(`mkdir -p $FABRIC_CA_HOME
 cp /var/hyperledger/ca_config/ca.yaml $FABRIC_CA_HOME/fabric-ca-server-config.yaml
 cp /var/hyperledger/ca_config_tls/fabric-ca-server-config.yaml $FABRIC_CA_HOME/fabric-ca-server-config-tls.yaml
 
 ls -l $FABRIC_CA_HOME
 
 echo ">\033[0;35m fabric-ca-server start \033[0m"
-fabric-ca-server start`,
-							},
+%s`, startCmd)
+
+								return []string{"sh", "-c", baseCmd}
+							}(),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "ca-port",
@@ -1994,15 +2019,286 @@ func (r *CAReconciler) updateIngress(ctx context.Context, ca *fabricxv1alpha1.CA
 	return err
 }
 
+// reconcileIdemixServiceAccount creates a service account with necessary RBAC for the idemix keys extraction Job
+func (r *CAReconciler) reconcileIdemixServiceAccount(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
+	// Create ServiceAccount
+	saName := fmt.Sprintf("%s-idemix-extractor", ca.Name)
+	sa := &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      saName,
+			Namespace: ca.Namespace,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(ca, sa, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for service account: %w", err)
+	}
+
+	existingSA := &corev1.ServiceAccount{}
+	saNamespacedName := types.NamespacedName{Name: saName, Namespace: ca.Namespace}
+	if err := r.Get(ctx, saNamespacedName, existingSA); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating idemix extractor service account", "serviceAccount", saName)
+			if err := r.Create(ctx, sa); err != nil {
+				return fmt.Errorf("failed to create service account: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get service account: %w", err)
+		}
+	}
+
+	// Create Role
+	roleName := fmt.Sprintf("%s-idemix-extractor", ca.Name)
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      roleName,
+			Namespace: ca.Namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods"},
+				Verbs:     []string{"get", "list"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"pods/exec"},
+				Verbs:     []string{"create"},
+			},
+			{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get", "create", "update", "patch"},
+			},
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(ca, role, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for role: %w", err)
+	}
+
+	existingRole := &rbacv1.Role{}
+	roleNamespacedName := types.NamespacedName{Name: roleName, Namespace: ca.Namespace}
+	if err := r.Get(ctx, roleNamespacedName, existingRole); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating idemix extractor role", "role", roleName)
+			if err := r.Create(ctx, role); err != nil {
+				return fmt.Errorf("failed to create role: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get role: %w", err)
+		}
+	}
+
+	// Create RoleBinding
+	rbName := fmt.Sprintf("%s-idemix-extractor", ca.Name)
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rbName,
+			Namespace: ca.Namespace,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      saName,
+				Namespace: ca.Namespace,
+			},
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     roleName,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(ca, rb, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for role binding: %w", err)
+	}
+
+	existingRB := &rbacv1.RoleBinding{}
+	rbNamespacedName := types.NamespacedName{Name: rbName, Namespace: ca.Namespace}
+	if err := r.Get(ctx, rbNamespacedName, existingRB); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating idemix extractor role binding", "roleBinding", rbName)
+			if err := r.Create(ctx, rb); err != nil {
+				return fmt.Errorf("failed to create role binding: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get role binding: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// reconcileIdemixKeysJob creates a Job to extract idemix issuer keys from the CA pod to a Kubernetes secret
+func (r *CAReconciler) reconcileIdemixKeysJob(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+	log := logf.FromContext(ctx)
+
+	// First, ensure service account and RBAC are in place
+	if err := r.reconcileIdemixServiceAccount(ctx, ca); err != nil {
+		return fmt.Errorf("failed to reconcile idemix service account: %w", err)
+	}
+
+	// Check if the deployment is ready
+	deployment := &appsv1.Deployment{}
+	deploymentName := types.NamespacedName{
+		Name:      ca.Name,
+		Namespace: ca.Namespace,
+	}
+	if err := r.Get(ctx, deploymentName, deployment); err != nil {
+		log.Info("CA deployment not found, skipping idemix keys Job", "deployment", deploymentName)
+		return nil
+	}
+
+	// Wait for at least one ready replica
+	if deployment.Status.ReadyReplicas == 0 {
+		log.Info("CA deployment not ready yet, skipping idemix keys Job", "deployment", deploymentName)
+		return nil
+	}
+
+	// Define secret name
+	secretName := fmt.Sprintf("%s-idemix-issuer-keys", ca.Name)
+
+	// Create the Job
+	jobName := fmt.Sprintf("%s-extract-idemix-keys", ca.Name)
+	job := &batchv1.Job{}
+	jobNamespacedName := types.NamespacedName{
+		Name:      jobName,
+		Namespace: ca.Namespace,
+	}
+
+	// Check if job already completed
+	if err := r.Get(ctx, jobNamespacedName, job); err == nil {
+		if job.Status.Succeeded > 0 {
+			log.Info("Idemix keys extraction Job already completed", "job", jobName)
+			return nil
+		}
+	}
+
+	// Create the Job template
+	backoffLimit := int32(3)
+	ttlSecondsAfterFinished := int32(600) // 10 minutes
+	jobTemplate := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: ca.Namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name":       "fabric-ca",
+				"app.kubernetes.io/instance":   ca.Name,
+				"app.kubernetes.io/component":  "idemix-keys-extractor",
+				"app.kubernetes.io/managed-by": "fabric-x-operator",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					ServiceAccountName: fmt.Sprintf("%s-idemix-extractor", ca.Name),
+					RestartPolicy:      corev1.RestartPolicyNever,
+					Containers: []corev1.Container{
+						{
+							Name:  "extract-idemix-keys",
+							Image: "bitnami/kubectl:latest",
+							Command: []string{
+								"/bin/bash",
+								"-c",
+								fmt.Sprintf(`
+set -e
+
+# Get the CA pod name
+CA_POD=$(kubectl get pods -n %s -l app=ca,release=%s -o jsonpath='{.items[0].metadata.name}')
+
+if [ -z "$CA_POD" ]; then
+  echo "Error: CA pod not found"
+  exit 1
+fi
+
+echo "Found CA pod: $CA_POD"
+
+# Create temporary directory
+TMP_DIR=$(mktemp -d)
+
+# Extract issuer keys from CA pod
+echo "Extracting IssuerPublicKey..."
+kubectl exec -n %s $CA_POD -- cat /etc/hyperledger/fabric-ca-server/IssuerPublicKey > $TMP_DIR/IssuerPublicKey
+
+echo "Extracting IssuerRevocationPublicKey..."
+kubectl exec -n %s $CA_POD -- cat /etc/hyperledger/fabric-ca-server/IssuerRevocationPublicKey > $TMP_DIR/IssuerRevocationPublicKey
+
+echo "Extracting IssuerSecretKey..."
+kubectl exec -n %s $CA_POD -- cat /etc/hyperledger/fabric-ca-server/msp/keystore/IssuerSecretKey > $TMP_DIR/IssuerSecretKey
+
+echo "Extracting IssuerRevocationPrivateKey..."
+kubectl exec -n %s $CA_POD -- cat /etc/hyperledger/fabric-ca-server/msp/keystore/IssuerRevocationPrivateKey > $TMP_DIR/RevocationKey
+
+# Create or update the secret
+if kubectl get secret -n %s %s &>/dev/null; then
+  echo "Updating existing secret..."
+  kubectl create secret generic -n %s %s \
+    --from-file=IssuerPublicKey=$TMP_DIR/IssuerPublicKey \
+    --from-file=IssuerRevocationPublicKey=$TMP_DIR/IssuerRevocationPublicKey \
+    --from-file=IssuerSecretKey=$TMP_DIR/IssuerSecretKey \
+    --from-file=RevocationKey=$TMP_DIR/RevocationKey \
+    --dry-run=client -o yaml | kubectl apply -f -
+else
+  echo "Creating new secret..."
+  kubectl create secret generic -n %s %s \
+    --from-file=IssuerPublicKey=$TMP_DIR/IssuerPublicKey \
+    --from-file=IssuerRevocationPublicKey=$TMP_DIR/IssuerRevocationPublicKey \
+    --from-file=IssuerSecretKey=$TMP_DIR/IssuerSecretKey \
+    --from-file=RevocationKey=$TMP_DIR/RevocationKey
+fi
+
+echo "Idemix issuer keys extracted successfully!"
+
+# Cleanup
+rm -rf $TMP_DIR
+`, ca.Namespace, ca.Name, ca.Namespace, ca.Namespace, ca.Namespace, ca.Namespace, ca.Namespace, secretName, ca.Namespace, secretName, ca.Namespace, secretName),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Set owner reference
+	if err := controllerutil.SetControllerReference(ca, jobTemplate, r.Scheme); err != nil {
+		return fmt.Errorf("failed to set controller reference for idemix keys Job: %w", err)
+	}
+
+	// Create or update the Job
+	if err := r.Get(ctx, jobNamespacedName, job); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating idemix keys extraction Job", "job", jobName)
+			if err := r.Create(ctx, jobTemplate); err != nil {
+				return fmt.Errorf("failed to create idemix keys Job: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to get idemix keys Job: %w", err)
+		}
+	}
+
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *CAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&fabricxv1alpha1.CA{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&batchv1.Job{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Secret{}).
+		Owns(&rbacv1.Role{}).
+		Owns(&rbacv1.RoleBinding{}).
 		Owns(&networkingv1.Ingress{}).
 		Named("ca").
 		Complete(r)

@@ -1,0 +1,223 @@
+# Idemix Identities for Endorsers
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-issuer-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: issuer
+    enrollSecretRef:
+      name: issuer-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-issuer-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: issuer
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: issuer-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: issuerpw
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-owner1-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: owner1
+    enrollSecretRef:
+      name: owner1-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-owner1-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: owner1
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: owner1-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: owner1pw
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-owner2-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: owner2
+    enrollSecretRef:
+      name: owner2-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-owner2-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: owner2
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: owner2-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: owner2pw
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-endorser1-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: endorser1
+    enrollSecretRef:
+      name: endorser1-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-endorser1-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: endorser1
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: endorser1-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: endorser1pw
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-endorser2-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: endorser2
+    enrollSecretRef:
+      name: endorser2-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-endorser2-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: endorser2
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: endorser2-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: endorser2pw
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-auditor-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: auditor
+    enrollSecretRef:
+      name: auditor-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    idemix:
+      enabled: true
+  output:
+    secretPrefix: org1-auditor-idemix
+    namespace: default
+    labels:
+      app: fabric-x
+      identity-type: idemix
+      endorser: auditor
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: auditor-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: auditorpw

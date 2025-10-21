@@ -415,6 +415,15 @@ type CACertificateConfig struct {
 
 	// Enrollment secret
 	EnrollSecret string `json:"enrollsecret,omitempty"`
+
+	// Use idemix enrollment instead of X.509
+	Idemix bool `json:"idemix,omitempty"`
+}
+
+// IdemixEnrollmentConfig defines Idemix credential enrollment configuration
+type IdemixEnrollmentConfig struct {
+	// CA configuration for Idemix enrollment
+	CA *CACertificateConfig `json:"ca,omitempty"`
 }
 
 // SANSConfig defines Subject Alternative Names configuration
@@ -541,6 +550,9 @@ type EnrollmentConfig struct {
 
 	// TLS certificate configuration
 	TLS *CertificateConfig `json:"tls,omitempty"`
+
+	// Idemix credential configuration
+	Idemix *IdemixEnrollmentConfig `json:"idemix,omitempty"`
 }
 
 // BatcherInstance defines a single batcher instance configuration

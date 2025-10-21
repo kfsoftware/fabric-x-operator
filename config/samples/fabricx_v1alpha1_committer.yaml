@@ -6,7 +6,7 @@ metadata:
 
 spec:
   bootstrapMode: deploy
-  mspid: CommitterMSP
+  mspid: Org1MSP
   image: hyperledger/fabric-x-committer
   imageTag: "0.1.5"
   common:
@@ -31,10 +31,10 @@ spec:
   components:
     # Global endpoints used by sidecar and coordinator
     ordererEndpoints:
-      - orderergroup-party1-consenter:7052
-      - orderergroup-party2-consenter:7052
-      - orderergroup-party3-consenter:7052
-      - orderergroup-party4-consenter:7052
+      - orderergroup-party1-assembler.default.svc.cluster.local:7050
+      - orderergroup-party2-assembler.default.svc.cluster.local:7050
+      - orderergroup-party3-assembler.default.svc.cluster.local:7050
+      - orderergroup-party4-assembler.default.svc.cluster.local:7050
     committerHost: fabric-x-committer-coordinator-service.default.svc.cluster.local
     committerPort: 9001
 
@@ -94,7 +94,7 @@ spec:
           key: password
         maxConnections: 100
         minConnections: 10
-        loadBalance: true
+        loadBalance: false
         retry:
           maxElapsedTime: 5m
 

@@ -17,4 +17,5 @@ resources:
 - fabricx.kfsoft.tech_v1alpha1_fabriccaidentity.yaml
 - fabricx.kfsoft.tech_v1alpha1_caenrollment.yaml
 - fabricx_v1alpha1_identity.yaml
+- fabricx_v1alpha1_namespace.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

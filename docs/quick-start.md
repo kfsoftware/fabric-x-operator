@@ -236,6 +236,52 @@ istioctl verify-install
 
 This should output "Installation verified successfully" if all components are correctly installed.
 
+### Install Gateway API CRDs
+
+The Fabric X Operator uses Kubernetes Gateway API for traffic routing. Install the Gateway API CRDs:
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+```
+
+Verify Gateway API CRDs are installed:
+
+```bash
+kubectl get crd gateways.gateway.networking.k8s.io
+kubectl get crd tlsroutes.gateway.networking.k8s.io
+```
+
+### Create Shared Gateway for TLS Passthrough
+
+Create a shared Gateway resource that all orderer components will use:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: fabric-x-gateway
+  namespace: default
+spec:
+  gatewayClassName: istio
+  listeners:
+  - name: tls-passthrough
+    port: 443
+    protocol: TLS
+    tls:
+      mode: Passthrough
+    allowedRoutes:
+      namespaces:
+        from: All
+EOF
+```
+
+Verify the Gateway is ready:
+
+```bash
+kubectl get gateway fabric-x-gateway
+```
+
 ## Step 5: Configure Environment Variables
 
 Set the container image versions for Fabric components:
@@ -331,16 +377,16 @@ The CA will be accessible at:
 - `https://ca.org1.localho.st` (signing CA)
 - Internal endpoint: `test-ca2.default:7054`
 
-## Step 8: Create Admin Identity (Optional)
+## Step 8: Create Admin Identity
 
-The Identity CRD allows you to enroll identities with the Fabric CA. This is useful for creating admin users, application users, or any other Fabric identity.
+The Identity CRD allows you to enroll identities with the Fabric CA. **This step is required** as the admin identity's public key will be used for meta namespace verification in the genesis block.
 
 ### Create Admin Password Secret
 
 First, create a secret containing the admin enrollment password:
 
 ```bash
-kubectl apply -f config/samples/admin-password-secret.yaml
+kubectl create secret generic admin-enroll-secret --from-literal=password=adminpw
 ```
 
 This creates a secret with the admin password (`adminpw`) that will be used for enrollment.
@@ -358,38 +404,40 @@ This Identity resource will:
 - Enroll with the Fabric CA using the admin credentials
 - Generate both signing and TLS certificates
 - Create 6 output secrets containing the identity materials:
-  - `admin-org1-sign-cert`: Signing certificate
-  - `admin-org1-sign-key`: Signing private key
-  - `admin-org1-sign-cacert`: Signing CA certificate
-  - `admin-org1-tls-cert`: TLS certificate
-  - `admin-org1-tls-key`: TLS private key
-  - `admin-org1-tls-cacert`: TLS CA certificate
+  - `org1-admin-sign-cert`: Signing certificate (used for meta namespace verification)
+  - `org1-admin-sign-key`: Signing private key
+  - `org1-admin-sign-cacert`: Signing CA certificate
+  - `org1-admin-tls-cert`: TLS certificate
+  - `org1-admin-tls-key`: TLS private key
+  - `org1-admin-tls-cacert`: TLS CA certificate
 
 ### Verify Identity Creation
 
 ```bash
 # Check identity status
-kubectl get identity admin-org1
+kubectl get identity org1-admin
 
 # Expected output:
 # NAME         TYPE    MSPID     STATUS   EXPIRY         AGE
-# admin-org1   admin   Org1MSP   READY    2026-10-19...  1m
+# org1-admin   admin   Org1MSP   READY    2026-10-19...  1m
 ```
 
 ### Verify Generated Secrets
 
 ```bash
 # List all secrets created for the identity
-kubectl get secrets | grep admin-org1
+kubectl get secrets | grep org1-admin
 
 # Expected output shows 6 secrets:
-# admin-org1-sign-cacert
-# admin-org1-sign-cert
-# admin-org1-sign-key
-# admin-org1-tls-cacert
-# admin-org1-tls-cert
-# admin-org1-tls-key
+# org1-admin-sign-cacert
+# org1-admin-sign-cert
+# org1-admin-sign-key
+# org1-admin-tls-cacert
+# org1-admin-tls-cert
+# org1-admin-tls-key
 ```
+
+**Important**: The `org1-admin-sign-cert` secret will be referenced in the genesis block for meta namespace verification.
 
 ### Validate Certificate
 

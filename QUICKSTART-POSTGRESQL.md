@@ -31,6 +31,7 @@ kubectl apply -f testing/postgresql-cluster.yaml
 ```
 
 This creates:
+
 - **PostgreSQL Cluster**: 1 replica with 5Gi storage
 - **Database**: `queryservice`
 - **User**: `queryservice` / `queryservice123`
@@ -101,6 +102,7 @@ kubectl get pods -l app=query-service
 ```
 
 Expected output:
+
 ```
 NAME                               STATE     MESSAGE
 fabric-x-committer-query-service   RUNNING   CommitterQueryService reconciled successfully
@@ -113,6 +115,7 @@ kubectl logs -l app=query-service -n default
 ```
 
 You should see database connection information:
+
 ```
 Starting Query-Service
 DB source: postgres://queryservice:***@postgresql-rw.default.svc.cluster.local:5432/queryservice?sslmode=disable
@@ -148,7 +151,7 @@ database:
   database: queryservice
   max-connections: 50
   min-connections: 10
-  load-balance: true
+  load-balance: false
   retry:
     max-elapsed-time: 5m
 
@@ -165,6 +168,7 @@ kubectl port-forward svc/fabric-x-committer-query-service 9001:9001 -n default
 ```
 
 Or access via Istio ingress (if enabled):
+
 ```
 https://query-service-committer.localho.st
 ```
@@ -222,11 +226,11 @@ Adjust connection pool settings:
 
 ```yaml
 postgresql:
-  maxConnections: 100    # Maximum connections
-  minConnections: 20     # Minimum connections
-  loadBalance: true      # Enable load balancing
+  maxConnections: 100 # Maximum connections
+  minConnections: 20 # Minimum connections
+  loadBalance: true # Enable load balancing
   retry:
-    maxElapsedTime: 10m  # Retry timeout
+    maxElapsedTime: 10m # Retry timeout
 ```
 
 ## Cleanup

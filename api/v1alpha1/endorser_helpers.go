@@ -275,6 +275,13 @@ func (e *Endorser) GenerateCoreYAML() (string, error) {
 					tc["services"] = services
 				}
 
+				// Add public parameters if specified
+				if tmsConfig.PublicParameters != nil && tmsConfig.PublicParameters.Path != "" {
+					tc["publicParameters"] = map[string]interface{}{
+						"path": tmsConfig.PublicParameters.Path,
+					}
+				}
+
 				tms[name] = tc
 			}
 			tokenConfig["tms"] = tms

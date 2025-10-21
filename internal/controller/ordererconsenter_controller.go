@@ -39,9 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	// Istio imports
-	istioapinetworkingv1alpha3 "istio.io/api/networking/v1alpha3"
-	istionetworkingv1beta1 "istio.io/client-go/pkg/apis/networking/v1beta1"
+	// Gateway API imports
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
@@ -135,6 +135,8 @@ type OrdererConsenterReconciler struct {
 // +kubebuilder:rbac:groups=networking.istio.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=networking.istio.io,resources=destinationrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -1032,213 +1034,50 @@ func (r *OrdererConsenterReconciler) reconcileIstioResources(ctx context.Context
 	return nil
 }
 
-// reconcileIstioGateway creates or updates the Istio Gateway for Consenter
+// reconcileIstioGateway creates or updates the Gateway API TLSRoute for Consenter
 func (r *OrdererConsenterReconciler) reconcileIstioGateway(ctx context.Context, ordererConsenter *fabricxv1alpha1.OrdererConsenter) error {
 	log := logf.FromContext(ctx)
 
 	// Check if Istio configuration is provided
 	if ordererConsenter.Spec.Ingress == nil || ordererConsenter.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping Gateway creation")
+		log.Info("No Istio configuration found, skipping TLSRoute creation")
 		return nil
 	}
 
 	istioConfig := ordererConsenter.Spec.Ingress.Istio
-	gatewayName := fmt.Sprintf("%s-gateway", ordererConsenter.Name)
 
-	// Create Gateway resource template
-	gatewayTemplate := &istionetworkingv1beta1.Gateway{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      gatewayName,
-			Namespace: ordererConsenter.Namespace,
-			Labels: map[string]string{
-				"app":                      "fabric-x",
-				"ordererconsenter":         ordererConsenter.Name,
-				"fabricx.kfsoft.tech/type": "gateway",
-			},
+	// Use shared helper function to reconcile TLSRoute
+	return ReconcileTLSRoute(ctx, r.Client, TLSRouteConfig{
+		Name:        fmt.Sprintf("%s-tlsroute", ordererConsenter.Name),
+		Namespace:   ordererConsenter.Namespace,
+		Hostnames:   istioConfig.Hosts,
+		ServiceName: r.getServiceName(ordererConsenter),
+		ServicePort: r.getServicePort(),
+		Labels: map[string]string{
+			"app":                      "fabric-x",
+			"ordererconsenter":         ordererConsenter.Name,
+			"fabricx.kfsoft.tech/type": "tlsroute",
 		},
-		Spec: istioapinetworkingv1alpha3.Gateway{
-			Selector: map[string]string{
-				"istio": istioConfig.IngressGateway,
-			},
-			Servers: []*istioapinetworkingv1alpha3.Server{
-				{
-					Port: &istioapinetworkingv1alpha3.Port{
-						Number:   uint32(istioConfig.Port),
-						Name:     "tls",
-						Protocol: "TLS",
-					},
-					Hosts: istioConfig.Hosts,
-					Tls: &istioapinetworkingv1alpha3.ServerTLSSettings{
-						Mode: istioapinetworkingv1alpha3.ServerTLSSettings_PASSTHROUGH,
-						// Set MinProtocolVersion to ensure TLS config is not treated as empty
-						MinProtocolVersion: istioapinetworkingv1alpha3.ServerTLSSettings_TLSV1_2,
-					},
-				},
-			},
-		},
-	}
-
-	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererConsenter, gatewayTemplate, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set controller reference for Gateway: %w", err)
-	}
-
-	// Check if Gateway already exists
-	existingGateway := &istionetworkingv1beta1.Gateway{}
-	err := r.Client.Get(ctx, types.NamespacedName{
-		Name:      gatewayName,
-		Namespace: ordererConsenter.Namespace,
-	}, existingGateway)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create new Gateway
-			if err := r.Client.Create(ctx, gatewayTemplate); err != nil {
-				return fmt.Errorf("failed to create Gateway: %w", err)
-			}
-			log.Info("Created Istio Gateway", "gateway", gatewayName)
-		} else {
-			return fmt.Errorf("failed to get existing Gateway: %w", err)
-		}
-	} else {
-		// Update existing Gateway - always update to ensure it's current
-		existingGateway.Spec = gatewayTemplate.Spec
-		existingGateway.Labels = gatewayTemplate.Labels
-		if err := r.Client.Update(ctx, existingGateway); err != nil {
-			return fmt.Errorf("failed to update Gateway: %w", err)
-		}
-		log.Info("Updated Istio Gateway", "gateway", gatewayName)
-	}
-
-	log.Info("Istio Gateway reconciled successfully", "gateway", gatewayName)
-	return nil
+		Owner:  ordererConsenter,
+		Scheme: r.Scheme,
+	})
 }
 
-// reconcileIstioVirtualService creates or updates the Istio VirtualService for Consenter
+// reconcileIstioVirtualService is no longer needed with Gateway API - using TLSRoute only
 func (r *OrdererConsenterReconciler) reconcileIstioVirtualService(ctx context.Context, ordererConsenter *fabricxv1alpha1.OrdererConsenter) error {
-	log := logf.FromContext(ctx)
-
-	// Check if Istio configuration is provided
-	if ordererConsenter.Spec.Ingress == nil || ordererConsenter.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping VirtualService creation")
-		return nil
-	}
-
-	istioConfig := ordererConsenter.Spec.Ingress.Istio
-	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererConsenter.Name)
-	gatewayName := fmt.Sprintf("%s-gateway", ordererConsenter.Name)
-
-	// Create VirtualService resource template
-	virtualServiceTemplate := &istionetworkingv1beta1.VirtualService{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      virtualServiceName,
-			Namespace: ordererConsenter.Namespace,
-			Labels: map[string]string{
-				"app":                      "fabric-x",
-				"ordererconsenter":         ordererConsenter.Name,
-				"fabricx.kfsoft.tech/type": "virtualservice",
-			},
-		},
-		Spec: istioapinetworkingv1alpha3.VirtualService{
-			Hosts:    istioConfig.Hosts,
-			Gateways: []string{gatewayName},
-			Tls: []*istioapinetworkingv1alpha3.TLSRoute{
-				{
-					Match: []*istioapinetworkingv1alpha3.TLSMatchAttributes{
-						{
-							Port:     uint32(istioConfig.Port),
-							SniHosts: istioConfig.Hosts,
-						},
-					},
-					Route: []*istioapinetworkingv1alpha3.RouteDestination{
-						{
-							Destination: &istioapinetworkingv1alpha3.Destination{
-								Host: r.getServiceFQDN(ordererConsenter),
-								Port: &istioapinetworkingv1alpha3.PortSelector{
-									Number: uint32(r.getServicePort()),
-								},
-							},
-							Weight: 100,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Set controller reference
-	if err := controllerutil.SetControllerReference(ordererConsenter, virtualServiceTemplate, r.Scheme); err != nil {
-		return fmt.Errorf("failed to set controller reference for VirtualService: %w", err)
-	}
-
-	// Check if VirtualService already exists
-	existingVirtualService := &istionetworkingv1beta1.VirtualService{}
-	err := r.Client.Get(ctx, types.NamespacedName{
-		Name:      virtualServiceName,
-		Namespace: ordererConsenter.Namespace,
-	}, existingVirtualService)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create new VirtualService
-			if err := r.Client.Create(ctx, virtualServiceTemplate); err != nil {
-				return fmt.Errorf("failed to create VirtualService: %w", err)
-			}
-			log.Info("Created Istio VirtualService", "virtualService", virtualServiceName)
-		} else {
-			return fmt.Errorf("failed to get existing VirtualService: %w", err)
-		}
-	} else {
-		// Update existing VirtualService - always update to ensure it's current
-		existingVirtualService.Spec = virtualServiceTemplate.Spec
-		existingVirtualService.Labels = virtualServiceTemplate.Labels
-		if err := r.Client.Update(ctx, existingVirtualService); err != nil {
-			return fmt.Errorf("failed to update VirtualService: %w", err)
-		}
-		log.Info("Updated Istio VirtualService", "virtualService", virtualServiceName)
-	}
-
-	log.Info("Istio VirtualService reconciled successfully", "virtualService", virtualServiceName)
+	// With Gateway API, we only need TLSRoute - no separate VirtualService
 	return nil
 }
 
-// cleanupIstioResources cleans up Istio Gateway and VirtualService resources
+// cleanupIstioResources cleans up Gateway API TLSRoute resources
 func (r *OrdererConsenterReconciler) cleanupIstioResources(ctx context.Context, ordererConsenter *fabricxv1alpha1.OrdererConsenter) error {
-	log := logf.FromContext(ctx)
-
 	// Check if Istio configuration is provided
 	if ordererConsenter.Spec.Ingress == nil || ordererConsenter.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping Istio resources cleanup")
 		return nil
 	}
 
-	gatewayName := fmt.Sprintf("%s-gateway", ordererConsenter.Name)
-	virtualServiceName := fmt.Sprintf("%s-virtualservice", ordererConsenter.Name)
-
-	// Delete Gateway
-	gateway := &istionetworkingv1beta1.Gateway{}
-	gateway.SetName(gatewayName)
-	gateway.SetNamespace(ordererConsenter.Namespace)
-
-	if err := r.Client.Delete(ctx, gateway); err != nil && !errors.IsNotFound(err) {
-		log.Error(err, "Failed to delete Istio Gateway", "name", gatewayName)
-	} else {
-		log.Info("Deleted Istio Gateway", "name", gatewayName)
-	}
-
-	// Delete VirtualService
-	virtualService := &istionetworkingv1beta1.VirtualService{}
-	virtualService.SetName(virtualServiceName)
-	virtualService.SetNamespace(ordererConsenter.Namespace)
-
-	if err := r.Client.Delete(ctx, virtualService); err != nil && !errors.IsNotFound(err) {
-		log.Error(err, "Failed to delete Istio VirtualService", "name", virtualServiceName)
-	} else {
-		log.Info("Deleted Istio VirtualService", "name", virtualServiceName)
-	}
-
-	log.Info("Istio resources cleanup completed")
-	return nil
+	// Use shared helper to delete TLSRoute
+	return DeleteTLSRoute(ctx, r.Client, fmt.Sprintf("%s-tlsroute", ordererConsenter.Name), ordererConsenter.Namespace)
 }
 
 // getDeploymentTemplate returns a deployment template for the Consenter component
@@ -1727,9 +1566,12 @@ func (r *OrdererConsenterReconciler) updateOrdererConsenterStatus(ctx context.Co
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OrdererConsenterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Register Istio types with the scheme
-	if err := istionetworkingv1beta1.AddToScheme(mgr.GetScheme()); err != nil {
-		return fmt.Errorf("failed to add Istio networking v1beta1 to scheme: %w", err)
+	// Register Gateway API types with the scheme
+	if err := gatewayv1.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("failed to add Gateway API v1 to scheme: %w", err)
+	}
+	if err := gatewayv1alpha2.AddToScheme(mgr.GetScheme()); err != nil {
+		return fmt.Errorf("failed to add Gateway API v1alpha2 to scheme: %w", err)
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).

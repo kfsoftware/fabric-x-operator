@@ -10,6 +10,7 @@ rules:
   - configmaps
   - persistentvolumeclaims
   - secrets
+  - serviceaccounts
   - services
   verbs:
   - create
@@ -19,6 +20,19 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
 - apiGroups:
   - apps
   resources:
@@ -32,10 +46,23 @@ rules:
   - update
   - watch
 - apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - fabricx.kfsoft.tech
   resources:
   - caenrollments
   - cas
+  - chainnamespaces
   - committercoordinators
   - committerqueryservices
   - committers
@@ -63,6 +90,7 @@ rules:
   resources:
   - caenrollments/finalizers
   - cas/finalizers
+  - chainnamespaces/finalizers
   - committercoordinators/finalizers
   - committerqueryservices/finalizers
   - committers/finalizers
@@ -83,6 +111,7 @@ rules:
   resources:
   - caenrollments/status
   - cas/status
+  - chainnamespaces/status
   - committercoordinators/status
   - committerqueryservices/status
   - committers/status
@@ -101,6 +130,19 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - tlsroutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - networking.istio.io
   resources:
@@ -135,3 +177,16 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

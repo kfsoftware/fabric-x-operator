@@ -18,6 +18,7 @@ resources:
 - bases/fabricx.kfsoft.tech_committerqueryservices.yaml
 - bases/fabricx.kfsoft.tech_caenrollments.yaml
 - bases/fabricx.kfsoft.tech_identities.yaml
+- bases/fabricx.kfsoft.tech_chainnamespaces.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

@@ -70,6 +70,22 @@ type IdentityEnrollment struct {
 	// TLS CA reference (if different from signing CA)
 	// +optional
 	TLSCARef *IdentityCARef `json:"tlsCARef,omitempty"`
+
+	// Idemix enrollment configuration (if using idemix instead of X.509)
+	// +optional
+	Idemix *IdentityIdemixEnrollment `json:"idemix,omitempty"`
+}
+
+// IdentityIdemixEnrollment defines idemix enrollment configuration
+type IdentityIdemixEnrollment struct {
+	// Enabled indicates whether idemix enrollment is enabled
+	// +optional
+	// +kubebuilder:default=true
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// CA reference for idemix enrollment (defaults to main CARef if not specified)
+	// +optional
+	CARef *IdentityCARef `json:"caRef,omitempty"`
 }
 
 // IdentityCARef references a Fabric CA instance
@@ -175,6 +191,10 @@ type IdentityOutputSecrets struct {
 	// TLS CA certificate secret name
 	// +optional
 	TLSCACert string `json:"tlsCACert,omitempty"`
+
+	// Idemix credential secret name
+	// +optional
+	IdemixCred string `json:"idemixCred,omitempty"`
 }
 
 // +genclient

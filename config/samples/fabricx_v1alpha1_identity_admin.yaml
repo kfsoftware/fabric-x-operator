@@ -1,7 +1,7 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Identity
 metadata:
-  name: admin-org1
+  name: org1-admin
   namespace: default
 spec:
   # Type of identity
@@ -22,7 +22,7 @@ spec:
 
     # Enrollment secret reference
     enrollSecretRef:
-      name: admin-password
+      name: admin-enroll-secret
       key: password
       namespace: default
 
@@ -32,7 +32,7 @@ spec:
     # Attributes to include in the enrollment certificate (optional)
     attrs:
       - name: "hf.Registrar.Roles"
-        value: "client,orderer,peer,user"
+        value: "*"
         ecert: true
       - name: "hf.Revoker"
         value: "true"
@@ -44,13 +44,9 @@ spec:
   # Output configuration
   output:
     # Prefix for output secrets
-    secretPrefix: admin-org1
-
-    # Optional: namespace for output secrets (defaults to identity namespace)
-    namespace: default
+    secretPrefix: org1-admin
 
     # Optional: labels to apply to output secrets
     labels:
-      app: fabric-admin
-      org: org1
-      identity-type: admin
+      app: admin
+      identity: org1-admin

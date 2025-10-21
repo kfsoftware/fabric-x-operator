@@ -352,6 +352,16 @@ type CASpec struct {
 
 	// Environment variables
 	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Idemix configuration
+	Idemix *FabricCAIdemix `json:"idemix,omitempty"`
+}
+
+// FabricCAIdemix represents idemix configuration for Fabric CA
+type FabricCAIdemix struct {
+	// Curve for idemix (e.g., "gurvy.Bn254", "amcl.Fp256bn")
+	// +kubebuilder:default="gurvy.Bn254"
+	Curve string `json:"curve,omitempty"`
 }
 
 // FabricCAServiceMonitor represents service monitor configuration

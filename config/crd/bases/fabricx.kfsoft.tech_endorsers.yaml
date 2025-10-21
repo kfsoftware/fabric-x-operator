@@ -1025,6 +1025,13 @@ spec:
                             network:
                               description: Network name
                               type: string
+                            publicParameters:
+                              description: Public parameters configuration
+                              properties:
+                                path:
+                                  description: Path to public parameters file
+                                  type: string
+                              type: object
                             services:
                               description: Services configuration
                               properties:
@@ -1064,6 +1071,13 @@ spec:
                                       type: object
                                   type: object
                               type: object
+                            wallets:
+                              additionalProperties:
+                                type: string
+                              description: Wallets configuration (pass-through to
+                                core.yaml)
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         description: Token Management Service (TMS) configurations
                         type: object
@@ -1074,6 +1088,56 @@ spec:
               enrollment:
                 description: Enrollment configuration for certificates
                 properties:
+                  idemix:
+                    description: Idemix credential configuration
+                    properties:
+                      ca:
+                        description: CA configuration for Idemix enrollment
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
+                        type: object
+                    type: object
                   sign:
                     description: Sign certificate configuration
                     properties:
@@ -1121,6 +1185,9 @@ spec:
                           enrollsecret:
                             description: Enrollment secret
                             type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
                         type: object
                       provider:
                         description: Provider configuration (new multi-provider support)
@@ -1332,6 +1399,9 @@ spec:
                           enrollsecret:
                             description: Enrollment secret
                             type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
                         type: object
                       provider:
                         description: Provider configuration (new multi-provider support)
@@ -1537,6 +1607,27 @@ spec:
               mspid:
                 description: MSP ID for the endorser
                 type: string
+              ports:
+                description: Ports to expose on the endorser pod and service
+                items:
+                  description: EndorserPort defines a port to expose on the endorser
+                  properties:
+                    name:
+                      description: Name of the port (e.g., "grpc", "http", "metrics")
+                      type: string
+                    port:
+                      description: Port number to expose
+                      format: int32
+                      type: integer
+                    protocol:
+                      default: TCP
+                      description: Protocol (TCP or UDP), defaults to TCP
+                      type: string
+                  required:
+                  - name
+                  - port
+                  type: object
+                type: array
               sans:
                 description: |-
                   Subject Alternative Names (SANS) for TLS certificates

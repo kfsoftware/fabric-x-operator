@@ -1317,6 +1317,14 @@ spec:
                 items:
                   type: string
                 type: array
+              idemix:
+                description: Idemix configuration
+                properties:
+                  curve:
+                    default: gurvy.Bn254
+                    description: Curve for idemix (e.g., "gurvy.Bn254", "amcl.Fp256bn")
+                    type: string
+                type: object
               image:
                 description: Image
                 type: string

@@ -9,6 +9,7 @@ This document contains important learnings and patterns discovered during develo
 - [Operator Deployment Workflow](#operator-deployment-workflow)
 - [Kubernetes MCP Integration](#kubernetes-mcp-integration)
 - [Testing Patterns](#testing-patterns)
+- [Namespace CRD](#namespace-crd)
 
 ---
 
@@ -1592,8 +1593,605 @@ spec:
 
 ---
 
+## Namespace CRD
+
+### Overview
+
+The Namespace CRD allows deploying Fabric X namespaces to the ordering service. A namespace represents a logical separation of data within a channel, with its own endorsement policy.
+
+### Problem
+
+Creating namespaces in Fabric X requires:
+1. Setting up MSP credentials from Kubernetes secrets
+2. Creating a namespace transaction with endorsement policy
+3. Signing the transaction
+4. Broadcasting to the orderer
+
+The operator needs to automate this process while leveraging the Identity CRD for credential management.
+
+### Solution
+
+Created a Namespace CRD with a controller that provides:
+- Integration with Identity CRD for MSP setup
+- Helper functions for secret retrieval
+- Basic controller skeleton for custom implementation
+
+### Implementation
+
+#### 1. CRD Structure ([api/v1alpha1/namespace_types.go](api/v1alpha1/namespace_types.go))
+
+```go
+type NamespaceSpec struct {
+    // Namespace ID
+    Name string `json:"name"`
+
+    // Orderer endpoint
+    Orderer string `json:"orderer"`
+
+    // CA certificate for TLS connection to orderer
+    CACert SecretKeyRef `json:"caCert"`
+
+    // MSPID of the identity
+    MSPID string `json:"mspID"`
+
+    // Reference to Identity CRD
+    Identity SecretKeyRef `json:"identity"`
+
+    // Channel name (optional)
+    Channel string `json:"channel,omitempty"`
+
+    // Verification key path (optional)
+    VerificationKeyPath string `json:"verificationKeyPath,omitempty"`
+
+    // Namespace version (-1 for new namespace)
+    Version int `json:"version,omitempty"`
+}
+
+type SecretKeyRef struct {
+    Name      string `json:"name"`
+    Namespace string `json:"namespace"`
+    Key       string `json:"key,omitempty"`
+}
+```
+
+#### 2. Controller Skeleton ([internal/controller/namespace_controller.go](internal/controller/namespace_controller.go))
+
+The controller provides a basic skeleton with helper functions but leaves the complex deployment logic to be implemented:
+
+**Key Functions:**
+
+1. **setupMSPFromIdentity** - Maps Identity CRD to local MSP directory
+2. **getSecretValue** - Retrieves values from Kubernetes secrets
+3. **updateStatus** - Updates Namespace status and conditions
+4. **handleDeletion** - Cleanup logic when namespace is deleted
+
+#### 3. MSP Setup from Identity CRD
+
+The `setupMSPFromIdentity` function creates a local MSP directory structure compatible with fabric-x-common's `setupMSP` function:
+
+```go
+// Create temporary directory for MSP
+tmpDir, err := os.MkdirTemp("", "namespace-msp-*")
+if err != nil {
+    return ctrl.Result{}, fmt.Errorf("failed to create temp dir: %w", err)
+}
+defer os.RemoveAll(tmpDir)
+
+// Setup MSP from Identity CRD
+mspPath, mspID, err := r.setupMSPFromIdentity(ctx, ns.Spec.Identity, tmpDir)
+if err != nil {
+    return ctrl.Result{}, fmt.Errorf("failed to setup MSP: %w", err)
+}
+
+// Now mspPath points to a directory with this structure:
+// msp/
+//   ├── signcerts/cert.pem
+//   ├── keystore/priv_sk
+//   ├── cacerts/ca.pem
+//   └── config.yaml
+```
+
+The function:
+1. Fetches the Identity CRD resource
+2. Verifies the identity status is "Ready"
+3. Retrieves signing cert, key, and CA cert from the secrets referenced in `identity.Status.OutputSecrets`
+4. Creates the MSP directory structure
+5. Writes all certificates and keys to the correct paths
+6. Creates `config.yaml` with NodeOUs configuration
+7. Returns the MSP path and MSPID
+
+#### 4. Sample Usage
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Namespace
+metadata:
+  name: my-namespace
+spec:
+  name: "token-namespace"
+  orderer: "orderergroup-party1-router-service.default:443"
+  caCert:
+    name: "orderergroup-party1-consenter-tls-cert"
+    namespace: "default"
+    key: "ca.pem"
+  mspID: "Org1MSP"
+  identity:
+    name: "org1-admin"
+    namespace: "default"
+  channel: "arma"
+  version: -1
+```
+
+### Integration with fabric-x-common
+
+The MSP directory created by `setupMSPFromIdentity` can be directly used with the `setupMSP` function from fabric-x-common:
+
+```go
+import "github.com/hyperledger/fabric-x-common/msp"
+
+// After calling setupMSPFromIdentity
+mspCfg := namespace.MSPConfig{
+    MSPConfigPath: mspPath,
+    MSPID:         mspID,
+}
+
+thisMSP, err := setupMSP(mspCfg)
+if err != nil {
+    return fmt.Errorf("msp setup error: %w", err)
+}
+
+// Use the MSP for signing
+sid, err := thisMSP.GetDefaultSigningIdentity()
+// ... continue with transaction creation and signing
+```
+
+### Design Decisions
+
+1. **Minimal Controller Logic**: Controller provides helper functions but leaves complex deployment logic to be implemented by the user
+2. **Identity CRD Integration**: Leverages existing Identity CRD for credential management rather than duplicating MSP setup
+3. **Temporary MSP Directory**: Creates ephemeral MSP structure that's cleaned up after use
+4. **Status Tracking**: Tracks deployment status, transaction ID, and conditions
+
+### Implementation Workflow
+
+When implementing the namespace deployment logic:
+
+1. **Setup MSP**: Use `setupMSPFromIdentity` to create MSP directory from Identity CRD
+2. **Load Credentials**: Use the MSP path with fabric-x-common's `setupMSP` function
+3. **Create Transaction**: Build namespace transaction with endorsement policy
+4. **Sign Transaction**: Sign using MSP signing identity
+5. **Broadcast**: Send signed envelope to orderer
+6. **Update Status**: Record transaction ID and status
+
+### Benefits
+
+1. **Identity Integration**: Reuses Identity CRD for credential management
+2. **Flexible Implementation**: Controller skeleton allows custom deployment logic
+3. **Helper Functions**: Provides utilities for secret access and status updates
+4. **Fabric X Compatible**: MSP directory structure matches fabric-x-common expectations
+5. **Clean Separation**: Separates MSP setup from complex transaction logic
+
+### Future Enhancements
+
+Potential additions to consider:
+
+- Verification key management for custom endorsement policies
+- Namespace policy updates (using version field)
+- Integration with endorser CRDs for namespace-specific configurations
+- Status watching for transaction confirmation
+- Automatic retry logic for failed deployments
+
+---
+
 ## Contributors
 
 This document captures learnings from active development. Keep it updated as new patterns and solutions emerge!
 
-Last Updated: 2025-10-17
+Last Updated: 2025-10-20
+
+---
+
+## Idemix Integration
+
+### Overview
+
+Automatic idemix (Identity Mixer) enrollment integration for privacy-preserving identities in Hyperledger Fabric. This allows creating anonymous credentials that support selective disclosure and unlinkability.
+
+### Problem
+
+Need automatic idemix credential enrollment that:
+1. Works with Fabric CA's idemix support
+2. Stores all credential information in Kubernetes secrets
+3. Is testable in isolation from the identity controller
+4. Uses the correct elliptic curve (gurvy.Bn254)
+
+### Solution
+
+Created a separate `internal/idemix` package with:
+- Standalone enrollment logic using official Fabric CA client library
+- Integration tests with testcontainers spinning up real Fabric CA
+- Identity controller integration for automatic enrollment
+- CA controller support for idemix curve configuration
+
+### Implementation
+
+#### 1. Idemix Package ([internal/idemix/enrollment.go](internal/idemix/enrollment.go))
+
+**Key Components**:
+
+```go
+type EnrollmentRequest struct {
+    CAURL         string
+    CAName        string
+    EnrollID      string
+    EnrollSecret  string
+    CACertPath    string
+    SkipTLSVerify bool
+    MSPDir        string
+}
+
+type EnrollmentResponse struct {
+    SignerConfig     *idemix2.SignerConfig
+    IdemixConfigPath string
+}
+
+func Enroll(req EnrollmentRequest) (*EnrollmentResponse, error) {
+    // Initialize BCCSP (crypto service provider)
+    opts := &factory.FactoryOpts{
+        Default: "SW",
+        SW: &factory.SwOpts{
+            Hash:     "SHA2",
+            Security: 256,
+            FileKeystore: &factory.FileKeystoreOpts{
+                KeyStorePath: bccspDir,
+            },
+        },
+    }
+    
+    // Create Fabric CA client with idemix curve
+    clientConfig := &lib.ClientConfig{
+        URL:    req.CAURL,
+        TLS:    tlsConfig,
+        MSPDir: mspDir,
+        CSP:    opts,
+        Idemix: api.Idemix{
+            Curve: "gurvy.Bn254", // CRITICAL: Must match CA curve
+        },
+    }
+    
+    // Perform enrollment with Type: "idemix"
+    enrollReq := &api.EnrollmentRequest{
+        Name:   req.EnrollID,
+        Secret: req.EnrollSecret,
+        CAName: req.CAName,
+        Type:   "idemix",  // Triggers idemix enrollment
+    }
+    
+    enrollResp, err := client.Enroll(enrollReq)
+    // Returns SignerConfig with all credential data
+}
+```
+
+**SignerConfig Contents**:
+- `Cred`: Serialized idemix credential (344 bytes)
+- `Sk`: Secret key (32 bytes)
+- `OrganizationalUnitIdentifier`: OU string
+- `Role`: Role (e.g., 1 for member)
+- `EnrollmentID`: Enrollment ID (e.g., "admin")
+- `CredentialRevocationInformation`: CRI data
+- `CurveID`: Curve used ("gurvy.Bn254")
+- `RevocationHandle`: Revocation handle
+
+#### 2. Testcontainer Integration ([internal/idemix/enrollment_test.go](internal/idemix/enrollment_test.go))
+
+**Test Setup**:
+
+```go
+func TestIdemixEnrollmentWithCA(t *testing.T) {
+    // Start Fabric CA with idemix support
+    req := testcontainers.ContainerRequest{
+        Image: "hyperledger/fabric-ca:1.5.15",
+        Cmd: []string{
+            "sh", "-c",
+            "fabric-ca-server start -b admin:adminpw --tls.enabled --idemix.curve gurvy.Bn254 -d",
+        },
+        WaitingFor: wait.ForLog("Listening on https://0.0.0.0:7054"),
+    }
+    
+    // Perform idemix enrollment
+    enrollReq := idemix.EnrollmentRequest{
+        CAURL:        caURL,
+        CAName:       "ca",
+        EnrollID:     "admin",
+        EnrollSecret: "adminpw",
+        CACertPath:   tlsCertPath,
+        MSPDir:       mspDir,
+    }
+    
+    resp, err := idemix.Enroll(enrollReq)
+    // Validate credential components
+}
+```
+
+**Important Test Fixes**:
+1. **TLS Cert Cleanup**: CA container output includes extra characters before PEM block, so we trim to `-----BEGIN CERTIFICATE-----`
+2. **Curve Matching**: Client MUST specify `Idemix: api.Idemix{Curve: "gurvy.Bn254"}` to match CA curve
+3. **CA Startup**: CA must be started with `--idemix.curve gurvy.Bn254` flag
+
+#### 3. Identity Controller Integration ([internal/controller/identity_controller.go](internal/controller/identity_controller.go))
+
+**Modified `handleEnrollment`**:
+
+```go
+func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity) (ctrl.Result, error) {
+    enrollment := identity.Spec.Enrollment
+    
+    // Check if idemix enrollment is requested
+    if enrollment.Idemix != nil {
+        return r.handleIdemixEnrollment(ctx, logger, identity)
+    }
+    
+    // Otherwise do X.509 enrollment...
+}
+```
+
+**New `handleIdemixEnrollment` function**:
+
+```go
+func (r *IdentityReconciler) handleIdemixEnrollment(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity) (ctrl.Result, error) {
+    // Get CA resource and TLS cert
+    // Create temp MSP directory
+    // Perform idemix enrollment
+    enrollResp, err := idemix.Enroll(enrollReq)
+    
+    // Create comprehensive Kubernetes secret
+    return r.createIdemixSecret(ctx, logger, identity, enrollResp)
+}
+```
+
+**Idemix Secret Creation**:
+
+```go
+func (r *IdentityReconciler) createIdemixSecret(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, enrollResp *idemix.EnrollmentResponse) error {
+    secretData := make(map[string][]byte)
+    
+    // 1. Full SignerConfig as JSON
+    secretData["SignerConfig"] = signerConfigJSON
+    
+    // 2. Individual components
+    secretData["Cred"] = enrollResp.SignerConfig.GetCred()
+    secretData["Sk"] = enrollResp.SignerConfig.GetSk()
+    secretData["CRI"] = enrollResp.SignerConfig.GetCredentialRevocationInformation()
+    
+    // 3. Metadata JSON
+    metadata := map[string]string{
+        "enrollment_id":     enrollResp.SignerConfig.GetEnrollmentID(),
+        "ou_identifier":     enrollResp.SignerConfig.GetOrganizationalUnitIdentifier(),
+        "role":              fmt.Sprintf("%d", enrollResp.SignerConfig.GetRole()),
+        "curve_id":          enrollResp.SignerConfig.CurveID,
+        "revocation_handle": enrollResp.SignerConfig.RevocationHandle,
+    }
+    secretData["metadata.json"] = metadataJSON
+    
+    // 4. All files from idemix config directory
+    for _, file := range files {
+        content, _ := os.ReadFile(filepath.Join(enrollResp.IdemixConfigPath, file.Name()))
+        secretData[fmt.Sprintf("user/%s", file.Name())] = content
+    }
+    
+    // Create secret with all data
+    secret := &corev1.Secret{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      fmt.Sprintf("%s-idemix-cred", output.SecretPrefix),
+            Namespace: namespace,
+        },
+        Data: secretData,
+    }
+    
+    // Create and track in status
+    identity.Status.OutputSecrets.IdemixCred = secretName
+}
+```
+
+#### 4. CA Controller Idemix Support ([internal/controller/ca/ca_controller.go](internal/controller/ca/ca_controller.go))
+
+**Updated Deployment Command**:
+
+```go
+Command: func() []string {
+    baseCmd := `fabric-ca-server start`
+    
+    // Add idemix flag if configured
+    if ca.Spec.Idemix != nil && ca.Spec.Idemix.Curve != "" {
+        baseCmd += fmt.Sprintf(" --idemix.curve %s", ca.Spec.Idemix.Curve)
+    }
+    
+    return []string{"sh", "-c", baseCmd}
+}()
+```
+
+#### 5. API Types
+
+**CA Spec** ([api/v1alpha1/ca_types.go](api/v1alpha1/ca_types.go)):
+
+```go
+type CASpec struct {
+    // ... other fields ...
+    
+    // Idemix configuration
+    Idemix *FabricCAIdemix `json:"idemix,omitempty"`
+}
+
+type FabricCAIdemix struct {
+    // Curve for idemix (e.g., "gurvy.Bn254", "amcl.Fp256bn")
+    // +kubebuilder:default="gurvy.Bn254"
+    Curve string `json:"curve,omitempty"`
+}
+```
+
+**Identity Spec** ([api/v1alpha1/identity_types.go](api/v1alpha1/identity_types.go)):
+
+```go
+type IdentityEnrollment struct {
+    // ... other fields ...
+    
+    // Idemix enrollment configuration
+    Idemix *IdentityIdemixEnrollment `json:"idemix,omitempty"`
+}
+
+type IdentityIdemixEnrollment struct {
+    // CA reference for idemix enrollment (defaults to main CARef if not specified)
+    CARef *IdentityCARef `json:"caRef,omitempty"`
+}
+
+type IdentityOutputSecrets struct {
+    // ... X.509 cert fields ...
+    
+    // Idemix credential secret name
+    IdemixCred string `json:"idemixCred,omitempty"`
+}
+```
+
+### Directory Structure
+
+After idemix enrollment, the MSP directory contains:
+
+```
+<MSPDir>/
+  ├── keystore/              # BCCSP keystore
+  └── user/
+      └── SignerConfig       # JSON file with complete credential
+```
+
+The Kubernetes secret mirrors this structure with additional metadata:
+
+```
+Secret Data:
+  SignerConfig            # Complete JSON SignerConfig
+  Cred                    # Raw credential bytes
+  Sk                      # Secret key bytes
+  CRI                     # Credential Revocation Information
+  metadata.json           # Human-readable metadata
+  user/SignerConfig       # Copy of original SignerConfig file
+```
+
+### Sample Deployment
+
+#### 1. Deploy Idemix CA ([config/samples/fabricx_v1alpha1_ca_idemix.yaml](config/samples/fabricx_v1alpha1_ca_idemix.yaml))
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CA
+metadata:
+  name: endorser-idemix-ca
+spec:
+  image: hyperledger/fabric-ca
+  version: 1.5.15
+  idemix:
+    curve: gurvy.Bn254  # Enable idemix with gurvy.Bn254 curve
+  ca:
+    name: idemix-ca
+    registry:
+      identities:
+        - name: admin
+          pass: adminpw
+          type: client
+```
+
+#### 2. Create Idemix Identity ([config/samples/fabricx_v1alpha1_identity_idemix.yaml](config/samples/fabricx_v1alpha1_identity_idemix.yaml))
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-idemix-user
+spec:
+  type: user
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+    enrollID: admin
+    enrollSecretRef:
+      name: idemix-enrollment-secret
+      key: password
+    enrollTLS: false
+    idemix: {}  # Enable idemix enrollment
+  output:
+    secretPrefix: org1-idemix-user
+```
+
+#### 3. Verify Idemix Secret
+
+```bash
+# List idemix secret
+kubectl get secret org1-idemix-user-idemix-cred
+
+# View metadata
+kubectl get secret org1-idemix-user-idemix-cred -o jsonpath='{.data.metadata\.json}' | base64 -d | jq
+
+# Output:
+# {
+#   "enrollment_id": "admin",
+#   "ou_identifier": "ou1",
+#   "role": "1",
+#   "curve_id": "gurvy.Bn254",
+#   "revocation_handle": "..."
+# }
+
+# View SignerConfig
+kubectl get secret org1-idemix-user-idemix-cred -o jsonpath='{.data.SignerConfig}' | base64 -d | jq
+```
+
+### Key Learnings
+
+1. **Curve Matching is Critical**: 
+   - CA must be started with `--idemix.curve gurvy.Bn254`
+   - Client MUST specify `Idemix: api.Idemix{Curve: "gurvy.Bn254"}`
+   - Mismatch causes: "Invalid Idemix credential request: failure [set bytes failed [invalid point: subgroup check failed]]"
+
+2. **Supported Curves**:
+   - `gurvy.Bn254` (recommended, BN254 pairing-friendly curve)
+   - `amcl.Fp256bn` (default if not specified)
+   - `amcl.Fp256Miraclbn`
+
+3. **TLS Certificate Handling**:
+   - Container exec output may include control characters
+   - Trim to `-----BEGIN CERTIFICATE-----` to clean cert data
+
+4. **Directory Structure**:
+   - Idemix creates `<MSPDir>/user/SignerConfig`
+   - BCCSP keystore at `<MSPDir>/keystore/`
+   - All credential data is in SignerConfig JSON
+
+5. **Secret Organization**:
+   - Store complete SignerConfig JSON
+   - Also store individual components (Cred, Sk, CRI) for easy access
+   - Include human-readable metadata.json
+   - Mirror file structure with `user/` prefix
+
+6. **Testing**:
+   - Use testcontainers for integration testing
+   - Spin up real Fabric CA with idemix support
+   - Verify all credential components
+   - Test both successful and failed enrollments
+
+### Benefits
+
+1. **Privacy-Preserving**: Idemix credentials support anonymous transactions
+2. **Automatic**: No manual enrollment needed
+3. **Testable**: Isolated package with comprehensive tests
+4. **Complete**: All credential data stored in single secret
+5. **Flexible**: Can use different CA for idemix vs X.509
+
+### Future Enhancements
+
+Potential improvements:
+- Support for idemix attribute-based credentials
+- Automatic curve detection from CA
+- Re-enrollment support
+- Revocation integration
+- Multiple idemix credentials per identity
+
+---
+

@@ -142,6 +142,48 @@ spec:
                     default: true
                     description: Whether to also enroll for TLS certificates
                     type: boolean
+                  idemix:
+                    description: Idemix enrollment configuration (if using idemix
+                      instead of X.509)
+                    properties:
+                      caRef:
+                        description: CA reference for idemix enrollment (defaults
+                          to main CARef if not specified)
+                        properties:
+                          caCertRef:
+                            description: TLS CA certificate reference for connecting
+                              to the CA
+                            properties:
+                              key:
+                                description: Secret key
+                                type: string
+                              name:
+                                description: Secret name
+                                type: string
+                              namespace:
+                                description: Namespace of the secret
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          name:
+                            description: Name of the CA custom resource
+                            type: string
+                          namespace:
+                            description: Namespace of the CA (optional, defaults to
+                              identity's namespace)
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      enabled:
+                        default: true
+                        description: Enabled indicates whether idemix enrollment is
+                          enabled
+                        type: boolean
+                    type: object
                   tlsCARef:
                     description: TLS CA reference (if different from signing CA)
                     properties:
@@ -290,6 +332,9 @@ spec:
               outputSecrets:
                 description: Output secrets created
                 properties:
+                  idemixCred:
+                    description: Idemix credential secret name
+                    type: string
                   signCACert:
                     description: Sign CA certificate secret name
                     type: string

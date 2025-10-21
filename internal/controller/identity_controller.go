@@ -21,12 +21,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/hyperledger/fabric-ca/api"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
+	"github.com/kfsoftware/fabric-x-operator/internal/idemix"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -122,6 +125,14 @@ func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.L
 	logger.Info("Enrolling identity with Fabric CA")
 
 	enrollment := identity.Spec.Enrollment
+
+	// Debug: Check idemix field
+	if enrollment.Idemix != nil {
+		logger.Info("Idemix enrollment requested")
+		return r.handleIdemixEnrollment(ctx, logger, identity)
+	} else {
+		logger.Info("Using X.509 enrollment (idemix is nil)")
+	}
 
 	// Get CA resource
 	ca := &fabricxv1alpha1.CA{}
@@ -290,15 +301,15 @@ func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.L
 		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to create output secrets: %v", err))
 	}
 
-	// Update status
+	// Update status with enrollment time and certificate expiry
 	now := metav1.Now()
-	identity.Status.EnrollmentTime = &now
-	identity.Status.CertificateExpiry = &metav1.Time{Time: signCert.NotAfter}
+	certExpiry := &metav1.Time{Time: signCert.NotAfter}
+	var tlsCertExpiry *metav1.Time
 	if tlsCertPEM != nil {
-		identity.Status.TLSCertificateExpiry = &metav1.Time{Time: signCert.NotAfter}
+		tlsCertExpiry = &metav1.Time{Time: signCert.NotAfter}
 	}
 
-	return r.updateStatus(ctx, logger, identity, "READY", "Identity enrolled successfully with CA")
+	return r.updateStatusWithCerts(ctx, logger, identity, "READY", "Identity enrolled successfully with CA", &now, certExpiry, tlsCertExpiry)
 }
 
 // createOutputSecrets creates secrets for the identity materials
@@ -401,6 +412,18 @@ func (r *IdentityReconciler) outputSecretsExist(ctx context.Context, identity *f
 		namespace = identity.Namespace
 	}
 
+	// Check if this is an idemix enrollment
+	if identity.Spec.Enrollment != nil && identity.Spec.Enrollment.Idemix != nil && identity.Spec.Enrollment.Idemix.Enabled != nil && *identity.Spec.Enrollment.Idemix.Enabled {
+		// For idemix, check for the idemix credential secret
+		idemixSecretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: idemixSecretName, Namespace: namespace}, secret); err != nil {
+			return false
+		}
+		return true
+	}
+
+	// For X.509, check for the traditional secrets
 	secretNames := []string{
 		fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
 		fmt.Sprintf("%s-sign-key", output.SecretPrefix),
@@ -425,7 +448,26 @@ func (r *IdentityReconciler) validateExistingSecrets(ctx context.Context, identi
 		namespace = identity.Namespace
 	}
 
-	// Validate signing cert
+	// For idemix, validate the idemix credential secret
+	if identity.Spec.Enrollment != nil && identity.Spec.Enrollment.Idemix != nil && identity.Spec.Enrollment.Idemix.Enabled != nil && *identity.Spec.Enrollment.Idemix.Enabled {
+		idemixSecretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+		idemixSecret := &corev1.Secret{}
+		if err := r.Get(ctx, types.NamespacedName{Name: idemixSecretName, Namespace: namespace}, idemixSecret); err != nil {
+			return errors.Wrapf(err, "failed to get idemix secret %s", idemixSecretName)
+		}
+
+		// Basic validation - check if Cred and Sk fields exist
+		if _, ok := idemixSecret.Data["Cred"]; !ok {
+			return errors.New("idemix secret missing Cred field")
+		}
+		if _, ok := idemixSecret.Data["Sk"]; !ok {
+			return errors.New("idemix secret missing Sk field")
+		}
+
+		return nil
+	}
+
+	// For X.509, validate signing cert
 	signCertSecret := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
@@ -449,15 +491,71 @@ func (r *IdentityReconciler) validateExistingSecrets(ctx context.Context, identi
 
 // updateStatus updates the identity status
 func (r *IdentityReconciler) updateStatus(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, status, message string) (ctrl.Result, error) {
-	identity.Status.Status = status
-	identity.Status.Message = message
+	// Refetch the identity to avoid conflict errors
+	fresh := &fabricxv1alpha1.Identity{}
+	if err := r.Get(ctx, types.NamespacedName{Name: identity.Name, Namespace: identity.Namespace}, fresh); err != nil {
+		logger.Error(err, "Failed to refetch Identity for status update")
+		return ctrl.Result{}, err
+	}
 
-	if err := r.Status().Update(ctx, identity); err != nil {
+	// Update status on the fresh object
+	fresh.Status.Status = status
+	fresh.Status.Message = message
+
+	if err := r.Status().Update(ctx, fresh); err != nil {
 		logger.Error(err, "Failed to update Identity status")
 		return ctrl.Result{}, err
 	}
 
 	logger.Info("Updated Identity status", "status", status, "message", message)
+	return ctrl.Result{}, nil
+}
+
+// updateStatusWithTime updates the identity status including enrollment time
+func (r *IdentityReconciler) updateStatusWithTime(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, status, message string, enrollmentTime *metav1.Time) (ctrl.Result, error) {
+	// Refetch the identity to avoid conflict errors
+	fresh := &fabricxv1alpha1.Identity{}
+	if err := r.Get(ctx, types.NamespacedName{Name: identity.Name, Namespace: identity.Namespace}, fresh); err != nil {
+		logger.Error(err, "Failed to refetch Identity for status update")
+		return ctrl.Result{}, err
+	}
+
+	// Update status on the fresh object
+	fresh.Status.Status = status
+	fresh.Status.Message = message
+	fresh.Status.EnrollmentTime = enrollmentTime
+
+	if err := r.Status().Update(ctx, fresh); err != nil {
+		logger.Error(err, "Failed to update Identity status")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Updated Identity status with enrollment time", "status", status, "message", message)
+	return ctrl.Result{}, nil
+}
+
+// updateStatusWithCerts updates the identity status including enrollment time and certificate expiry
+func (r *IdentityReconciler) updateStatusWithCerts(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, status, message string, enrollmentTime, certExpiry, tlsCertExpiry *metav1.Time) (ctrl.Result, error) {
+	// Refetch the identity to avoid conflict errors
+	fresh := &fabricxv1alpha1.Identity{}
+	if err := r.Get(ctx, types.NamespacedName{Name: identity.Name, Namespace: identity.Namespace}, fresh); err != nil {
+		logger.Error(err, "Failed to refetch Identity for status update")
+		return ctrl.Result{}, err
+	}
+
+	// Update status on the fresh object
+	fresh.Status.Status = status
+	fresh.Status.Message = message
+	fresh.Status.EnrollmentTime = enrollmentTime
+	fresh.Status.CertificateExpiry = certExpiry
+	fresh.Status.TLSCertificateExpiry = tlsCertExpiry
+
+	if err := r.Status().Update(ctx, fresh); err != nil {
+		logger.Error(err, "Failed to update Identity status")
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Updated Identity status with certificate expiry", "status", status, "message", message)
 	return ctrl.Result{}, nil
 }
 
@@ -476,6 +574,225 @@ func (r *IdentityReconciler) handleDeletion(ctx context.Context, logger logr.Log
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+// handleIdemixEnrollment handles idemix enrollment with Fabric CA
+func (r *IdentityReconciler) handleIdemixEnrollment(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity) (ctrl.Result, error) {
+	logger.Info("Enrolling identity with Fabric CA using idemix")
+
+	enrollment := identity.Spec.Enrollment
+
+	// Determine which CA to use for idemix enrollment
+	caRef := enrollment.CARef
+	if enrollment.Idemix.CARef != nil {
+		caRef = *enrollment.Idemix.CARef
+	}
+
+	// Get CA resource
+	ca := &fabricxv1alpha1.CA{}
+	caNamespace := caRef.Namespace
+	if caNamespace == "" {
+		caNamespace = identity.Namespace
+	}
+	err := r.Get(ctx, types.NamespacedName{
+		Name:      caRef.Name,
+		Namespace: caNamespace,
+	}, ca)
+	if err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to get CA resource: %v", err))
+	}
+
+	// Get enrollment secret
+	enrollSecret := &corev1.Secret{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      enrollment.EnrollSecretRef.Name,
+		Namespace: identity.Namespace,
+	}, enrollSecret)
+	if err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to get enrollment secret: %v", err))
+	}
+
+	enrollPassword, ok := enrollSecret.Data[enrollment.EnrollSecretRef.Key]
+	if !ok {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Key %s not found in secret %s", enrollment.EnrollSecretRef.Key, enrollment.EnrollSecretRef.Name))
+	}
+
+	// Get TLS cert (server certificate to trust)
+	tlsCertSecret := &corev1.Secret{}
+	err = r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-tls-crypto", ca.Name),
+		Namespace: ca.Namespace,
+	}, tlsCertSecret)
+	if err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to get TLS certificate: %v", err))
+	}
+
+	tlsCACert, ok := tlsCertSecret.Data["tls.crt"]
+	if !ok {
+		return r.updateStatus(ctx, logger, identity, "FAILED", "TLS certificate not found in secret")
+	}
+
+	// Build CA URL
+	caURL := fmt.Sprintf("https://%s.%s:7054", ca.Name, ca.Namespace)
+	logger.Info("Using CA URL for idemix enrollment", "url", caURL)
+
+	// Get the actual CA name from the CA spec
+	caName := ca.Spec.CA.Name
+	if caName == "" {
+		caName = "ca" // Default CA name
+	}
+
+	// Create temporary MSP directory for enrollment
+	tmpMSPDir, err := os.MkdirTemp("", "idemix-msp-*")
+	if err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to create temp MSP directory: %v", err))
+	}
+	defer os.RemoveAll(tmpMSPDir)
+
+	// Save TLS cert to temp file for enrollment
+	tlsCertPath := filepath.Join(tmpMSPDir, "ca-cert.pem")
+	if err := os.WriteFile(tlsCertPath, tlsCACert, 0644); err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to write TLS cert: %v", err))
+	}
+
+	// Perform idemix enrollment
+	logger.Info("Performing idemix enrollment", "enrollID", enrollment.EnrollID, "caName", caName)
+	enrollReq := idemix.EnrollmentRequest{
+		CAURL:        caURL,
+		CAName:       caName,
+		EnrollID:     enrollment.EnrollID,
+		EnrollSecret: string(enrollPassword),
+		CACertPath:   tlsCertPath,
+		MSPDir:       tmpMSPDir,
+	}
+
+	enrollResp, err := idemix.Enroll(enrollReq)
+	if err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to enroll with idemix: %v", err))
+	}
+
+	logger.Info("Idemix enrollment successful", "enrollmentID", enrollResp.SignerConfig.GetEnrollmentID())
+
+	// Get the CA name for fetching issuer public keys
+	caNameForKeys := enrollment.CARef.Name
+	if enrollment.Idemix.CARef != nil {
+		caNameForKeys = enrollment.Idemix.CARef.Name
+	}
+
+	// Create idemix credential secret (will fetch CA issuer keys from CA secret)
+	if err := r.createIdemixSecret(ctx, logger, identity, enrollResp, caNameForKeys); err != nil {
+		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to create idemix secret: %v", err))
+	}
+
+	// Update status with enrollment time
+	now := metav1.Now()
+	return r.updateStatusWithTime(ctx, logger, identity, "READY", "Identity enrolled successfully with idemix", &now)
+}
+
+// createIdemixSecret creates a secret containing all idemix credential information
+// Each field from SignerConfig is stored as a separate key in the Kubernetes secret
+func (r *IdentityReconciler) createIdemixSecret(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, enrollResp *idemix.EnrollmentResponse, caName string) error {
+	output := identity.Spec.Output
+	namespace := output.Namespace
+	if namespace == "" {
+		namespace = identity.Namespace
+	}
+
+	secretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+
+	// Prepare secret data - one key per SignerConfig field
+	secretData := make(map[string][]byte)
+
+	// Individual fields from SignerConfig (matching JSON structure)
+	secretData["Cred"] = enrollResp.SignerConfig.GetCred()
+	secretData["Sk"] = enrollResp.SignerConfig.GetSk()
+	secretData["enrollment_id"] = []byte(enrollResp.SignerConfig.GetEnrollmentID())
+	secretData["credential_revocation_information"] = enrollResp.SignerConfig.GetCredentialRevocationInformation()
+	secretData["curveID"] = []byte(enrollResp.SignerConfig.CurveID)
+	secretData["revocation_handle"] = []byte(enrollResp.SignerConfig.RevocationHandle)
+
+	// Optional fields (may be empty)
+	if ouIdentifier := enrollResp.SignerConfig.GetOrganizationalUnitIdentifier(); ouIdentifier != "" {
+		secretData["organizational_unit_identifier"] = []byte(ouIdentifier)
+	}
+
+	// Role as string representation
+	secretData["role"] = []byte(fmt.Sprintf("%d", enrollResp.SignerConfig.GetRole()))
+
+	// Add all files from idemix config directory
+	files, err := os.ReadDir(enrollResp.IdemixConfigPath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read idemix config directory")
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		filePath := filepath.Join(enrollResp.IdemixConfigPath, file.Name())
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			logger.Error(err, "Failed to read idemix config file", "file", file.Name())
+			continue
+		}
+		// Store the original SignerConfig file (replace / with -)
+		secretData[fmt.Sprintf("user-%s", file.Name())] = content
+	}
+
+	// Fetch CA issuer public keys from CA secret
+	logger.Info("Fetching CA issuer keys from CA secret", "caName", caName)
+	caSecretName := fmt.Sprintf("%s-idemix-issuer-keys", caName)
+	caSecret := &corev1.Secret{}
+	// CA is in the same namespace as the identity
+	caNamespace := identity.Namespace
+	if err := r.Get(ctx, types.NamespacedName{Name: caSecretName, Namespace: caNamespace}, caSecret); err != nil {
+		logger.Info("Failed to get CA issuer keys secret, skipping CA keys", "secret", caSecretName, "error", err)
+	} else {
+		logger.Info("Found CA issuer keys secret", "secret", caSecretName)
+		// Add IssuerPublicKey and IssuerRevocationPublicKey (the public keys needed by identities)
+		if issuerPubKey, ok := caSecret.Data["IssuerPublicKey"]; ok {
+			logger.Info("Adding IssuerPublicKey to identity secret", "size", len(issuerPubKey))
+			secretData["IssuerPublicKey"] = issuerPubKey
+		}
+		if revocationPubKey, ok := caSecret.Data["IssuerRevocationPublicKey"]; ok {
+			logger.Info("Adding IssuerRevocationPublicKey to identity secret", "size", len(revocationPubKey))
+			secretData["IssuerRevocationPublicKey"] = revocationPubKey
+		}
+	}
+
+	// Create secret
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: namespace,
+			Labels:    output.Labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: secretData,
+	}
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(identity, secret, r.Scheme); err != nil {
+		return errors.Wrapf(err, "failed to set controller reference for secret %s", secretName)
+	}
+
+	// Create or update secret
+	if err := r.Create(ctx, secret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.Info("Idemix secret already exists, updating", "secret", secretName)
+			if err := r.Update(ctx, secret); err != nil {
+				return errors.Wrapf(err, "failed to update secret %s", secretName)
+			}
+		} else {
+			return errors.Wrapf(err, "failed to create secret %s", secretName)
+		}
+	}
+	logger.Info("Created idemix secret", "secret", secretName)
+
+	// Update status with output secret
+	identity.Status.OutputSecrets.IdemixCred = secretName
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -428,6 +428,56 @@ spec:
               enrollment:
                 description: Component-specific enrollment configuration
                 properties:
+                  idemix:
+                    description: Idemix credential configuration
+                    properties:
+                      ca:
+                        description: CA configuration for Idemix enrollment
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
+                        type: object
+                    type: object
                   sign:
                     description: Sign certificate configuration
                     properties:
@@ -475,6 +525,9 @@ spec:
                           enrollsecret:
                             description: Enrollment secret
                             type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
                         type: object
                       provider:
                         description: Provider configuration (new multi-provider support)
@@ -686,6 +739,9 @@ spec:
                           enrollsecret:
                             description: Enrollment secret
                             type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
                         type: object
                       provider:
                         description: Provider configuration (new multi-provider support)

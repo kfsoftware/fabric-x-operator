@@ -1,0 +1,32 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: ChainNamespace
+metadata:
+  name: token-namespace
+  # Note: This is a cluster-scoped resource (no namespace field)
+spec:
+  # Namespace ID
+  name: "token_namespace"
+
+  # Orderer router endpoint (without TLS)
+  orderer: "orderergroup-party1-router-service.default:7150"
+
+  # CA certificate - not used anymore (TLS disabled)
+  caCert:
+    name: "orderergroup-party1-router-tls-cert"
+    namespace: "default"
+    key: "ca.pem"
+
+  # MSPID
+  mspID: "Org1MSP"
+
+  # Identity to use for signing (org1-admin)
+  identity:
+    name: "org1-admin"
+    namespace: "default"
+    key: "identity" # Not used for Identity CR reference
+
+  # Channel name
+  channel: "arma"
+
+  # Version (-1 for new namespace)
+  version: -1
