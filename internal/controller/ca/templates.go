@@ -278,10 +278,12 @@ cafiles:
 #############################################################################
 # Intermediate CA section
 #############################################################################
+{{- if .CA.Intermediate.ParentServer.URL}}
 intermediate:
   parentserver:
     url: {{.CA.Intermediate.ParentServer.URL}}
     caname: {{.CA.Intermediate.ParentServer.CAName}}
+{{- end}}
 
 #############################################################################
 # Extra configuration options
@@ -592,10 +594,12 @@ cafiles:
 #############################################################################
 # Intermediate CA section
 #############################################################################
+{{- if .TLSCA.Intermediate.ParentServer.URL}}
 intermediate:
   parentserver:
     url: {{.TLSCA.Intermediate.ParentServer.URL}}
     caname: {{.TLSCA.Intermediate.ParentServer.CAName}}
+{{- end}}
 
 #############################################################################
 # Extra configuration options

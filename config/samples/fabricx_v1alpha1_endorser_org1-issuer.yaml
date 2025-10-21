@@ -7,7 +7,7 @@ metadata:
   name: org1-issuer
   namespace: default
 spec:
-  bootstrapMode: configure
+  bootstrapMode: deploy
   mspid: Org1MSP
   image: token-sdk-issuer
   version: fabricx-latest
@@ -39,6 +39,28 @@ spec:
           persistentVolumeClaim:
             claimName: org1-issuer-data
             readOnly: false
+      - name: idemix-wallet
+        volumeSource:
+          secret:
+            secretName: org1-issuer-idemix-idemix-cred
+            items:
+              - key: Sk
+                path: keystore/priv_sk
+              - key: Cred
+                path: signcerts/cert.pem
+      - name: sign-identity
+        volumeSource:
+          secret:
+            secretName: org1-issuer-idemix-idemix-cred
+            items:
+              - key: Sk
+                path: keystore/priv_sk
+              - key: Sk
+                path: keystore/key.pem
+              - key: Cred
+                path: signcerts/cert.pem
+              - key: IssuerPublicKey
+                path: cacerts/ca.pem
 
     volumeMounts:
       - name: data
@@ -47,6 +69,12 @@ spec:
       - name: data
         mountPath: /var/hyperledger/fabric/config/data
         readOnly: false
+      - name: idemix-wallet
+        mountPath: /var/hyperledger/fabric/config/wallet/iss
+        readOnly: true
+      - name: sign-identity
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp
+        readOnly: true
 
   core:
     logging:
@@ -61,19 +89,8 @@ spec:
         key:
           file: ""
       p2p:
-        listenAddress: /ip4/0.0.0.0/tcp/9101
+        listenAddress: /ip4/0.0.0.0/tcp/9301
         type: websocket
-        opts:
-          routing:
-            inline:
-              {
-                "issuer": { "parties": ["issuer"], "aliases": [] },
-                "auditor": { "parties": ["auditor"], "aliases": [] },
-                "endorser1": { "parties": ["endorser1"], "aliases": [] },
-                "endorser2": { "parties": ["endorser2"], "aliases": [] },
-                "owner1": { "parties": ["owner1"], "aliases": [] },
-                "owner2": { "parties": ["owner2"], "aliases": [] },
-              }
       persistences:
         default:
           type: sqlite
@@ -81,51 +98,42 @@ spec:
             dataSource: file:/var/hyperledger/fabric/data/fts.sqlite
       endpoint:
         resolvers:
-          - name: auditor
-            identity:
-              id: auditor
-              secretRef:
-                name: org1-auditor-tls-cert
-                namespace: default
-                key: cert.pem
-            addresses:
-              P2P: auditor.example.com:9201
           - name: endorser1
             identity:
               id: endorser1
               secretRef:
-                name: org1-endorser1-tls-cert
+                name: org1-endorser1-idemix-idemix-cred
                 namespace: default
-                key: cert.pem
+                key: Cred
             addresses:
-              P2P: endorser1.example.com:9301
+              P2P: org1-endorser1-service.default.svc.cluster.local:9301
           - name: endorser2
             identity:
               id: endorser2
               secretRef:
-                name: org1-endorser2-tls-cert
+                name: org1-endorser2-idemix-idemix-cred
                 namespace: default
-                key: cert.pem
+                key: Cred
             addresses:
-              P2P: endorser2.example.com:9401
+              P2P: org1-endorser2-service.default.svc.cluster.local:9301
           - name: owner1
             identity:
               id: owner1
               secretRef:
-                name: org1-owner1-tls-cert
+                name: org1-owner1-idemix-idemix-cred
                 namespace: default
-                key: cert.pem
+                key: Cred
             addresses:
-              P2P: owner1.example.com:9501
+              P2P: org1-owner1-service.default.svc.cluster.local:9301
           - name: owner2
             identity:
               id: owner2
               secretRef:
-                name: org1-owner2-tls-cert
+                name: org1-owner2-idemix-idemix-cred
                 namespace: default
-                key: cert.pem
+                key: Cred
             addresses:
-              P2P: owner2.example.com:9601
+              P2P: org1-owner2-service.default.svc.cluster.local:9301
 
     fabric:
       enabled: true
@@ -136,7 +144,7 @@ spec:
           - id: user
             mspType: bccsp
             mspID: Org1MSP
-            path: ./keys/fabric/user
+            path: /var/hyperledger/fabric/config/keys/fabric/user/msp
         tls:
           enabled: false
         peers:
@@ -171,28 +179,28 @@ spec:
   enrollment:
     sign:
       ca:
-        caname: ca
-        cahost: test-ca2.default
+        caname: idemix-ca
+        cahost: endorser-idemix-ca.default
         caport: 7054
         catls:
           secretRef:
             key: tls.crt
-            name: test-ca2-tls-crypto
+            name: endorser-idemix-ca-tls-crypto
             namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+        enrollid: issuer
+        enrollsecret: issuerpw
     tls:
       ca:
         caname: tlsca
-        cahost: test-ca2.default
+        cahost: endorser-idemix-ca.default
         caport: 7054
         catls:
           secretRef:
             key: tls.crt
-            name: test-ca2-tls-crypto
+            name: endorser-idemix-ca-tls-crypto
             namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
+        enrollid: issuer
+        enrollsecret: issuerpw
       sans:
         dnsNames:
           - org1-issuer
