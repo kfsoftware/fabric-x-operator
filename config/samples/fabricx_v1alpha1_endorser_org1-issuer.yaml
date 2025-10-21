@@ -1,4 +1,58 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-issuer-sign
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: issuer
+    enrollSecretRef:
+      key: password
+      name: issuer-enrollment-secret
+      namespace: default
+    enrollTLS: false
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: issuer
+      identity-type: x509-sign
+    namespace: default
+    secretPrefix: org1-issuer-sign
+  type: client
+
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-issuer-tls
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: issuer
+    enrollSecretRef:
+      key: password
+      name: issuer-enrollment-secret
+      namespace: default
+    enrollTLS: true
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: issuer
+      identity-type: x509-tls
+    namespace: default
+    secretPrefix: org1-issuer-tls
+  type: client
+
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Endorser
 metadata:
   labels:
@@ -51,16 +105,38 @@ spec:
       - name: sign-identity
         volumeSource:
           secret:
-            secretName: org1-issuer-idemix-idemix-cred
+            secretName: org1-issuer-sign-cert
             items:
-              - key: Sk
+              - key: key.pem
                 path: keystore/priv_sk
-              - key: Sk
+              - key: key.pem
                 path: keystore/key.pem
-              - key: Cred
+              - key: cert.pem
                 path: signcerts/cert.pem
-              - key: IssuerPublicKey
+              - key: ca.pem
                 path: cacerts/ca.pem
+      - name: x509-msp
+        volumeSource:
+          secret:
+            secretName: org1-issuer-sign-cert
+            items:
+              - key: cert.pem
+                path: signcerts/cert.pem
+              - key: key.pem
+                path: keystore/key.pem
+              - key: ca.pem
+                path: cacerts/ca.pem
+      - name: x509-tls
+        volumeSource:
+          secret:
+            secretName: org1-issuer-tls-cert
+            items:
+              - key: cert.pem
+                path: cert.pem
+              - key: key.pem
+                path: key.pem
+              - key: ca.pem
+                path: ca.pem
 
     volumeMounts:
       - name: data
@@ -75,6 +151,12 @@ spec:
       - name: sign-identity
         mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp
         readOnly: true
+      - name: x509-msp
+        mountPath: /var/hyperledger/fabric/msp
+        readOnly: true
+      - name: x509-tls
+        mountPath: /var/hyperledger/fabric/tls
+        readOnly: true
 
   core:
     logging:
@@ -85,9 +167,9 @@ spec:
       id: issuer
       identity:
         cert:
-          file: ""
+          file: "/var/hyperledger/fabric/msp/signcerts/cert.pem"
         key:
-          file: ""
+          file: "/var/hyperledger/fabric/msp/keystore/key.pem"
       p2p:
         listenAddress: /ip4/0.0.0.0/tcp/9301
         type: websocket
@@ -102,36 +184,36 @@ spec:
             identity:
               id: endorser1
               secretRef:
-                name: org1-endorser1-idemix-idemix-cred
+                name: org1-endorser1-sign-cert
                 namespace: default
-                key: Cred
+                key: cert.pem
             addresses:
               P2P: org1-endorser1-service.default.svc.cluster.local:9301
           - name: endorser2
             identity:
               id: endorser2
               secretRef:
-                name: org1-endorser2-idemix-idemix-cred
+                name: org1-endorser2-sign-cert
                 namespace: default
-                key: Cred
+                key: cert.pem
             addresses:
               P2P: org1-endorser2-service.default.svc.cluster.local:9301
           - name: owner1
             identity:
               id: owner1
               secretRef:
-                name: org1-owner1-idemix-idemix-cred
+                name: org1-owner1-sign-cert
                 namespace: default
-                key: Cred
+                key: cert.pem
             addresses:
               P2P: org1-owner1-service.default.svc.cluster.local:9301
           - name: owner2
             identity:
               id: owner2
               secretRef:
-                name: org1-owner2-idemix-idemix-cred
+                name: org1-owner2-sign-cert
                 namespace: default
-                key: Cred
+                key: cert.pem
             addresses:
               P2P: org1-owner2-service.default.svc.cluster.local:9301
 
@@ -175,38 +257,6 @@ spec:
                   endorsers:
                     - endorser1
                     - endorser2
-
-  enrollment:
-    sign:
-      ca:
-        caname: idemix-ca
-        cahost: endorser-idemix-ca.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: endorser-idemix-ca-tls-crypto
-            namespace: default
-        enrollid: issuer
-        enrollsecret: issuerpw
-    tls:
-      ca:
-        caname: tlsca
-        cahost: endorser-idemix-ca.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: endorser-idemix-ca-tls-crypto
-            namespace: default
-        enrollid: issuer
-        enrollsecret: issuerpw
-      sans:
-        dnsNames:
-          - org1-issuer
-          - org1-issuer.default
-          - org1-issuer.default.svc.cluster.local
-          - issuer.example.com
 
   ingress:
     istio:

@@ -7,7 +7,7 @@ metadata:
   name: org1-endorser1
   namespace: default
 spec:
-  bootstrapMode: configure
+  bootstrapMode: deploy
   mspid: Org1MSP
   image: token-sdk-endorser
   version: fabricx-latest
@@ -39,6 +39,37 @@ spec:
           persistentVolumeClaim:
             claimName: org1-endorser1-data
             readOnly: false
+      - name: sign-identity
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-sign-cert
+            items:
+              - key: key.pem
+                path: keystore/priv_sk
+              - key: key.pem
+                path: keystore/key.pem
+              - key: cert.pem
+                path: signcerts/cert.pem
+              - key: ca.pem
+                path: cacerts/ca.pem
+      - name: x509-msp
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-sign-cert
+            items:
+              - key: cert.pem
+                path: signcerts/cert.pem
+              - key: key.pem
+                path: keystore/key.pem
+              - key: ca.pem
+                path: cacerts/ca.pem
+      - name: namespace-params
+        volumeSource:
+          secret:
+            secretName: token-namespace
+            items:
+              - key: zkatdlognoghv1_pp.json
+                path: zkatdlognoghv1_pp.json
 
     volumeMounts:
       - name: data
@@ -47,19 +78,28 @@ spec:
       - name: data
         mountPath: /var/hyperledger/fabric/config/data
         readOnly: false
+      - name: sign-identity
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp
+        readOnly: true
+      - name: x509-msp
+        mountPath: /var/hyperledger/fabric/msp
+        readOnly: true
+      - name: namespace-params
+        mountPath: /var/hyperledger/fabric/config/namespace
+        readOnly: true
 
   core:
     logging:
-      spec: info
+      spec: debug
       format: "%{color}%{time:15:04:05.000} [%{module}] %{shortfunc} %{level:.4s}%{color:reset} %{message}"
 
     fsc:
       id: endorser1
       identity:
         cert:
-          file: ""
+          file: "/var/hyperledger/fabric/config/keys/fabric/user/msp/signcerts/cert.pem"
         key:
-          file: ""
+          file: "/var/hyperledger/fabric/config/keys/fabric/user/msp/keystore/key.pem"
       p2p:
         listenAddress: /ip4/0.0.0.0/tcp/9301
         type: websocket
@@ -85,38 +125,38 @@ spec:
             identity:
               id: issuer
               secretRef:
-                name: org1-issuer-tls-cert
+                name: org1-issuer-sign-cert
                 namespace: default
                 key: cert.pem
             addresses:
-              P2P: issuer.example.com:9101
+              P2P: org1-issuer-service.default.svc.cluster.local:9301
           - name: endorser2
             identity:
               id: endorser2
               secretRef:
-                name: org1-endorser2-tls-cert
+                name: org1-endorser2-sign-cert
                 namespace: default
                 key: cert.pem
             addresses:
-              P2P: endorser2.example.com:9401
+              P2P: org1-endorser2-service.default.svc.cluster.local:9301
           - name: owner1
             identity:
               id: owner1
               secretRef:
-                name: org1-owner1-tls-cert
+                name: org1-owner1-sign-cert
                 namespace: default
                 key: cert.pem
             addresses:
-              P2P: owner1.example.com:9501
+              P2P: org1-owner1-service.default.svc.cluster.local:9301
           - name: owner2
             identity:
               id: owner2
               secretRef:
-                name: org1-owner2-tls-cert
+                name: org1-owner2-sign-cert
                 namespace: default
                 key: cert.pem
             addresses:
-              P2P: owner2.example.com:9601
+              P2P: org1-owner2-service.default.svc.cluster.local:9301
 
     fabric:
       enabled: true
@@ -127,7 +167,7 @@ spec:
           - id: user
             mspType: bccsp
             mspID: Org1MSP
-            path: ./keys/fabric/user
+            path: /var/hyperledger/fabric/config/keys/fabric/user/msp
         tls:
           enabled: false
         peers:
@@ -147,6 +187,8 @@ spec:
           channel: arma
           namespace: token_namespace
           driver: zkatdlog
+          publicParameters:
+            path: ../namespace/zkatdlognoghv1_pp.json
           services:
             network:
               fabric:
@@ -158,38 +200,6 @@ spec:
                   endorsers:
                     - endorser1
                     - endorser2
-
-  enrollment:
-    sign:
-      ca:
-        caname: ca
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-    tls:
-      ca:
-        caname: tlsca
-        cahost: test-ca2.default
-        caport: 7054
-        catls:
-          secretRef:
-            key: tls.crt
-            name: test-ca2-tls-crypto
-            namespace: default
-        enrollid: admin
-        enrollsecret: adminpw
-      sans:
-        dnsNames:
-          - org1-endorser1
-          - org1-endorser1.default
-          - org1-endorser1.default.svc.cluster.local
-          - endorser1.example.com
 
   ingress:
     istio:

@@ -32,14 +32,14 @@ spec:
         key: cert.pem
         name: orderergroup-party1-consenter-tls-cert
         namespace: default
-      host: consenter-1-org1.localho.st
+      host: orderergroup-party1-consenter.default.svc.cluster.local
       id: 1
       identityRef:
         key: cert.pem
         name: orderergroup-party1-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 443
+      port: 7052
       serverTlsCertRef:
         key: cert.pem
         name: orderergroup-party1-consenter-tls-cert
@@ -48,14 +48,14 @@ spec:
         key: cert.pem
         name: orderergroup-party2-consenter-tls-cert
         namespace: default
-      host: consenter-1-org2.localho.st
+      host: orderergroup-party2-consenter.default.svc.cluster.local
       id: 2
       identityRef:
         key: cert.pem
         name: orderergroup-party2-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 443
+      port: 7052
       serverTlsCertRef:
         key: cert.pem
         name: orderergroup-party2-consenter-tls-cert
@@ -64,14 +64,14 @@ spec:
         key: cert.pem
         name: orderergroup-party3-consenter-tls-cert
         namespace: default
-      host: consenter-1-org3.localho.st
+      host: orderergroup-party3-consenter.default.svc.cluster.local
       id: 3
       identityRef:
         key: cert.pem
         name: orderergroup-party3-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 443
+      port: 7052
       serverTlsCertRef:
         key: cert.pem
         name: orderergroup-party3-consenter-tls-cert
@@ -80,14 +80,14 @@ spec:
         key: cert.pem
         name: orderergroup-party4-consenter-tls-cert
         namespace: default
-      host: consenter-1-org4.localho.st
+      host: orderergroup-party4-consenter.default.svc.cluster.local
       id: 4
       identityRef:
         key: cert.pem
         name: orderergroup-party4-consenter-sign-cert
         namespace: default
       mspId: OrdererMSP
-      port: 443
+      port: 7052
       serverTlsCertRef:
         key: cert.pem
         name: orderergroup-party4-consenter-tls-cert
@@ -114,16 +114,16 @@ spec:
           name: test-ca2-tlsca-crypto
           namespace: default
       routerConfig:
-        host: router-org1.localho.st
-        port: 443
+        host: orderergroup-party1-router-service.default.svc.cluster.local
+        port: 7150
         tlsCert:
           key: cert.pem
           name: orderergroup-party1-router-tls-cert
           namespace: default
       batchersConfig:
         - shardID: 1
-          host: batcher-1-org1.localho.st
-          port: 443
+          host: orderergroup-party1-batcher-0.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party1-batcher-0-sign-cert
@@ -133,8 +133,8 @@ spec:
             name: orderergroup-party1-batcher-0-tls-cert
             namespace: default
         - shardID: 2
-          host: batcher-2-org1.localho.st
-          port: 443
+          host: orderergroup-party1-batcher-1.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party1-batcher-1-sign-cert
@@ -144,8 +144,8 @@ spec:
             name: orderergroup-party1-batcher-1-tls-cert
             namespace: default
       consenterConfig:
-        host: consenter-1-org1.localho.st
-        port: 443
+        host: orderergroup-party1-consenter.default.svc.cluster.local
+        port: 7052
         signCert:
           key: cert.pem
           name: orderergroup-party1-consenter-sign-cert
@@ -155,8 +155,8 @@ spec:
           name: orderergroup-party1-consenter-tls-cert
           namespace: default
       assemblerConfig:
-        host: assembler-org1.localho.st
-        port: 443
+        host: orderergroup-party1-assembler.default.svc.cluster.local
+        port: 7050
         tlsCert:
           key: cert.pem
           name: orderergroup-party1-assembler-tls-cert
@@ -171,16 +171,16 @@ spec:
           name: test-ca2-tlsca-crypto
           namespace: default
       routerConfig:
-        host: router-org2.localho.st
-        port: 443
+        host: orderergroup-party2-router-service.default.svc.cluster.local
+        port: 7150
         tlsCert:
           key: cert.pem
           name: orderergroup-party2-router-tls-cert
           namespace: default
       batchersConfig:
         - shardID: 1
-          host: batcher-1-org2.localho.st
-          port: 443
+          host: orderergroup-party2-batcher-0.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party2-batcher-0-sign-cert
@@ -190,8 +190,8 @@ spec:
             name: orderergroup-party2-batcher-0-tls-cert
             namespace: default
         - shardID: 2
-          host: batcher-2-org2.localho.st
-          port: 443
+          host: orderergroup-party2-batcher-1.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party2-batcher-1-sign-cert
@@ -201,8 +201,8 @@ spec:
             name: orderergroup-party2-batcher-1-tls-cert
             namespace: default
       consenterConfig:
-        host: consenter-1-org2.localho.st
-        port: 443
+        host: orderergroup-party2-consenter.default.svc.cluster.local
+        port: 7052
         signCert:
           key: cert.pem
           name: orderergroup-party2-consenter-sign-cert
@@ -212,8 +212,8 @@ spec:
           name: orderergroup-party2-consenter-tls-cert
           namespace: default
       assemblerConfig:
-        host: assembler-org2.localho.st
-        port: 443
+        host: orderergroup-party2-assembler.default.svc.cluster.local
+        port: 7050
         tlsCert:
           key: cert.pem
           name: orderergroup-party2-assembler-tls-cert
@@ -228,16 +228,16 @@ spec:
           name: test-ca2-tlsca-crypto
           namespace: default
       routerConfig:
-        host: router-org3.localho.st
-        port: 443
+        host: orderergroup-party3-router-service.default.svc.cluster.local
+        port: 7150
         tlsCert:
           key: cert.pem
           name: orderergroup-party3-router-tls-cert
           namespace: default
       batchersConfig:
         - shardID: 1
-          host: batcher-1-org3.localho.st
-          port: 443
+          host: orderergroup-party3-batcher-0.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party3-batcher-0-sign-cert
@@ -247,8 +247,8 @@ spec:
             name: orderergroup-party3-batcher-0-tls-cert
             namespace: default
         - shardID: 2
-          host: batcher-2-org3.localho.st
-          port: 443
+          host: orderergroup-party3-batcher-1.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party3-batcher-1-sign-cert
@@ -258,8 +258,8 @@ spec:
             name: orderergroup-party3-batcher-1-tls-cert
             namespace: default
       consenterConfig:
-        host: consenter-1-org3.localho.st
-        port: 443
+        host: orderergroup-party3-consenter.default.svc.cluster.local
+        port: 7052
         signCert:
           key: cert.pem
           name: orderergroup-party3-consenter-sign-cert
@@ -269,8 +269,8 @@ spec:
           name: orderergroup-party3-consenter-tls-cert
           namespace: default
       assemblerConfig:
-        host: assembler-org3.localho.st
-        port: 443
+        host: orderergroup-party3-assembler.default.svc.cluster.local
+        port: 7050
         tlsCert:
           key: cert.pem
           name: orderergroup-party3-assembler-tls-cert
@@ -285,16 +285,16 @@ spec:
           name: test-ca2-tlsca-crypto
           namespace: default
       routerConfig:
-        host: router-org4.localho.st
-        port: 443
+        host: orderergroup-party4-router-service.default.svc.cluster.local
+        port: 7150
         tlsCert:
           key: cert.pem
           name: orderergroup-party4-router-tls-cert
           namespace: default
       batchersConfig:
         - shardID: 1
-          host: batcher-1-org4.localho.st
-          port: 443
+          host: orderergroup-party4-batcher-0.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party4-batcher-0-sign-cert
@@ -304,20 +304,20 @@ spec:
             name: orderergroup-party4-batcher-0-tls-cert
             namespace: default
         - shardID: 2
-          host: batcher-2-org4.localho.st
-          port: 443
+          host: orderergroup-party4-batcher-1.default.svc.cluster.local
+          port: 7151
           signCert:
             key: cert.pem
             name: orderergroup-party4-batcher-1-sign-cert
             namespace: default
           tlsCert:
             key: cert.pem
-            
+
             name: orderergroup-party4-batcher-1-tls-cert
             namespace: default
       consenterConfig:
-        host: consenter-1-org4.localho.st
-        port: 443
+        host: orderergroup-party4-consenter.default.svc.cluster.local
+        port: 7052
         signCert:
           key: cert.pem
           name: orderergroup-party4-consenter-sign-cert
@@ -327,8 +327,8 @@ spec:
           name: orderergroup-party4-consenter-tls-cert
           namespace: default
       assemblerConfig:
-        host: assembler-org4.localho.st
-        port: 443
+        host: orderergroup-party4-assembler.default.svc.cluster.local
+        port: 7050
         tlsCert:
           key: cert.pem
           name: orderergroup-party4-assembler-tls-cert

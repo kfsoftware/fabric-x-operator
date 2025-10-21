@@ -8,7 +8,7 @@ spec:
   name: "token_namespace"
 
   # Orderer router endpoint (without TLS)
-  orderer: "orderergroup-party1-router-service.default:7150"
+  orderer: "orderergroup-party1-router-service.default.svc.cluster.local:7150"
 
   # CA certificate - not used anymore (TLS disabled)
   caCert:

@@ -24,11 +24,17 @@ COPY pkg/ pkg/
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o manager cmd/main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Use alpine with shell for debugging
+FROM alpine:3.19
 WORKDIR /
 COPY --from=builder /workspace/manager .
+
+# Install useful debugging tools
+RUN apk add --no-cache bash ca-certificates curl vim tree
+
+# Create debug directory for MSP inspection
+RUN mkdir -p /debug/msp && chmod 777 /debug/msp
+
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]

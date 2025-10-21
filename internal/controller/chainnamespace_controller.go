@@ -139,7 +139,9 @@ func (r *ChainNamespaceReconciler) deployNamespace(ctx context.Context, ns *fabr
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	// DO NOT clean up tmpDir - keep it for debugging
+	// defer os.RemoveAll(tmpDir)
+	log.Info("Created temporary MSP directory (will NOT be cleaned up for debugging)", "tmpDir", tmpDir)
 
 	// Setup MSP from Identity CRD
 	thisMSP, err := r.setupMSPFromIdentity(ctx, ns.Spec.Identity, tmpDir)
@@ -162,6 +164,7 @@ func (r *ChainNamespaceReconciler) deployNamespace(ctx context.Context, ns *fabr
 		}
 	} else {
 		// Use the default MSP signer as namespace endorsement policy
+		log.Info("Extracting public key from signing identity", "identity", sid.GetIdentifier())
 		pkData, err = r.extractPublicPem(sid)
 		if err != nil {
 			return "", fmt.Errorf("failed to extract public key from signing identity %s: %w", sid.GetIdentifier(), err)
@@ -169,7 +172,7 @@ func (r *ChainNamespaceReconciler) deployNamespace(ctx context.Context, ns *fabr
 	}
 
 	// Get serialized public key for namespace policy
-	serializedPublicKey, err := r.getPubKeyFromPemData(pkData)
+	serializedPublicKey, err := r.getPubKeyFromPemData(ctx, pkData)
 	if err != nil {
 		return "", fmt.Errorf("failed to get public key from pem: %w", err)
 	}
@@ -228,18 +231,13 @@ func (r *ChainNamespaceReconciler) extractPublicPem(sid msp.SigningIdentity) ([]
 		return nil, err
 	}
 
-	// mspSI.IdBytes contains the X.509 certificate in DER format
-	// We need to encode it as PEM for getPubKeyFromPemData to parse
-	pemBlock := &pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: mspSI.IdBytes,
-	}
-
-	return pem.EncodeToMemory(pemBlock), nil
+	return mspSI.IdBytes, nil
 }
 
 // getPubKeyFromPemData looks for ECDSA public key in pemContent and returns PEM content only with the public key
-func (r *ChainNamespaceReconciler) getPubKeyFromPemData(pemContent []byte) ([]byte, error) {
+func (r *ChainNamespaceReconciler) getPubKeyFromPemData(ctx context.Context, pemContent []byte) ([]byte, error) {
+	log := logf.FromContext(ctx)
+	log.Info("Getting public key from pem data", "pemContent", string(pemContent))
 	for {
 		block, rest := pem.Decode(pemContent)
 		if block == nil {
@@ -484,14 +482,24 @@ func (r *ChainNamespaceReconciler) updateStatus(ctx context.Context, ns *fabricx
 func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, identityRef fabricxv1alpha1.SecretKeyRef, tmpDir string) (msp.MSP, error) {
 	log := logf.FromContext(ctx)
 
+	log.V(1).Info("Starting MSP setup from Identity",
+		"identityName", identityRef.Name,
+		"identityNamespace", identityRef.Namespace,
+		"tmpDir", tmpDir)
+
 	// Fetch the Identity resource
 	identity := &fabricxv1alpha1.Identity{}
+	log.V(1).Info("Fetching Identity resource", "name", identityRef.Name, "namespace", identityRef.Namespace)
 	if err := r.Get(ctx, types.NamespacedName{
 		Name:      identityRef.Name,
 		Namespace: identityRef.Namespace,
 	}, identity); err != nil {
 		return nil, fmt.Errorf("failed to get Identity %s/%s: %w", identityRef.Namespace, identityRef.Name, err)
 	}
+	log.V(1).Info("Identity resource fetched successfully",
+		"type", identity.Spec.Type,
+		"mspID", identity.Spec.MspID,
+		"status", identity.Status.Status)
 
 	// Check if identity is ready (Status can be "Ready" or "READY")
 	if identity.Status.Status != "Ready" && identity.Status.Status != "READY" {
@@ -501,8 +509,28 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 	mspID := identity.Spec.MspID
 	log.Info("Setting up MSP from Identity", "identity", identityRef.Name, "mspID", mspID)
 
+	// Determine the secret names from the identity's output configuration
+	// This is more reliable than using status.outputSecrets which might not be populated yet
+	secretPrefix := identity.Spec.Output.SecretPrefix
+	outputNamespace := identityRef.Namespace
+	if identity.Spec.Output.Namespace != "" {
+		outputNamespace = identity.Spec.Output.Namespace
+	}
+
+	signCertSecretName := fmt.Sprintf("%s-sign-cert", secretPrefix)
+	signKeySecretName := fmt.Sprintf("%s-sign-key", secretPrefix)
+	signCACertSecretName := fmt.Sprintf("%s-sign-cacert", secretPrefix)
+
+	log.Info("Using secrets from identity output",
+		"signCert", signCertSecretName,
+		"signKey", signKeySecretName,
+		"signCACert", signCACertSecretName,
+		"namespace", outputNamespace)
+
 	// Create MSP directory structure
 	mspPath := filepath.Join(tmpDir, "msp")
+	log.V(1).Info("Creating MSP directory structure", "mspPath", mspPath, "tmpDir", tmpDir)
+
 	dirs := []string{
 		filepath.Join(mspPath, "signcerts"),
 		filepath.Join(mspPath, "keystore"),
@@ -510,46 +538,69 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 	}
 
 	for _, dir := range dirs {
+		log.V(1).Info("Creating directory", "path", dir, "permissions", "0755")
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
+		log.V(1).Info("Directory created successfully", "path", dir)
 	}
 
 	// Retrieve signing certificate from secret
-	signCertData, err := r.getSecretData(ctx, identity.Status.OutputSecrets.SignCert, identityRef.Namespace, "cert.pem")
+	log.V(1).Info("Retrieving signing certificate from secret",
+		"secretName", signCertSecretName,
+		"namespace", outputNamespace,
+		"key", "cert.pem")
+	signCertData, err := r.getSecretData(ctx, signCertSecretName, outputNamespace, "cert.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sign certificate: %w", err)
 	}
+	log.V(1).Info("Retrieved signing certificate", "sizeBytes", len(signCertData))
 
 	// Write signing certificate
 	certPath := filepath.Join(mspPath, "signcerts", "cert.pem")
+	log.V(1).Info("Writing signing certificate", "path", certPath, "size", len(signCertData))
 	if err := os.WriteFile(certPath, signCertData, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write certificate to %s: %w", certPath, err)
 	}
+	log.V(1).Info("Signing certificate written successfully", "path", certPath)
 
 	// Retrieve signing key from secret (stored as cert.pem in the secret)
-	signKeyData, err := r.getSecretData(ctx, identity.Status.OutputSecrets.SignKey, identityRef.Namespace, "cert.pem")
+	log.V(1).Info("Retrieving signing key from secret",
+		"secretName", signKeySecretName,
+		"namespace", outputNamespace,
+		"key", "cert.pem")
+	signKeyData, err := r.getSecretData(ctx, signKeySecretName, outputNamespace, "cert.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sign key: %w", err)
 	}
+	log.V(1).Info("Retrieved signing key", "sizeBytes", len(signKeyData))
 
 	// Write signing key
 	keyPath := filepath.Join(mspPath, "keystore", "priv_sk")
+	log.V(1).Info("Writing signing key", "path", keyPath, "size", len(signKeyData), "permissions", "0600")
 	if err := os.WriteFile(keyPath, signKeyData, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write key to %s: %w", keyPath, err)
 	}
+	log.V(1).Info("Signing key written successfully", "path", keyPath)
 
 	// Retrieve CA certificate from secret (stored as cert.pem in the secret)
-	caCertData, err := r.getSecretData(ctx, identity.Status.OutputSecrets.SignCACert, identityRef.Namespace, "cert.pem")
+	log.V(1).Info("Retrieving CA certificate from secret",
+		"secretName", signCACertSecretName,
+		"namespace", outputNamespace,
+		"key", "cert.pem")
+	caCertData, err := r.getSecretData(ctx, signCACertSecretName, outputNamespace, "cert.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
 	}
+	log.V(1).Info("Retrieved CA certificate", "sizeBytes", len(caCertData))
 
 	// Write CA certificate
 	caPath := filepath.Join(mspPath, "cacerts", "ca.pem")
+	log.V(1).Info("Writing CA certificate", "path", caPath, "size", len(caCertData))
 	if err := os.WriteFile(caPath, caCertData, 0644); err != nil {
 		return nil, fmt.Errorf("failed to write CA cert to %s: %w", caPath, err)
 	}
+	log.V(1).Info("CA certificate written successfully", "path", caPath)
 
 	// Create config.yaml for NodeOUs
 	configContent := `NodeOUs:
@@ -569,9 +620,19 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 `
 
 	configPath := filepath.Join(mspPath, "config.yaml")
+	log.V(1).Info("Writing NodeOU config.yaml", "path", configPath, "size", len(configContent))
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write config.yaml to %s: %w", configPath, err)
 	}
+	log.V(1).Info("NodeOU config.yaml written successfully", "path", configPath)
+
+	// List final directory structure for debugging
+	log.V(1).Info("MSP directory structure created", "mspPath", mspPath)
+	log.V(1).Info("MSP contents:",
+		"signcerts", certPath,
+		"keystore", keyPath,
+		"cacerts", caPath,
+		"config", configPath)
 
 	log.Info("Successfully created MSP directory structure", "mspPath", mspPath, "mspID", mspID)
 

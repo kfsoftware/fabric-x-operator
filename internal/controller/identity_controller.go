@@ -369,6 +369,66 @@ func (r *IdentityReconciler) createOutputSecrets(ctx context.Context, logger log
 		logger.Info("Created secret", "secret", secretName)
 	}
 
+	// Create combined sign secret (cert + key + ca in one secret)
+	combinedSignSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-cert", output.SecretPrefix),
+			Namespace: namespace,
+			Labels:    output.Labels,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: map[string][]byte{
+			"cert.pem": signCert,
+			"key.pem":  signKey,
+			"ca.pem":   signCACert,
+		},
+	}
+	if err := controllerutil.SetControllerReference(identity, combinedSignSecret, r.Scheme); err != nil {
+		return errors.Wrapf(err, "failed to set controller reference for combined sign secret")
+	}
+	if err := r.Create(ctx, combinedSignSecret); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			logger.Info("Combined sign secret already exists, updating", "secret", combinedSignSecret.Name)
+			if err := r.Update(ctx, combinedSignSecret); err != nil {
+				return errors.Wrapf(err, "failed to update combined sign secret")
+			}
+		} else {
+			return errors.Wrapf(err, "failed to create combined sign secret")
+		}
+	}
+	logger.Info("Created combined sign secret", "secret", combinedSignSecret.Name)
+
+	// Create combined TLS secret if TLS certs exist
+	if tlsCert != nil && tlsKey != nil && tlsCACert != nil {
+		combinedTLSSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("%s-tls-combined", output.SecretPrefix),
+				Namespace: namespace,
+				Labels:    output.Labels,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"cert.pem": tlsCert,
+				"key.pem":  tlsKey,
+				"ca.pem":   tlsCACert,
+			},
+		}
+		if err := controllerutil.SetControllerReference(identity, combinedTLSSecret, r.Scheme); err != nil {
+			return errors.Wrapf(err, "failed to set controller reference for combined TLS secret")
+		}
+		if err := r.Create(ctx, combinedTLSSecret); err != nil {
+			if apierrors.IsAlreadyExists(err) {
+				logger.Info("Combined TLS secret already exists, updating", "secret", combinedTLSSecret.Name)
+				if err := r.Update(ctx, combinedTLSSecret); err != nil {
+					return errors.Wrapf(err, "failed to update combined TLS secret")
+				}
+			} else {
+				return errors.Wrapf(err, "failed to create combined TLS secret")
+			}
+		}
+		logger.Info("Created combined TLS secret", "secret", combinedTLSSecret.Name)
+	}
+
 	// Update status with output secrets
 	identity.Status.OutputSecrets = fabricxv1alpha1.IdentityOutputSecrets{
 		SignCert:   fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
@@ -484,6 +544,51 @@ func (r *IdentityReconciler) validateExistingSecrets(ctx context.Context, identi
 	// Parse to ensure it's valid
 	if _, err := r.getCertificateExpiry(signCertData); err != nil {
 		return errors.Wrap(err, "invalid sign certificate")
+	}
+
+	// Create combined secret if it doesn't exist
+	// Fetch individual secrets
+	signKeySecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-sign-key", output.SecretPrefix),
+		Namespace: namespace,
+	}, signKeySecret); err != nil {
+		return errors.Wrap(err, "failed to get sign key secret")
+	}
+
+	signCACertSecret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      fmt.Sprintf("%s-sign-cacert", output.SecretPrefix),
+		Namespace: namespace,
+	}, signCACertSecret); err != nil {
+		return errors.Wrap(err, "failed to get sign cacert secret")
+	}
+
+	// Create combined sign secret
+	combinedSecretName := fmt.Sprintf("%s-cert", output.SecretPrefix)
+	combinedSecret := &corev1.Secret{}
+	err := r.Get(ctx, types.NamespacedName{Name: combinedSecretName, Namespace: namespace}, combinedSecret)
+	if err != nil && apierrors.IsNotFound(err) {
+		// Create combined secret
+		combinedSecret = &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      combinedSecretName,
+				Namespace: namespace,
+				Labels:    output.Labels,
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				"cert.pem": signCertSecret.Data["cert.pem"],
+				"key.pem":  signKeySecret.Data["cert.pem"],
+				"ca.pem":   signCACertSecret.Data["cert.pem"],
+			},
+		}
+		if err := controllerutil.SetControllerReference(identity, combinedSecret, r.Scheme); err != nil {
+			return errors.Wrapf(err, "failed to set controller reference for combined secret")
+		}
+		if err := r.Create(ctx, combinedSecret); err != nil {
+			return errors.Wrapf(err, "failed to create combined secret %s", combinedSecretName)
+		}
 	}
 
 	return nil

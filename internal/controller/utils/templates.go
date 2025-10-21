@@ -308,7 +308,7 @@ General:
         File: /etc/hyperledger/fabricx/router/genesis/genesis.block
     LocalMSPDir: /etc/hyperledger/fabricx/router/msp
     LocalMSPID: {{.MSPID}}
-    LogSpec: info
+    LogSpec: debug
 FileStore:
 Router:
     NumberOfConnectionsPerBatcher: 12

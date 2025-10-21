@@ -43,14 +43,14 @@ spec:
         assembler:
             sans:
                 dnsNames:
-                    - assembler-org4.localho.st
+                    - orderergroup-party4-assembler.default.svc.cluster.local
             env:
                 - name: ASSEMBLER_MAX_MESSAGE_COUNT
                   value: '500'
             ingress:
                 istio:
                     hosts:
-                        - assembler-org4.localho.st
+                        - orderergroup-party4-assembler.default.svc.cluster.local
                     ingressGateway: ingressgateway
                     port: 443
             replicas: 1
@@ -58,7 +58,7 @@ spec:
             - shardID: 1
               sans:
                   dnsNames:
-                      - batcher-1-org4.localho.st
+                      - orderergroup-party4-batcher-0.default.svc.cluster.local
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -67,7 +67,7 @@ spec:
               ingress:
                   istio:
                       hosts:
-                          - batcher-1-org4.localho.st
+                          - orderergroup-party4-batcher-0.default.svc.cluster.local
                       ingressGateway: ingressgateway
                       port: 443
               podLabels:
@@ -82,7 +82,7 @@ spec:
             - shardID: 2
               sans:
                   dnsNames:
-                      - batcher-2-org4.localho.st
+                      - orderergroup-party4-batcher-1.default.svc.cluster.local
               env:
                   - name: BATCHER_TIMEOUT
                     value: 2s
@@ -91,7 +91,7 @@ spec:
               ingress:
                   istio:
                       hosts:
-                          - batcher-2-org4.localho.st
+                          - orderergroup-party4-batcher-1.default.svc.cluster.local
                       ingressGateway: ingressgateway
                       port: 443
               podLabels:
@@ -108,9 +108,9 @@ spec:
 
             sans:
                 dnsNames:
-                    - consenter-1-org4.localho.st
+                    - orderergroup-party4-consenter.default.svc.cluster.local
             endpoints:
-                - consenter-1-org4.localho.st:7050
+                - orderergroup-party4-consenter.default.svc.cluster.local:7050
             env:
                 - name: CONSENTER_TYPE
                   value: raft
@@ -119,7 +119,7 @@ spec:
             ingress:
                 istio:
                     hosts:
-                        - consenter-1-org4.localho.st
+                        - orderergroup-party4-consenter.default.svc.cluster.local
                     ingressGateway: ingressgateway
                     port: 443
             podAnnotations:
@@ -131,7 +131,7 @@ spec:
         router:
             sans:
                 dnsNames:
-                    - router-org4.localho.st
+                    - orderergroup-party4-router-service.default.svc.cluster.local
             env:
                 - name: ROUTER_CHANNEL_BUFFER_SIZE
                   value: '1000'
@@ -139,7 +139,7 @@ spec:
             ingress:
                 istio:
                     hosts:
-                        - router-org4.localho.st
+                        - orderergroup-party4-router-service.default.svc.cluster.local
                     ingressGateway: ingressgateway
                     port: 443
             replicas: 1

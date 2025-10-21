@@ -43,14 +43,14 @@ spec:
     assembler:
       sans:
         dnsNames:
-          - assembler-org1.localho.st
+          - orderergroup-party1-assembler.default.svc.cluster.local
       env:
         - name: ASSEMBLER_MAX_MESSAGE_COUNT
           value: '500'
       ingress:
         istio:
           hosts:
-            - assembler-org1.localho.st
+            - orderergroup-party1-assembler.default.svc.cluster.local
           ingressGateway: ingressgateway
           port: 443
       replicas: 1
@@ -59,7 +59,7 @@ spec:
         # Component-specific SANS configuration for this batcher instance
         sans:
           dnsNames:
-            - batcher-1-org1.localho.st
+            - orderergroup-party1-batcher-0.default.svc.cluster.local
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -68,7 +68,7 @@ spec:
         ingress:
           istio:
             hosts:
-              - batcher-1-org1.localho.st
+              - orderergroup-party1-batcher-0.default.svc.cluster.local
             ingressGateway: ingressgateway
             port: 443
         podLabels:
@@ -84,7 +84,7 @@ spec:
         # Component-specific SANS configuration for this batcher instance
         sans:
           dnsNames:
-            - batcher-2-org1.localho.st      
+            - orderergroup-party1-batcher-1.default.svc.cluster.local      
         env:
           - name: BATCHER_TIMEOUT
             value: 2s
@@ -93,7 +93,7 @@ spec:
         ingress:
           istio:
             hosts:
-              - batcher-2-org1.localho.st
+              - orderergroup-party1-batcher-1.default.svc.cluster.local
             ingressGateway: ingressgateway
             port: 443
         podLabels:
@@ -110,9 +110,9 @@ spec:
       # Component-specific SANS configuration for consenter
       sans:
         dnsNames:
-          - consenter-1-org1.localho.st
+          - orderergroup-party1-consenter.default.svc.cluster.local
       endpoints:
-        - consenter-1-org1.localho.st:7050
+        - orderergroup-party1-consenter.default.svc.cluster.local:7050
       env:
         - name: CONSENTER_TYPE
           value: raft
@@ -121,7 +121,7 @@ spec:
       ingress:
         istio:
           hosts:
-            - consenter-1-org1.localho.st
+            - orderergroup-party1-consenter.default.svc.cluster.local
           ingressGateway: ingressgateway
           port: 443
       podAnnotations:
@@ -134,7 +134,7 @@ spec:
       # Component-specific SANS configuration for router
       sans:
         dnsNames:
-          - router-org1.localho.st
+          - orderergroup-party1-router-service.default.svc.cluster.local
       env:
         - name: ROUTER_CHANNEL_BUFFER_SIZE
           value: '1000'
@@ -142,7 +142,7 @@ spec:
       ingress:
         istio:
           hosts:
-            - router-org1.localho.st
+            - orderergroup-party1-router-service.default.svc.cluster.local
           ingressGateway: ingressgateway
           port: 443
       replicas: 1
