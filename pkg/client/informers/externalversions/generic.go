@@ -41,25 +41,31 @@ func (f *genericInformer) Lister() cache.GenericLister {
 // TODO extend this to unknown resources with a client pool
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
-	// Group=api, Version=v1alpha1
+	// Group=fabricx.kfsoft.tech, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithResource("cas"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().CAs().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().CAs().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("caenrollments"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().CAEnrollments().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("chainnamespaces"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().ChainNamespaces().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("committers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().Committers().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().Committers().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("endorsers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().Endorsers().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().Endorsers().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("genesises"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().Genesises().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().Genesises().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("identities"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().Identities().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("ordererassemblers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().OrdererAssemblers().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().OrdererAssemblers().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("ordererbatchers"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().OrdererBatchers().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().OrdererBatchers().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("ordererconsenters"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().OrdererConsenters().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().OrdererConsenters().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("orderergroups"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().OrdererGroups().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().OrdererGroups().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("ordererrouters"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Api().V1alpha1().OrdererRouters().Informer()}, nil
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Fabricx().V1alpha1().OrdererRouters().Informer()}, nil
 
 	}
 

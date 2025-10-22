@@ -109,8 +109,18 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
+test: manifests generate fmt vet setup-envtest ## Run all tests (unit + integration).
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+
+.PHONY: test-unit
+test-unit: manifests generate fmt vet setup-envtest ## Run unit tests only (excludes integration tests).
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /internal/enrollment | grep -v /internal/idemix) -coverprofile cover-unit.out
+
+.PHONY: test-integration
+test-integration: setup-envtest ## Run integration tests (enrollment and idemix packages with testcontainers).
+	@echo "Running integration tests with testcontainers..."
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is not running. Please start Docker."; exit 1; }
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./internal/enrollment ./internal/idemix -v -timeout 300s -coverprofile cover-integration.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
 # The default setup assumes Kind is pre-installed and builds/loads the Manager Docker image locally.
@@ -134,8 +144,35 @@ setup-test-e2e: ## Set up a Kind cluster for e2e tests if it does not exist
 
 .PHONY: test-e2e
 test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expected an isolated environment using Kind.
-	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v
+	KIND_CLUSTER=$(KIND_CLUSTER) go test ./test/e2e/ -v -ginkgo.v -timeout=10m
 	$(MAKE) cleanup-test-e2e
+
+.PHONY: test-e2e-k3d
+test-e2e-k3d: manifests generate fmt vet ## Run the e2e tests on an existing K3D cluster (no cluster creation/cleanup).
+	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -timeout=10m
+
+.PHONY: test-e2e-identity
+test-e2e-identity: ## Run Identity controller E2E tests (standalone, no cluster setup required)
+	@echo "Running standalone Identity E2E tests..."
+	@kubectl get pods -n fabric-x-operator-system -l control-plane=controller-manager > /dev/null 2>&1 || \
+		(echo "Error: Operator not deployed. Run 'make deploy IMG=<image>' first" && exit 1)
+	go test ./test/e2e_identity -v -timeout=30m
+
+.PHONY: test-e2e-identity-setup
+test-e2e-identity-setup: ## Setup K3D cluster and deploy operator for Identity E2E tests
+	@echo "Setting up K3D cluster for Identity E2E tests..."
+	@command -v k3d >/dev/null 2>&1 || { echo "k3d is not installed. Install with: brew install k3d"; exit 1; }
+	@k3d cluster list | grep -q "$(or $(K3D_CLUSTER),k8s-hlf)" || k3d cluster create $(or $(K3D_CLUSTER),k8s-hlf) --agents 2
+	@echo "Building and deploying operator..."
+	$(MAKE) docker-build IMG=$(IMG)
+	k3d image import $(IMG) --cluster $(or $(K3D_CLUSTER),k8s-hlf)
+	$(MAKE) deploy IMG=$(IMG)
+	@echo "Waiting for operator to be ready..."
+	kubectl wait --for=condition=ready pod -l control-plane=controller-manager -n fabric-x-operator-system --timeout=300s
+	@echo "Identity E2E test environment ready!"
+
+.PHONY: test-e2e-identity-full
+test-e2e-identity-full: test-e2e-identity-setup test-e2e-identity ## Setup environment and run Identity E2E tests
 
 .PHONY: cleanup-test-e2e
 cleanup-test-e2e: ## Tear down the Kind cluster used for e2e tests
@@ -152,6 +189,30 @@ lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
+
+##@ Act (Local GitHub Actions Testing)
+
+.PHONY: act-list
+act-list: ## List all GitHub Actions workflows (requires act)
+	@command -v act >/dev/null 2>&1 || { echo "act is not installed. Install with: brew install act"; exit 1; }
+	act -l
+
+.PHONY: act-lint
+act-lint: ## Test lint workflow locally with act (dry run)
+	@command -v act >/dev/null 2>&1 || { echo "act is not installed. Install with: brew install act"; exit 1; }
+	act -j lint -n
+
+.PHONY: act-test
+act-test: ## Test unit test workflow locally with act (dry run)
+	@command -v act >/dev/null 2>&1 || { echo "act is not installed. Install with: brew install act"; exit 1; }
+	act -j test -n
+
+.PHONY: act-e2e
+act-e2e: ## Test e2e workflow locally with act (dry run only, use make test-e2e-k3d for actual tests)
+	@command -v act >/dev/null 2>&1 || { echo "act is not installed. Install with: brew install act"; exit 1; }
+	@echo "Note: E2E tests with K3D may not work fully in act due to Docker-in-Docker limitations"
+	@echo "This is a dry run to validate workflow syntax. Use 'make test-e2e-k3d' to run actual tests."
+	act -j test-e2e-k3d -n
 
 ##@ Build
 

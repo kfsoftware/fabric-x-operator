@@ -29,7 +29,7 @@ func Committer(name, namespace string) *CommitterApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("Committer")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("fabricx.kfsoft.tech/v1alpha1")
 	return b
 }
 

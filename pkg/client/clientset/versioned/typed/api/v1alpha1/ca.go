@@ -49,7 +49,7 @@ type cAs struct {
 }
 
 // newCAs returns a CAs
-func newCAs(c *ApiV1alpha1Client, namespace string) *cAs {
+func newCAs(c *FabricxV1alpha1Client, namespace string) *cAs {
 	return &cAs{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.CA, *apiv1alpha1.CAList, *applyconfigurationapiv1alpha1.CAApplyConfiguration](
 			"cas",

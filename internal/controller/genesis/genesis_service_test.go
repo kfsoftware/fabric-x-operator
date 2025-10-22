@@ -239,6 +239,17 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		},
 	}
 
+	// Create meta namespace CA secret
+	metaNamespaceCASecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-meta-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.pem": certBundle1.CA, // Reuse one of the generated CA certs
+		},
+	}
+
 	// Create fake client with CA resources and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
@@ -247,6 +258,7 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		WithObjects(externalSignSecret, externalTLSSecret, externalAdminSecret).
 		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
+		WithObjects(metaNamespaceCASecret).
 		Build()
 
 	opts := zap.Options{
@@ -266,6 +278,11 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
 			Consenters:           consenters,
+			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+				Name:      "test-meta-ca-secret",
+				Namespace: "default",
+				Key:       "ca.pem",
+			},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -466,6 +483,17 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		},
 	}
 
+	// Create meta namespace CA secret
+	metaNamespaceCASecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-meta-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.pem": certBundle.CA,
+		},
+	}
+
 	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
@@ -473,6 +501,7 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		WithObjects(external1SignSecret, external1TLSSecret, external1AdminSecret).
 		WithObjects(external2SignSecret, external2TLSSecret, external2AdminSecret).
+		WithObjects(metaNamespaceCASecret).
 		Build()
 
 	opts := zap.Options{
@@ -491,6 +520,11 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg1, *externalOrg2},
 			Consenters:           consenters,
+			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+				Name:      "test-meta-ca-secret",
+				Namespace: "default",
+				Key:       "ca.pem",
+			},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -641,12 +675,23 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 	}
 
 	// Create fake client with CA resource and secrets
+	// Create meta namespace CA secret
+	metaNamespaceCASecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-meta-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.pem": certBundle.CA,
+		},
+	}
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ordererCA).
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
+		WithObjects(metaNamespaceCASecret).
 		Build()
 
 	opts := zap.Options{
@@ -666,6 +711,11 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg}, // Add orderer org
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
 			Consenters:           consenters, // Add consenters
+			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+				Name:      "test-meta-ca-secret",
+				Namespace: "default",
+				Key:       "ca.pem",
+			},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -795,11 +845,23 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		},
 	}
 
+	// Create meta namespace CA secret
+	metaNamespaceCASecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-meta-ca-secret",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"ca.pem": certBundle.CA,
+		},
+	}
+
 	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ca).
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
+		WithObjects(metaNamespaceCASecret).
 		Build()
 
 	opts := zap.Options{
@@ -818,6 +880,11 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
 			Consenters:           consenters, // Add consenters
+			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+				Name:      "test-meta-ca-secret",
+				Namespace: "default",
+				Key:       "ca.pem",
+			},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",

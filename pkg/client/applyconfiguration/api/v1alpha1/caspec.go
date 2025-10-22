@@ -41,6 +41,7 @@ type CASpecApplyConfiguration struct {
 	CredentialStore  *apiv1alpha1.CredentialStore              `json:"credentialStore,omitempty"`
 	Vault            *FabricCAVaultApplyConfiguration          `json:"vault,omitempty"`
 	Env              []v1.EnvVar                               `json:"env,omitempty"`
+	Idemix           *FabricCAIdemixApplyConfiguration         `json:"idemix,omitempty"`
 }
 
 // CASpecApplyConfiguration constructs a declarative configuration of the CASpec type for use with
@@ -274,5 +275,13 @@ func (b *CASpecApplyConfiguration) WithEnv(values ...v1.EnvVar) *CASpecApplyConf
 	for i := range values {
 		b.Env = append(b.Env, values[i])
 	}
+	return b
+}
+
+// WithIdemix sets the Idemix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Idemix field is set to the value of the last call.
+func (b *CASpecApplyConfiguration) WithIdemix(value *FabricCAIdemixApplyConfiguration) *CASpecApplyConfiguration {
+	b.Idemix = value
 	return b
 }

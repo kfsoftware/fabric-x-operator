@@ -49,7 +49,7 @@ type genesises struct {
 }
 
 // newGenesises returns a Genesises
-func newGenesises(c *ApiV1alpha1Client, namespace string) *genesises {
+func newGenesises(c *FabricxV1alpha1Client, namespace string) *genesises {
 	return &genesises{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.Genesis, *apiv1alpha1.GenesisList, *applyconfigurationapiv1alpha1.GenesisApplyConfiguration](
 			"genesises",

@@ -13,49 +13,61 @@ import (
 	testing "k8s.io/client-go/testing"
 )
 
-type FakeApiV1alpha1 struct {
+type FakeFabricxV1alpha1 struct {
 	*testing.Fake
 }
 
-func (c *FakeApiV1alpha1) CAs(namespace string) v1alpha1.CAInterface {
+func (c *FakeFabricxV1alpha1) CAs(namespace string) v1alpha1.CAInterface {
 	return newFakeCAs(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) Committers(namespace string) v1alpha1.CommitterInterface {
+func (c *FakeFabricxV1alpha1) CAEnrollments(namespace string) v1alpha1.CAEnrollmentInterface {
+	return newFakeCAEnrollments(c, namespace)
+}
+
+func (c *FakeFabricxV1alpha1) ChainNamespaces() v1alpha1.ChainNamespaceInterface {
+	return newFakeChainNamespaces(c)
+}
+
+func (c *FakeFabricxV1alpha1) Committers(namespace string) v1alpha1.CommitterInterface {
 	return newFakeCommitters(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) Endorsers(namespace string) v1alpha1.EndorserInterface {
+func (c *FakeFabricxV1alpha1) Endorsers(namespace string) v1alpha1.EndorserInterface {
 	return newFakeEndorsers(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) Genesises(namespace string) v1alpha1.GenesisInterface {
+func (c *FakeFabricxV1alpha1) Genesises(namespace string) v1alpha1.GenesisInterface {
 	return newFakeGenesises(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) OrdererAssemblers(namespace string) v1alpha1.OrdererAssemblerInterface {
+func (c *FakeFabricxV1alpha1) Identities(namespace string) v1alpha1.IdentityInterface {
+	return newFakeIdentities(c, namespace)
+}
+
+func (c *FakeFabricxV1alpha1) OrdererAssemblers(namespace string) v1alpha1.OrdererAssemblerInterface {
 	return newFakeOrdererAssemblers(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) OrdererBatchers(namespace string) v1alpha1.OrdererBatcherInterface {
+func (c *FakeFabricxV1alpha1) OrdererBatchers(namespace string) v1alpha1.OrdererBatcherInterface {
 	return newFakeOrdererBatchers(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) OrdererConsenters(namespace string) v1alpha1.OrdererConsenterInterface {
+func (c *FakeFabricxV1alpha1) OrdererConsenters(namespace string) v1alpha1.OrdererConsenterInterface {
 	return newFakeOrdererConsenters(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) OrdererGroups(namespace string) v1alpha1.OrdererGroupInterface {
+func (c *FakeFabricxV1alpha1) OrdererGroups(namespace string) v1alpha1.OrdererGroupInterface {
 	return newFakeOrdererGroups(c, namespace)
 }
 
-func (c *FakeApiV1alpha1) OrdererRouters(namespace string) v1alpha1.OrdererRouterInterface {
+func (c *FakeFabricxV1alpha1) OrdererRouters(namespace string) v1alpha1.OrdererRouterInterface {
 	return newFakeOrdererRouters(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *FakeApiV1alpha1) RESTClient() rest.Interface {
+func (c *FakeFabricxV1alpha1) RESTClient() rest.Interface {
 	var ret *rest.RESTClient
 	return ret
 }

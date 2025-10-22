@@ -27,8 +27,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/hyperledger/fabric-ca/api"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/certs"
-	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
+	enrollmentpkg "github.com/kfsoftware/fabric-x-operator/internal/enrollment"
 	"github.com/kfsoftware/fabric-x-operator/internal/idemix"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -197,31 +196,28 @@ func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.L
 		})
 	}
 
-	// Perform sign certificate enrollment
+	// Perform sign certificate enrollment using enrollment package
 	logger.Info("Enrolling for sign certificate", "enrollID", enrollment.EnrollID, "caName", caName)
-	signCert, signKey, signCACert, err := certs.EnrollUser(ctx, certs.EnrollUserRequest{
-		TLSCert:    string(tlsCACert),
-		URL:        caURL,
-		Name:       caName,
-		MSPID:      identity.Spec.MspID,
-		User:       enrollment.EnrollID,
-		Secret:     string(enrollPassword),
-		Hosts:      []string{},
-		CN:         enrollment.EnrollID,
-		Profile:    "",
-		Attributes: attrs,
+	signResp, err := enrollmentpkg.EnrollX509(ctx, enrollmentpkg.X509EnrollmentRequest{
+		CAURL:        caURL,
+		CAName:       caName,
+		EnrollID:     enrollment.EnrollID,
+		EnrollSecret: string(enrollPassword),
+		CATLSCert:    string(tlsCACert),
+		MSPID:        identity.Spec.MspID,
+		CN:           enrollment.EnrollID,
+		Hosts:        []string{},
+		Profile:      "",
+		Attributes:   attrs,
 	})
 	if err != nil {
 		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to enroll for sign certificate: %v", err))
 	}
 
-	// Convert to PEM
-	signCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: signCert.Raw})
-	signKeyPEM, err := utils.EncodePrivateKey(signKey)
-	if err != nil {
-		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to encode sign private key: %v", err))
-	}
-	signCACertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: signCACert.Raw})
+	signCertPEM := signResp.Certificate
+	signKeyPEM := signResp.PrivateKey
+	signCACertPEM := signResp.CACertificate
+	signCert := signResp.CertificateRaw
 
 	// Perform TLS certificate enrollment if requested
 	var tlsCertPEM, tlsKeyPEM, tlsCACertPEM []byte
@@ -272,28 +268,25 @@ func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.L
 			tlsCAActualName = caName
 		}
 
-		tlsCert, tlsKey, tlsCACert, err := certs.EnrollUser(ctx, certs.EnrollUserRequest{
-			TLSCert:    string(tlsCAForTLS),
-			URL:        tlsCAURL,
-			Name:       tlsCAActualName,
-			MSPID:      identity.Spec.MspID,
-			User:       enrollment.EnrollID,
-			Secret:     string(enrollPassword),
-			Hosts:      []string{},
-			CN:         enrollment.EnrollID,
-			Profile:    "tls",
-			Attributes: attrs,
+		tlsResp, err := enrollmentpkg.EnrollX509(ctx, enrollmentpkg.X509EnrollmentRequest{
+			CAURL:        tlsCAURL,
+			CAName:       tlsCAActualName,
+			EnrollID:     enrollment.EnrollID,
+			EnrollSecret: string(enrollPassword),
+			CATLSCert:    string(tlsCAForTLS),
+			MSPID:        identity.Spec.MspID,
+			CN:           enrollment.EnrollID,
+			Hosts:        []string{},
+			Profile:      "tls",
+			Attributes:   attrs,
 		})
 		if err != nil {
 			return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to enroll for TLS certificate: %v", err))
 		}
 
-		tlsCertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tlsCert.Raw})
-		tlsKeyPEM, err = utils.EncodePrivateKey(tlsKey)
-		if err != nil {
-			return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to encode TLS private key: %v", err))
-		}
-		tlsCACertPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: tlsCACert.Raw})
+		tlsCertPEM = tlsResp.Certificate
+		tlsKeyPEM = tlsResp.PrivateKey
+		tlsCACertPEM = tlsResp.CACertificate
 	}
 
 	// Create output secrets

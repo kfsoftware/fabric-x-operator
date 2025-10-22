@@ -17,10 +17,10 @@ import (
 // fakeOrdererRouters implements OrdererRouterInterface
 type fakeOrdererRouters struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.OrdererRouter, *v1alpha1.OrdererRouterList, *apiv1alpha1.OrdererRouterApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeOrdererRouters(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.OrdererRouterInterface {
+func newFakeOrdererRouters(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.OrdererRouterInterface {
 	return &fakeOrdererRouters{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.OrdererRouter, *v1alpha1.OrdererRouterList, *apiv1alpha1.OrdererRouterApplyConfiguration](
 			fake.Fake,

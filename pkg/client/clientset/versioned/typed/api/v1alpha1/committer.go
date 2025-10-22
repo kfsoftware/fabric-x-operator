@@ -49,7 +49,7 @@ type committers struct {
 }
 
 // newCommitters returns a Committers
-func newCommitters(c *ApiV1alpha1Client, namespace string) *committers {
+func newCommitters(c *FabricxV1alpha1Client, namespace string) *committers {
 	return &committers{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.Committer, *apiv1alpha1.CommitterList, *applyconfigurationapiv1alpha1.CommitterApplyConfiguration](
 			"committers",

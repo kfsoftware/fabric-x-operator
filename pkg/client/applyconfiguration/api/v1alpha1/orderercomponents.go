@@ -10,10 +10,10 @@ package v1alpha1
 // OrdererComponentsApplyConfiguration represents a declarative configuration of the OrdererComponents type for use
 // with apply.
 type OrdererComponentsApplyConfiguration struct {
-	Consenter *ComponentConfigApplyConfiguration  `json:"consenter,omitempty"`
-	Batchers  []BatcherInstanceApplyConfiguration `json:"batchers,omitempty"`
-	Assembler *ComponentConfigApplyConfiguration  `json:"assembler,omitempty"`
-	Router    *ComponentConfigApplyConfiguration  `json:"router,omitempty"`
+	Consenter *ConsenterInstanceApplyConfiguration `json:"consenter,omitempty"`
+	Batchers  []BatcherInstanceApplyConfiguration  `json:"batchers,omitempty"`
+	Assembler *ComponentConfigApplyConfiguration   `json:"assembler,omitempty"`
+	Router    *ComponentConfigApplyConfiguration   `json:"router,omitempty"`
 }
 
 // OrdererComponentsApplyConfiguration constructs a declarative configuration of the OrdererComponents type for use with
@@ -25,7 +25,7 @@ func OrdererComponents() *OrdererComponentsApplyConfiguration {
 // WithConsenter sets the Consenter field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Consenter field is set to the value of the last call.
-func (b *OrdererComponentsApplyConfiguration) WithConsenter(value *ComponentConfigApplyConfiguration) *OrdererComponentsApplyConfiguration {
+func (b *OrdererComponentsApplyConfiguration) WithConsenter(value *ConsenterInstanceApplyConfiguration) *OrdererComponentsApplyConfiguration {
 	b.Consenter = value
 	return b
 }

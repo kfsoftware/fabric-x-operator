@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  test-e2e:
-    name: Run on Ubuntu
+  test-e2e-kind:
+    name: Run with Kind
     runs-on: ubuntu-latest
     steps:
       - name: Clone the code
@@ -30,3 +30,46 @@ jobs:
         run: |
           go mod tidy
           make test-e2e
+
+  test-e2e-k3d:
+    name: Run with K3D
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install K3D
+        run: |
+          curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+
+      - name: Verify K3D installation
+        run: k3d version
+
+      - name: Create K3D cluster
+        run: |
+          k3d cluster create test-cluster \
+            --agents 2 \
+            --wait \
+            --timeout 5m
+
+      - name: Verify cluster is ready
+        run: |
+          kubectl cluster-info
+          kubectl get nodes
+
+      - name: Running Test e2e on K3D
+        env:
+          CLUSTER_TYPE: k3d
+          K3D_CLUSTER: test-cluster
+        run: |
+          go mod tidy
+          make test-e2e-k3d
+
+      - name: Cleanup K3D cluster
+        if: always()
+        run: k3d cluster delete test-cluster

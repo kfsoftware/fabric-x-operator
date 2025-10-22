@@ -267,6 +267,12 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 					},
 				},
 			},
+			// Add party configurations (at least 1 required for consensus)
+			Parties: []v1alpha1.PartyConfig{
+				{
+					PartyID: 1,
+				},
+			},
 		},
 	}
 
@@ -281,8 +287,8 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, sharedConfig)
 
-	// Verify parties configuration
-	assert.Len(t, sharedConfig.PartiesConfig, 4) // 2 orderer + 2 application orgs
+	// Verify parties configuration - now expects 1 party since we explicitly defined it
+	assert.Len(t, sharedConfig.PartiesConfig, 1) // 1 explicitly defined party
 
 	// Verify party IDs are assigned correctly
 	partyIDs := make(map[uint32]bool)
@@ -538,6 +544,12 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 					},
 				},
 			},
+			// Add party configurations (at least 1 required for consensus)
+			Parties: []v1alpha1.PartyConfig{
+				{
+					PartyID: 1,
+				},
+			},
 		},
 	}
 
@@ -554,7 +566,7 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 	assert.NotNil(t, sharedConfig.PartiesConfig)
 	assert.NotNil(t, sharedConfig.ConsensusConfig)
 	assert.NotNil(t, sharedConfig.BatchingConfig)
-	assert.Len(t, sharedConfig.PartiesConfig, 4)
+	assert.Len(t, sharedConfig.PartiesConfig, 1) // 1 explicitly defined party
 }
 
 func TestSharedConfigService_GenerateSharedConfig_Minimal(t *testing.T) {

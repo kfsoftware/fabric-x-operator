@@ -17,10 +17,10 @@ import (
 // fakeGenesises implements GenesisInterface
 type fakeGenesises struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.Genesis, *v1alpha1.GenesisList, *apiv1alpha1.GenesisApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeGenesises(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.GenesisInterface {
+func newFakeGenesises(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.GenesisInterface {
 	return &fakeGenesises{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.Genesis, *v1alpha1.GenesisList, *apiv1alpha1.GenesisApplyConfiguration](
 			fake.Fake,

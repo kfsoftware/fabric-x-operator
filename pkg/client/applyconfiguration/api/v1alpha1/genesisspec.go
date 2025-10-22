@@ -7,7 +7,7 @@
 
 package v1alpha1
 
-// GenesisSpecApplyConfiguration represents an declarative configuration of the GenesisSpec type for use
+// GenesisSpecApplyConfiguration represents a declarative configuration of the GenesisSpec type for use
 // with apply.
 type GenesisSpecApplyConfiguration struct {
 	ChannelID            *string                                     `json:"channelID,omitempty"`
@@ -15,6 +15,10 @@ type GenesisSpecApplyConfiguration struct {
 	OrdererOrganizations []OrdererOrganizationApplyConfiguration     `json:"ordererOrganizations,omitempty"`
 	ApplicationOrgs      []ApplicationOrganizationApplyConfiguration `json:"applicationOrgs,omitempty"`
 	Consenters           []OrdererNodeApplyConfiguration             `json:"consenters,omitempty"`
+	Parties              []PartyConfigApplyConfiguration             `json:"parties,omitempty"`
+	ConsensusConfig      *ConsensusConfigApplyConfiguration          `json:"consensusConfig,omitempty"`
+	BatchingConfig       *BatchingConfigApplyConfiguration           `json:"batchingConfig,omitempty"`
+	MetaNamespaceCA      *SecretKeyNSSelectorApplyConfiguration      `json:"metaNamespaceCA,omitempty"`
 	Output               *GenesisOutputApplyConfiguration            `json:"output,omitempty"`
 }
 
@@ -76,6 +80,43 @@ func (b *GenesisSpecApplyConfiguration) WithConsenters(values ...*OrdererNodeApp
 		}
 		b.Consenters = append(b.Consenters, *values[i])
 	}
+	return b
+}
+
+// WithParties adds the given value to the Parties field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Parties field.
+func (b *GenesisSpecApplyConfiguration) WithParties(values ...*PartyConfigApplyConfiguration) *GenesisSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithParties")
+		}
+		b.Parties = append(b.Parties, *values[i])
+	}
+	return b
+}
+
+// WithConsensusConfig sets the ConsensusConfig field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ConsensusConfig field is set to the value of the last call.
+func (b *GenesisSpecApplyConfiguration) WithConsensusConfig(value *ConsensusConfigApplyConfiguration) *GenesisSpecApplyConfiguration {
+	b.ConsensusConfig = value
+	return b
+}
+
+// WithBatchingConfig sets the BatchingConfig field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the BatchingConfig field is set to the value of the last call.
+func (b *GenesisSpecApplyConfiguration) WithBatchingConfig(value *BatchingConfigApplyConfiguration) *GenesisSpecApplyConfiguration {
+	b.BatchingConfig = value
+	return b
+}
+
+// WithMetaNamespaceCA sets the MetaNamespaceCA field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MetaNamespaceCA field is set to the value of the last call.
+func (b *GenesisSpecApplyConfiguration) WithMetaNamespaceCA(value *SecretKeyNSSelectorApplyConfiguration) *GenesisSpecApplyConfiguration {
+	b.MetaNamespaceCA = value
 	return b
 }
 

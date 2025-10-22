@@ -20,23 +20,55 @@ import (
 // apply configuration type exists for the given GroupVersionKind.
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
-	// Group=api, Version=v1alpha1
+	// Group=fabricx.kfsoft.tech, Version=v1alpha1
 	case v1alpha1.SchemeGroupVersion.WithKind("Affinity"):
 		return &apiv1alpha1.AffinityApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ApplicationOrganization"):
 		return &apiv1alpha1.ApplicationOrganizationApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("AssemblerConfig"):
+		return &apiv1alpha1.AssemblerConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("BatcherConfig"):
+		return &apiv1alpha1.BatcherConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("BatcherInstance"):
 		return &apiv1alpha1.BatcherInstanceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("BatchingConfig"):
+		return &apiv1alpha1.BatchingConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("BatchSizeConfig"):
+		return &apiv1alpha1.BatchSizeConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("BatchTimeoutsConfig"):
+		return &apiv1alpha1.BatchTimeoutsConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("CA"):
 		return &apiv1alpha1.CAApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CACertificateConfig"):
+		return &apiv1alpha1.CACertificateConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollment"):
+		return &apiv1alpha1.CAEnrollmentApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollmentAttr"):
+		return &apiv1alpha1.CAEnrollmentAttrApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollmentSecretRef"):
+		return &apiv1alpha1.CAEnrollmentSecretRefApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollmentSpec"):
+		return &apiv1alpha1.CAEnrollmentSpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollmentStatus"):
+		return &apiv1alpha1.CAEnrollmentStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CAEnrollmentTLS"):
+		return &apiv1alpha1.CAEnrollmentTLSApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("CASpec"):
 		return &apiv1alpha1.CASpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("CAStatus"):
 		return &apiv1alpha1.CAStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("CATLSConfig"):
 		return &apiv1alpha1.CATLSConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CertFileConfig"):
+		return &apiv1alpha1.CertFileConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("CertificateConfig"):
 		return &apiv1alpha1.CertificateConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("CertificateProviderConfig"):
+		return &apiv1alpha1.CertificateProviderConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ChainNamespace"):
+		return &apiv1alpha1.ChainNamespaceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ChannelConfig"):
+		return &apiv1alpha1.ChannelConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ChildCRDStatus"):
 		return &apiv1alpha1.ChildCRDStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ChildCRDStatuses"):
@@ -59,18 +91,32 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.ConfigMapVolumeSourceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ConfigTemplateReference"):
 		return &apiv1alpha1.ConfigTemplateReferenceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ConsensusConfig"):
+		return &apiv1alpha1.ConsensusConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ConsenterConfig"):
+		return &apiv1alpha1.ConsenterConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ConsenterInstance"):
+		return &apiv1alpha1.ConsenterInstanceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("EmptyDirVolumeSource"):
 		return &apiv1alpha1.EmptyDirVolumeSourceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndorsementPolicy"):
+		return &apiv1alpha1.EndorsementPolicyApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Endorser"):
 		return &apiv1alpha1.EndorserApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndorserCoreConfig"):
+		return &apiv1alpha1.EndorserCoreConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndorserPort"):
+		return &apiv1alpha1.EndorserPortApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("EndorserSpec"):
 		return &apiv1alpha1.EndorserSpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndorserStatus"):
+		return &apiv1alpha1.EndorserStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndpointConfig"):
+		return &apiv1alpha1.EndpointConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("EndpointResolver"):
+		return &apiv1alpha1.EndpointResolverApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("EnrollmentConfig"):
 		return &apiv1alpha1.EnrollmentConfigApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("EnvVar"):
-		return &apiv1alpha1.EnvVarApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("EnvVarSource"):
-		return &apiv1alpha1.EnvVarSourceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAAffiliation"):
 		return &apiv1alpha1.FabricCAAffiliationApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCACors"):
@@ -83,6 +129,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.FabricCACSRCAApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCADatabase"):
 		return &apiv1alpha1.FabricCADatabaseApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAIdemix"):
+		return &apiv1alpha1.FabricCAIdemixApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAIdentity"):
 		return &apiv1alpha1.FabricCAIdentityApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAIdentityAttrs"):
@@ -115,6 +163,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.FabricCAMetricsStatsdApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCANames"):
 		return &apiv1alpha1.FabricCANamesApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAProviderConfig"):
+		return &apiv1alpha1.FabricCAProviderConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAServiceMonitor"):
 		return &apiv1alpha1.FabricCAServiceMonitorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCASigning"):
@@ -139,6 +189,22 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.FabricCATLSConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("FabricCAVault"):
 		return &apiv1alpha1.FabricCAVaultApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricConfig"):
+		return &apiv1alpha1.FabricConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricDefaultConfig"):
+		return &apiv1alpha1.FabricDefaultConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricNetworkConfig"):
+		return &apiv1alpha1.FabricNetworkConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FabricTLSConfig"):
+		return &apiv1alpha1.FabricTLSConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FSCConfig"):
+		return &apiv1alpha1.FSCConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FSCEndorsementConfig"):
+		return &apiv1alpha1.FSCEndorsementConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FSCIdentity"):
+		return &apiv1alpha1.FSCIdentityApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("FSCP2PConfig"):
+		return &apiv1alpha1.FSCP2PConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Genesis"):
 		return &apiv1alpha1.GenesisApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("GenesisConfig"):
@@ -151,18 +217,52 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.GenesisStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("HostPathVolumeSource"):
 		return &apiv1alpha1.HostPathVolumeSourceApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdemixEnrollmentConfig"):
+		return &apiv1alpha1.IdemixEnrollmentConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("Identity"):
+		return &apiv1alpha1.IdentityApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityAttribute"):
+		return &apiv1alpha1.IdentityAttributeApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityCARef"):
+		return &apiv1alpha1.IdentityCARefApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityEnrollment"):
+		return &apiv1alpha1.IdentityEnrollmentApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityIdemixEnrollment"):
+		return &apiv1alpha1.IdentityIdemixEnrollmentApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityOutput"):
+		return &apiv1alpha1.IdentityOutputApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityOutputSecrets"):
+		return &apiv1alpha1.IdentityOutputSecretsApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentitySpec"):
+		return &apiv1alpha1.IdentitySpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("IdentityStatus"):
+		return &apiv1alpha1.IdentityStatusApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ImagePullSecret"):
 		return &apiv1alpha1.ImagePullSecretApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("IngressConfig"):
 		return &apiv1alpha1.IngressConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("IstioConfig"):
 		return &apiv1alpha1.IstioConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("KeyFileConfig"):
+		return &apiv1alpha1.KeyFileConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("KeyToPath"):
 		return &apiv1alpha1.KeyToPathApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("LabelSelector"):
 		return &apiv1alpha1.LabelSelectorApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("LabelSelectorRequirement"):
 		return &apiv1alpha1.LabelSelectorRequirementApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("LoggingConfig"):
+		return &apiv1alpha1.LoggingConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ManualProviderConfig"):
+		return &apiv1alpha1.ManualProviderConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("MSPConfig"):
+		return &apiv1alpha1.MSPConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("NamespaceSpec"):
+		return &apiv1alpha1.NamespaceSpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("NamespaceStatus"):
+		return &apiv1alpha1.NamespaceStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("NetworkServiceConfig"):
+		return &apiv1alpha1.NetworkServiceConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeAffinity"):
 		return &apiv1alpha1.NodeAffinityApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("NodeSelector"):
@@ -207,6 +307,22 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.OrdererRouterSpecApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("OrdererRouterStatus"):
 		return &apiv1alpha1.OrdererRouterStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("P2POptions"):
+		return &apiv1alpha1.P2POptionsApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PartyAssemblerConfig"):
+		return &apiv1alpha1.PartyAssemblerConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PartyBatcherConfig"):
+		return &apiv1alpha1.PartyBatcherConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PartyConfig"):
+		return &apiv1alpha1.PartyConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PartyConsenterConfig"):
+		return &apiv1alpha1.PartyConsenterConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PartyRouterConfig"):
+		return &apiv1alpha1.PartyRouterConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PeerConfig"):
+		return &apiv1alpha1.PeerConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PersistenceConfig"):
+		return &apiv1alpha1.PersistenceConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("PersistentVolumeClaimVolumeSource"):
 		return &apiv1alpha1.PersistentVolumeClaimVolumeSourceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("PodAffinity"):
@@ -215,24 +331,52 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1alpha1.PodAffinityTermApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("PodAntiAffinity"):
 		return &apiv1alpha1.PodAntiAffinityApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PostgreSQLConfig"):
+		return &apiv1alpha1.PostgreSQLConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PostgreSQLRetryConfig"):
+		return &apiv1alpha1.PostgreSQLRetryConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("PreferredSchedulingTerm"):
 		return &apiv1alpha1.PreferredSchedulingTermApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("PublicParametersConfig"):
+		return &apiv1alpha1.PublicParametersConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("QueryServiceConfig"):
+		return &apiv1alpha1.QueryServiceConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ResolverIdentity"):
+		return &apiv1alpha1.ResolverIdentityApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("RouterConfig"):
+		return &apiv1alpha1.RouterConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("RoutingConfig"):
+		return &apiv1alpha1.RoutingConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("SANSConfig"):
+		return &apiv1alpha1.SANSConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SecretKeyNSSelector"):
 		return &apiv1alpha1.SecretKeyNSSelectorApplyConfiguration{}
-	case v1alpha1.SchemeGroupVersion.WithKind("SecretKeySelector"):
-		return &apiv1alpha1.SecretKeySelectorApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("SecretKeyRef"):
+		return &apiv1alpha1.SecretKeyRefApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SecretRef"):
 		return &apiv1alpha1.SecretRefApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SecretVolumeSource"):
 		return &apiv1alpha1.SecretVolumeSourceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("SecurityContext"):
 		return &apiv1alpha1.SecurityContextApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("SmartBFTConfig"):
+		return &apiv1alpha1.SmartBFTConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("StorageConfig"):
 		return &apiv1alpha1.StorageConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("TLSConfig"):
 		return &apiv1alpha1.TLSConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("TMSConfig"):
+		return &apiv1alpha1.TMSConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("TMSServices"):
+		return &apiv1alpha1.TMSServicesApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("TokenConfig"):
+		return &apiv1alpha1.TokenConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Toleration"):
 		return &apiv1alpha1.TolerationApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ValidatorComponentConfig"):
+		return &apiv1alpha1.ValidatorComponentConfigApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("VaultProviderConfig"):
+		return &apiv1alpha1.VaultProviderConfigApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Volume"):
 		return &apiv1alpha1.VolumeApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("VolumeMount"):

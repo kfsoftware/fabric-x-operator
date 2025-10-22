@@ -49,7 +49,7 @@ type ordererBatchers struct {
 }
 
 // newOrdererBatchers returns a OrdererBatchers
-func newOrdererBatchers(c *ApiV1alpha1Client, namespace string) *ordererBatchers {
+func newOrdererBatchers(c *FabricxV1alpha1Client, namespace string) *ordererBatchers {
 	return &ordererBatchers{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.OrdererBatcher, *apiv1alpha1.OrdererBatcherList, *applyconfigurationapiv1alpha1.OrdererBatcherApplyConfiguration](
 			"ordererbatchers",

@@ -12,6 +12,8 @@ package v1alpha1
 type CommitterSpecApplyConfiguration struct {
 	BootstrapMode *string                                  `json:"bootstrapMode,omitempty"`
 	MSPID         *string                                  `json:"mspid,omitempty"`
+	Image         *string                                  `json:"image,omitempty"`
+	ImageTag      *string                                  `json:"imageTag,omitempty"`
 	Common        *CommonComponentConfigApplyConfiguration `json:"common,omitempty"`
 	Genesis       *GenesisConfigApplyConfiguration         `json:"genesis,omitempty"`
 	Components    *CommitterComponentsApplyConfiguration   `json:"components,omitempty"`
@@ -37,6 +39,22 @@ func (b *CommitterSpecApplyConfiguration) WithBootstrapMode(value string) *Commi
 // If called multiple times, the MSPID field is set to the value of the last call.
 func (b *CommitterSpecApplyConfiguration) WithMSPID(value string) *CommitterSpecApplyConfiguration {
 	b.MSPID = &value
+	return b
+}
+
+// WithImage sets the Image field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Image field is set to the value of the last call.
+func (b *CommitterSpecApplyConfiguration) WithImage(value string) *CommitterSpecApplyConfiguration {
+	b.Image = &value
+	return b
+}
+
+// WithImageTag sets the ImageTag field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ImageTag field is set to the value of the last call.
+func (b *CommitterSpecApplyConfiguration) WithImageTag(value string) *CommitterSpecApplyConfiguration {
+	b.ImageTag = &value
 	return b
 }
 

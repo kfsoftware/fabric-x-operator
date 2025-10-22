@@ -243,9 +243,9 @@ type SharedInformerFactory interface {
 	// client.
 	InformerFor(obj runtime.Object, newFunc internalinterfaces.NewInformerFunc) cache.SharedIndexInformer
 
-	Api() api.Interface
+	Fabricx() api.Interface
 }
 
-func (f *sharedInformerFactory) Api() api.Interface {
+func (f *sharedInformerFactory) Fabricx() api.Interface {
 	return api.New(f, f.namespace, f.tweakListOptions)
 }

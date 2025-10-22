@@ -9,11 +9,17 @@ package v1alpha1
 
 type CAExpansion interface{}
 
+type CAEnrollmentExpansion interface{}
+
+type ChainNamespaceExpansion interface{}
+
 type CommitterExpansion interface{}
 
 type EndorserExpansion interface{}
 
 type GenesisExpansion interface{}
+
+type IdentityExpansion interface{}
 
 type OrdererAssemblerExpansion interface{}
 

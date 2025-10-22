@@ -17,10 +17,10 @@ import (
 // fakeOrdererAssemblers implements OrdererAssemblerInterface
 type fakeOrdererAssemblers struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.OrdererAssembler, *v1alpha1.OrdererAssemblerList, *apiv1alpha1.OrdererAssemblerApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeOrdererAssemblers(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.OrdererAssemblerInterface {
+func newFakeOrdererAssemblers(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.OrdererAssemblerInterface {
 	return &fakeOrdererAssemblers{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.OrdererAssembler, *v1alpha1.OrdererAssemblerList, *apiv1alpha1.OrdererAssemblerApplyConfiguration](
 			fake.Fake,

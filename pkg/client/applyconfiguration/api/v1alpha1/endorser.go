@@ -8,7 +8,6 @@
 package v1alpha1
 
 import (
-	apiv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	v1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -19,8 +18,8 @@ import (
 type EndorserApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
-	Spec                             *EndorserSpecApplyConfiguration `json:"spec,omitempty"`
-	Status                           *apiv1alpha1.EndorserStatus     `json:"status,omitempty"`
+	Spec                             *EndorserSpecApplyConfiguration   `json:"spec,omitempty"`
+	Status                           *EndorserStatusApplyConfiguration `json:"status,omitempty"`
 }
 
 // Endorser constructs a declarative configuration of the Endorser type for use with
@@ -30,7 +29,7 @@ func Endorser(name, namespace string) *EndorserApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("Endorser")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("fabricx.kfsoft.tech/v1alpha1")
 	return b
 }
 
@@ -203,8 +202,8 @@ func (b *EndorserApplyConfiguration) WithSpec(value *EndorserSpecApplyConfigurat
 // WithStatus sets the Status field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Status field is set to the value of the last call.
-func (b *EndorserApplyConfiguration) WithStatus(value apiv1alpha1.EndorserStatus) *EndorserApplyConfiguration {
-	b.Status = &value
+func (b *EndorserApplyConfiguration) WithStatus(value *EndorserStatusApplyConfiguration) *EndorserApplyConfiguration {
+	b.Status = value
 	return b
 }
 

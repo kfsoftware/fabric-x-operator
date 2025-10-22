@@ -6,6 +6,7 @@ import (
 	"io"
 	"os/exec"
 
+	fabricxclientset "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -45,6 +46,20 @@ func GetControllerRuntimeClient(scheme *runtime.Scheme) (client.Client, error) {
 		return nil, errors.Wrap(err, "failed to create client")
 	}
 	return k8sClient, nil
+}
+
+// GetFabricXClient provides a typed Fabric X clientset for type-safe operations
+func GetFabricXClient() (fabricxclientset.Interface, error) {
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get kubeconfig")
+	}
+
+	fabricxClient, err := fabricxclientset.NewForConfig(cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create Fabric X client")
+	}
+	return fabricxClient, nil
 }
 
 // ExecKubectl executes the given command using `kubectl`

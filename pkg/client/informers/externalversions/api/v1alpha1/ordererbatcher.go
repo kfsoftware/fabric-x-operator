@@ -51,25 +51,25 @@ func NewFilteredOrdererBatcherInformer(client versioned.Interface, namespace str
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().OrdererBatchers(namespace).List(context.Background(), options)
+				return client.FabricxV1alpha1().OrdererBatchers(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().OrdererBatchers(namespace).Watch(context.Background(), options)
+				return client.FabricxV1alpha1().OrdererBatchers(namespace).Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().OrdererBatchers(namespace).List(ctx, options)
+				return client.FabricxV1alpha1().OrdererBatchers(namespace).List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().OrdererBatchers(namespace).Watch(ctx, options)
+				return client.FabricxV1alpha1().OrdererBatchers(namespace).Watch(ctx, options)
 			},
 		},
 		&fabricxoperatorapiv1alpha1.OrdererBatcher{},

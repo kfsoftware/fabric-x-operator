@@ -10,12 +10,10 @@ package v1alpha1
 // CertificateConfigApplyConfiguration represents a declarative configuration of the CertificateConfig type for use
 // with apply.
 type CertificateConfigApplyConfiguration struct {
-	CAHost       *string                        `json:"cahost,omitempty"`
-	CAName       *string                        `json:"caname,omitempty"`
-	CAPort       *int32                         `json:"caport,omitempty"`
-	CATLS        *CATLSConfigApplyConfiguration `json:"catls,omitempty"`
-	EnrollID     *string                        `json:"enrollid,omitempty"`
-	EnrollSecret *string                        `json:"enrollsecret,omitempty"`
+	ProviderType *string                                      `json:"providerType,omitempty"`
+	CA           *CACertificateConfigApplyConfiguration       `json:"ca,omitempty"`
+	Provider     *CertificateProviderConfigApplyConfiguration `json:"provider,omitempty"`
+	SANS         *SANSConfigApplyConfiguration                `json:"sans,omitempty"`
 }
 
 // CertificateConfigApplyConfiguration constructs a declarative configuration of the CertificateConfig type for use with
@@ -24,50 +22,34 @@ func CertificateConfig() *CertificateConfigApplyConfiguration {
 	return &CertificateConfigApplyConfiguration{}
 }
 
-// WithCAHost sets the CAHost field in the declarative configuration to the given value
+// WithProviderType sets the ProviderType field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CAHost field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithCAHost(value string) *CertificateConfigApplyConfiguration {
-	b.CAHost = &value
+// If called multiple times, the ProviderType field is set to the value of the last call.
+func (b *CertificateConfigApplyConfiguration) WithProviderType(value string) *CertificateConfigApplyConfiguration {
+	b.ProviderType = &value
 	return b
 }
 
-// WithCAName sets the CAName field in the declarative configuration to the given value
+// WithCA sets the CA field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CAName field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithCAName(value string) *CertificateConfigApplyConfiguration {
-	b.CAName = &value
+// If called multiple times, the CA field is set to the value of the last call.
+func (b *CertificateConfigApplyConfiguration) WithCA(value *CACertificateConfigApplyConfiguration) *CertificateConfigApplyConfiguration {
+	b.CA = value
 	return b
 }
 
-// WithCAPort sets the CAPort field in the declarative configuration to the given value
+// WithProvider sets the Provider field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CAPort field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithCAPort(value int32) *CertificateConfigApplyConfiguration {
-	b.CAPort = &value
+// If called multiple times, the Provider field is set to the value of the last call.
+func (b *CertificateConfigApplyConfiguration) WithProvider(value *CertificateProviderConfigApplyConfiguration) *CertificateConfigApplyConfiguration {
+	b.Provider = value
 	return b
 }
 
-// WithCATLS sets the CATLS field in the declarative configuration to the given value
+// WithSANS sets the SANS field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the CATLS field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithCATLS(value *CATLSConfigApplyConfiguration) *CertificateConfigApplyConfiguration {
-	b.CATLS = value
-	return b
-}
-
-// WithEnrollID sets the EnrollID field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EnrollID field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithEnrollID(value string) *CertificateConfigApplyConfiguration {
-	b.EnrollID = &value
-	return b
-}
-
-// WithEnrollSecret sets the EnrollSecret field in the declarative configuration to the given value
-// and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the EnrollSecret field is set to the value of the last call.
-func (b *CertificateConfigApplyConfiguration) WithEnrollSecret(value string) *CertificateConfigApplyConfiguration {
-	b.EnrollSecret = &value
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *CertificateConfigApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *CertificateConfigApplyConfiguration {
+	b.SANS = value
 	return b
 }

@@ -29,7 +29,7 @@ func OrdererRouter(name, namespace string) *OrdererRouterApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("OrdererRouter")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("fabricx.kfsoft.tech/v1alpha1")
 	return b
 }
 

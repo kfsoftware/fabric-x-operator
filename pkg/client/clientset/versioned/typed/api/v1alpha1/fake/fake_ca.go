@@ -17,10 +17,10 @@ import (
 // fakeCAs implements CAInterface
 type fakeCAs struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.CA, *v1alpha1.CAList, *apiv1alpha1.CAApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeCAs(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.CAInterface {
+func newFakeCAs(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.CAInterface {
 	return &fakeCAs{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.CA, *v1alpha1.CAList, *apiv1alpha1.CAApplyConfiguration](
 			fake.Fake,

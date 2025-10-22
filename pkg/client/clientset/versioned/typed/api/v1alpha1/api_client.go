@@ -15,12 +15,15 @@ import (
 	rest "k8s.io/client-go/rest"
 )
 
-type ApiV1alpha1Interface interface {
+type FabricxV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	CAsGetter
+	CAEnrollmentsGetter
+	ChainNamespacesGetter
 	CommittersGetter
 	EndorsersGetter
 	GenesisesGetter
+	IdentitiesGetter
 	OrdererAssemblersGetter
 	OrdererBatchersGetter
 	OrdererConsentersGetter
@@ -28,51 +31,63 @@ type ApiV1alpha1Interface interface {
 	OrdererRoutersGetter
 }
 
-// ApiV1alpha1Client is used to interact with features provided by the api group.
-type ApiV1alpha1Client struct {
+// FabricxV1alpha1Client is used to interact with features provided by the fabricx.kfsoft.tech group.
+type FabricxV1alpha1Client struct {
 	restClient rest.Interface
 }
 
-func (c *ApiV1alpha1Client) CAs(namespace string) CAInterface {
+func (c *FabricxV1alpha1Client) CAs(namespace string) CAInterface {
 	return newCAs(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) Committers(namespace string) CommitterInterface {
+func (c *FabricxV1alpha1Client) CAEnrollments(namespace string) CAEnrollmentInterface {
+	return newCAEnrollments(c, namespace)
+}
+
+func (c *FabricxV1alpha1Client) ChainNamespaces() ChainNamespaceInterface {
+	return newChainNamespaces(c)
+}
+
+func (c *FabricxV1alpha1Client) Committers(namespace string) CommitterInterface {
 	return newCommitters(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) Endorsers(namespace string) EndorserInterface {
+func (c *FabricxV1alpha1Client) Endorsers(namespace string) EndorserInterface {
 	return newEndorsers(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) Genesises(namespace string) GenesisInterface {
+func (c *FabricxV1alpha1Client) Genesises(namespace string) GenesisInterface {
 	return newGenesises(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) OrdererAssemblers(namespace string) OrdererAssemblerInterface {
+func (c *FabricxV1alpha1Client) Identities(namespace string) IdentityInterface {
+	return newIdentities(c, namespace)
+}
+
+func (c *FabricxV1alpha1Client) OrdererAssemblers(namespace string) OrdererAssemblerInterface {
 	return newOrdererAssemblers(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) OrdererBatchers(namespace string) OrdererBatcherInterface {
+func (c *FabricxV1alpha1Client) OrdererBatchers(namespace string) OrdererBatcherInterface {
 	return newOrdererBatchers(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) OrdererConsenters(namespace string) OrdererConsenterInterface {
+func (c *FabricxV1alpha1Client) OrdererConsenters(namespace string) OrdererConsenterInterface {
 	return newOrdererConsenters(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) OrdererGroups(namespace string) OrdererGroupInterface {
+func (c *FabricxV1alpha1Client) OrdererGroups(namespace string) OrdererGroupInterface {
 	return newOrdererGroups(c, namespace)
 }
 
-func (c *ApiV1alpha1Client) OrdererRouters(namespace string) OrdererRouterInterface {
+func (c *FabricxV1alpha1Client) OrdererRouters(namespace string) OrdererRouterInterface {
 	return newOrdererRouters(c, namespace)
 }
 
-// NewForConfig creates a new ApiV1alpha1Client for the given config.
+// NewForConfig creates a new FabricxV1alpha1Client for the given config.
 // NewForConfig is equivalent to NewForConfigAndClient(c, httpClient),
 // where httpClient was generated with rest.HTTPClientFor(c).
-func NewForConfig(c *rest.Config) (*ApiV1alpha1Client, error) {
+func NewForConfig(c *rest.Config) (*FabricxV1alpha1Client, error) {
 	config := *c
 	setConfigDefaults(&config)
 	httpClient, err := rest.HTTPClientFor(&config)
@@ -82,21 +97,21 @@ func NewForConfig(c *rest.Config) (*ApiV1alpha1Client, error) {
 	return NewForConfigAndClient(&config, httpClient)
 }
 
-// NewForConfigAndClient creates a new ApiV1alpha1Client for the given config and http client.
+// NewForConfigAndClient creates a new FabricxV1alpha1Client for the given config and http client.
 // Note the http client provided takes precedence over the configured transport values.
-func NewForConfigAndClient(c *rest.Config, h *http.Client) (*ApiV1alpha1Client, error) {
+func NewForConfigAndClient(c *rest.Config, h *http.Client) (*FabricxV1alpha1Client, error) {
 	config := *c
 	setConfigDefaults(&config)
 	client, err := rest.RESTClientForConfigAndClient(&config, h)
 	if err != nil {
 		return nil, err
 	}
-	return &ApiV1alpha1Client{client}, nil
+	return &FabricxV1alpha1Client{client}, nil
 }
 
-// NewForConfigOrDie creates a new ApiV1alpha1Client for the given config and
+// NewForConfigOrDie creates a new FabricxV1alpha1Client for the given config and
 // panics if there is an error in the config.
-func NewForConfigOrDie(c *rest.Config) *ApiV1alpha1Client {
+func NewForConfigOrDie(c *rest.Config) *FabricxV1alpha1Client {
 	client, err := NewForConfig(c)
 	if err != nil {
 		panic(err)
@@ -104,9 +119,9 @@ func NewForConfigOrDie(c *rest.Config) *ApiV1alpha1Client {
 	return client
 }
 
-// New creates a new ApiV1alpha1Client for the given RESTClient.
-func New(c rest.Interface) *ApiV1alpha1Client {
-	return &ApiV1alpha1Client{c}
+// New creates a new FabricxV1alpha1Client for the given RESTClient.
+func New(c rest.Interface) *FabricxV1alpha1Client {
+	return &FabricxV1alpha1Client{c}
 }
 
 func setConfigDefaults(config *rest.Config) {
@@ -122,7 +137,7 @@ func setConfigDefaults(config *rest.Config) {
 
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
-func (c *ApiV1alpha1Client) RESTClient() rest.Interface {
+func (c *FabricxV1alpha1Client) RESTClient() rest.Interface {
 	if c == nil {
 		return nil
 	}

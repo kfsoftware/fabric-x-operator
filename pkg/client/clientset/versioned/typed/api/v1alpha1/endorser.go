@@ -49,7 +49,7 @@ type endorsers struct {
 }
 
 // newEndorsers returns a Endorsers
-func newEndorsers(c *ApiV1alpha1Client, namespace string) *endorsers {
+func newEndorsers(c *FabricxV1alpha1Client, namespace string) *endorsers {
 	return &endorsers{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.Endorser, *apiv1alpha1.EndorserList, *applyconfigurationapiv1alpha1.EndorserApplyConfiguration](
 			"endorsers",

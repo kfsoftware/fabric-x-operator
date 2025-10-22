@@ -13,6 +13,8 @@ type OrdererGroupSpecApplyConfiguration struct {
 	BootstrapMode   *string                                  `json:"bootstrapMode,omitempty"`
 	MSPID           *string                                  `json:"mspid,omitempty"`
 	PartyID         *int32                                   `json:"partyID,omitempty"`
+	Image           *string                                  `json:"image,omitempty"`
+	ImageTag        *string                                  `json:"imageTag,omitempty"`
 	Common          *CommonComponentConfigApplyConfiguration `json:"common,omitempty"`
 	Genesis         *GenesisConfigApplyConfiguration         `json:"genesis,omitempty"`
 	Components      *OrdererComponentsApplyConfiguration     `json:"components,omitempty"`
@@ -47,6 +49,22 @@ func (b *OrdererGroupSpecApplyConfiguration) WithMSPID(value string) *OrdererGro
 // If called multiple times, the PartyID field is set to the value of the last call.
 func (b *OrdererGroupSpecApplyConfiguration) WithPartyID(value int32) *OrdererGroupSpecApplyConfiguration {
 	b.PartyID = &value
+	return b
+}
+
+// WithImage sets the Image field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Image field is set to the value of the last call.
+func (b *OrdererGroupSpecApplyConfiguration) WithImage(value string) *OrdererGroupSpecApplyConfiguration {
+	b.Image = &value
+	return b
+}
+
+// WithImageTag sets the ImageTag field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ImageTag field is set to the value of the last call.
+func (b *OrdererGroupSpecApplyConfiguration) WithImageTag(value string) *OrdererGroupSpecApplyConfiguration {
+	b.ImageTag = &value
 	return b
 }
 

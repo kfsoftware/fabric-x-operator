@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/kfsoftware/fabric-x-operator/kubectl-fabricx/cmd/ca"
 	"github.com/kfsoftware/fabric-x-operator/kubectl-fabricx/cmd/peer"
+	"github.com/kfsoftware/fabric-x-operator/kubectl-fabricx/cmd/testnet"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
@@ -25,8 +25,8 @@ func NewCmdFabricX() *cobra.Command {
 	}
 	logrus.SetLevel(logrus.DebugLevel)
 	cmd.AddCommand(
-		ca.NewCACmd(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 		peer.NewPeerCmd(cmd.OutOrStdout(), cmd.ErrOrStderr()),
+		testnet.NewTestnetCmd(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 		// TODO: Add more commands here as they are implemented
 		// orderer.NewOrdererCmd(cmd.OutOrStdout(), cmd.ErrOrStderr()),
 	)

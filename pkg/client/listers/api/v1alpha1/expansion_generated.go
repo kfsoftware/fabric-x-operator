@@ -15,6 +15,18 @@ type CAListerExpansion interface{}
 // CANamespaceLister.
 type CANamespaceListerExpansion interface{}
 
+// CAEnrollmentListerExpansion allows custom methods to be added to
+// CAEnrollmentLister.
+type CAEnrollmentListerExpansion interface{}
+
+// CAEnrollmentNamespaceListerExpansion allows custom methods to be added to
+// CAEnrollmentNamespaceLister.
+type CAEnrollmentNamespaceListerExpansion interface{}
+
+// ChainNamespaceListerExpansion allows custom methods to be added to
+// ChainNamespaceLister.
+type ChainNamespaceListerExpansion interface{}
+
 // CommitterListerExpansion allows custom methods to be added to
 // CommitterLister.
 type CommitterListerExpansion interface{}
@@ -38,6 +50,14 @@ type GenesisListerExpansion interface{}
 // GenesisNamespaceListerExpansion allows custom methods to be added to
 // GenesisNamespaceLister.
 type GenesisNamespaceListerExpansion interface{}
+
+// IdentityListerExpansion allows custom methods to be added to
+// IdentityLister.
+type IdentityListerExpansion interface{}
+
+// IdentityNamespaceListerExpansion allows custom methods to be added to
+// IdentityNamespaceLister.
+type IdentityNamespaceListerExpansion interface{}
 
 // OrdererAssemblerListerExpansion allows custom methods to be added to
 // OrdererAssemblerLister.

@@ -10,7 +10,18 @@ package v1alpha1
 // EndorserSpecApplyConfiguration represents a declarative configuration of the EndorserSpec type for use
 // with apply.
 type EndorserSpecApplyConfiguration struct {
-	Foo *string `json:"foo,omitempty"`
+	BootstrapMode *string                                  `json:"bootstrapMode,omitempty"`
+	MSPID         *string                                  `json:"mspid,omitempty"`
+	Common        *CommonComponentConfigApplyConfiguration `json:"common,omitempty"`
+	Core          *EndorserCoreConfigApplyConfiguration    `json:"core,omitempty"`
+	Enrollment    *EnrollmentConfigApplyConfiguration      `json:"enrollment,omitempty"`
+	SANS          *SANSConfigApplyConfiguration            `json:"sans,omitempty"`
+	Ingress       *IngressConfigApplyConfiguration         `json:"ingress,omitempty"`
+	Image         *string                                  `json:"image,omitempty"`
+	Version       *string                                  `json:"version,omitempty"`
+	Command       []string                                 `json:"command,omitempty"`
+	Args          []string                                 `json:"args,omitempty"`
+	Ports         []EndorserPortApplyConfiguration         `json:"ports,omitempty"`
 }
 
 // EndorserSpecApplyConfiguration constructs a declarative configuration of the EndorserSpec type for use with
@@ -19,10 +30,107 @@ func EndorserSpec() *EndorserSpecApplyConfiguration {
 	return &EndorserSpecApplyConfiguration{}
 }
 
-// WithFoo sets the Foo field in the declarative configuration to the given value
+// WithBootstrapMode sets the BootstrapMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Foo field is set to the value of the last call.
-func (b *EndorserSpecApplyConfiguration) WithFoo(value string) *EndorserSpecApplyConfiguration {
-	b.Foo = &value
+// If called multiple times, the BootstrapMode field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithBootstrapMode(value string) *EndorserSpecApplyConfiguration {
+	b.BootstrapMode = &value
+	return b
+}
+
+// WithMSPID sets the MSPID field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the MSPID field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithMSPID(value string) *EndorserSpecApplyConfiguration {
+	b.MSPID = &value
+	return b
+}
+
+// WithCommon sets the Common field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Common field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithCommon(value *CommonComponentConfigApplyConfiguration) *EndorserSpecApplyConfiguration {
+	b.Common = value
+	return b
+}
+
+// WithCore sets the Core field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Core field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithCore(value *EndorserCoreConfigApplyConfiguration) *EndorserSpecApplyConfiguration {
+	b.Core = value
+	return b
+}
+
+// WithEnrollment sets the Enrollment field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Enrollment field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithEnrollment(value *EnrollmentConfigApplyConfiguration) *EndorserSpecApplyConfiguration {
+	b.Enrollment = value
+	return b
+}
+
+// WithSANS sets the SANS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *EndorserSpecApplyConfiguration {
+	b.SANS = value
+	return b
+}
+
+// WithIngress sets the Ingress field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Ingress field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithIngress(value *IngressConfigApplyConfiguration) *EndorserSpecApplyConfiguration {
+	b.Ingress = value
+	return b
+}
+
+// WithImage sets the Image field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Image field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithImage(value string) *EndorserSpecApplyConfiguration {
+	b.Image = &value
+	return b
+}
+
+// WithVersion sets the Version field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Version field is set to the value of the last call.
+func (b *EndorserSpecApplyConfiguration) WithVersion(value string) *EndorserSpecApplyConfiguration {
+	b.Version = &value
+	return b
+}
+
+// WithCommand adds the given value to the Command field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Command field.
+func (b *EndorserSpecApplyConfiguration) WithCommand(values ...string) *EndorserSpecApplyConfiguration {
+	for i := range values {
+		b.Command = append(b.Command, values[i])
+	}
+	return b
+}
+
+// WithArgs adds the given value to the Args field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Args field.
+func (b *EndorserSpecApplyConfiguration) WithArgs(values ...string) *EndorserSpecApplyConfiguration {
+	for i := range values {
+		b.Args = append(b.Args, values[i])
+	}
+	return b
+}
+
+// WithPorts adds the given value to the Ports field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Ports field.
+func (b *EndorserSpecApplyConfiguration) WithPorts(values ...*EndorserPortApplyConfiguration) *EndorserSpecApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithPorts")
+		}
+		b.Ports = append(b.Ports, *values[i])
+	}
 	return b
 }

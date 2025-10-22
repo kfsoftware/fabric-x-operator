@@ -29,7 +29,7 @@ func OrdererBatcher(name, namespace string) *OrdererBatcherApplyConfiguration {
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("OrdererBatcher")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("fabricx.kfsoft.tech/v1alpha1")
 	return b
 }
 

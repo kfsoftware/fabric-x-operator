@@ -17,10 +17,10 @@ import (
 // fakeOrdererConsenters implements OrdererConsenterInterface
 type fakeOrdererConsenters struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.OrdererConsenter, *v1alpha1.OrdererConsenterList, *apiv1alpha1.OrdererConsenterApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeOrdererConsenters(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.OrdererConsenterInterface {
+func newFakeOrdererConsenters(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.OrdererConsenterInterface {
 	return &fakeOrdererConsenters{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.OrdererConsenter, *v1alpha1.OrdererConsenterList, *apiv1alpha1.OrdererConsenterApplyConfiguration](
 			fake.Fake,

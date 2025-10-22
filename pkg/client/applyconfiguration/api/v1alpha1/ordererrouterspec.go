@@ -14,26 +14,30 @@ import (
 // OrdererRouterSpecApplyConfiguration represents a declarative configuration of the OrdererRouterSpec type for use
 // with apply.
 type OrdererRouterSpecApplyConfiguration struct {
-	DeploymentMode   *string                              `json:"deploymentMode,omitempty"`
-	MSPID            *string                              `json:"mspid,omitempty"`
-	PartyID          *int32                               `json:"partyID,omitempty"`
-	Replicas         *int32                               `json:"replicas,omitempty"`
-	Storage          *StorageConfigApplyConfiguration     `json:"storage,omitempty"`
-	Resources        *v1.ResourceRequirements             `json:"resources,omitempty"`
-	SecurityContext  *SecurityContextApplyConfiguration   `json:"securityContext,omitempty"`
-	PodAnnotations   map[string]string                    `json:"podAnnotations,omitempty"`
-	PodLabels        map[string]string                    `json:"podLabels,omitempty"`
-	Volumes          []VolumeApplyConfiguration           `json:"volumes,omitempty"`
-	Affinity         *AffinityApplyConfiguration          `json:"affinity,omitempty"`
-	VolumeMounts     []VolumeMountApplyConfiguration      `json:"volumeMounts,omitempty"`
-	ImagePullSecrets []ImagePullSecretApplyConfiguration  `json:"imagePullSecrets,omitempty"`
-	Tolerations      []TolerationApplyConfiguration       `json:"tolerations,omitempty"`
-	Ingress          *IngressConfigApplyConfiguration     `json:"ingress,omitempty"`
-	Certificates     *CertificateConfigApplyConfiguration `json:"certificates,omitempty"`
-	Endpoints        []string                             `json:"endpoints,omitempty"`
-	Env              []EnvVarApplyConfiguration           `json:"env,omitempty"`
-	Command          []string                             `json:"command,omitempty"`
-	Args             []string                             `json:"args,omitempty"`
+	BootstrapMode    *string                             `json:"bootstrapMode,omitempty"`
+	MSPID            *string                             `json:"mspid,omitempty"`
+	PartyID          *int32                              `json:"partyID,omitempty"`
+	Image            *string                             `json:"image,omitempty"`
+	ImageTag         *string                             `json:"imageTag,omitempty"`
+	Genesis          *GenesisConfigApplyConfiguration    `json:"genesis,omitempty"`
+	Replicas         *int32                              `json:"replicas,omitempty"`
+	Storage          *StorageConfigApplyConfiguration    `json:"storage,omitempty"`
+	Resources        *v1.ResourceRequirements            `json:"resources,omitempty"`
+	SecurityContext  *SecurityContextApplyConfiguration  `json:"securityContext,omitempty"`
+	PodAnnotations   map[string]string                   `json:"podAnnotations,omitempty"`
+	PodLabels        map[string]string                   `json:"podLabels,omitempty"`
+	Volumes          []VolumeApplyConfiguration          `json:"volumes,omitempty"`
+	Affinity         *AffinityApplyConfiguration         `json:"affinity,omitempty"`
+	VolumeMounts     []VolumeMountApplyConfiguration     `json:"volumeMounts,omitempty"`
+	ImagePullSecrets []ImagePullSecretApplyConfiguration `json:"imagePullSecrets,omitempty"`
+	Tolerations      []TolerationApplyConfiguration      `json:"tolerations,omitempty"`
+	Ingress          *IngressConfigApplyConfiguration    `json:"ingress,omitempty"`
+	Enrollment       *EnrollmentConfigApplyConfiguration `json:"enrollment,omitempty"`
+	SANS             *SANSConfigApplyConfiguration       `json:"sans,omitempty"`
+	Endpoints        []string                            `json:"endpoints,omitempty"`
+	Env              []v1.EnvVar                         `json:"env,omitempty"`
+	Command          []string                            `json:"command,omitempty"`
+	Args             []string                            `json:"args,omitempty"`
 }
 
 // OrdererRouterSpecApplyConfiguration constructs a declarative configuration of the OrdererRouterSpec type for use with
@@ -42,11 +46,11 @@ func OrdererRouterSpec() *OrdererRouterSpecApplyConfiguration {
 	return &OrdererRouterSpecApplyConfiguration{}
 }
 
-// WithDeploymentMode sets the DeploymentMode field in the declarative configuration to the given value
+// WithBootstrapMode sets the BootstrapMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the DeploymentMode field is set to the value of the last call.
-func (b *OrdererRouterSpecApplyConfiguration) WithDeploymentMode(value string) *OrdererRouterSpecApplyConfiguration {
-	b.DeploymentMode = &value
+// If called multiple times, the BootstrapMode field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithBootstrapMode(value string) *OrdererRouterSpecApplyConfiguration {
+	b.BootstrapMode = &value
 	return b
 }
 
@@ -63,6 +67,30 @@ func (b *OrdererRouterSpecApplyConfiguration) WithMSPID(value string) *OrdererRo
 // If called multiple times, the PartyID field is set to the value of the last call.
 func (b *OrdererRouterSpecApplyConfiguration) WithPartyID(value int32) *OrdererRouterSpecApplyConfiguration {
 	b.PartyID = &value
+	return b
+}
+
+// WithImage sets the Image field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Image field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithImage(value string) *OrdererRouterSpecApplyConfiguration {
+	b.Image = &value
+	return b
+}
+
+// WithImageTag sets the ImageTag field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ImageTag field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithImageTag(value string) *OrdererRouterSpecApplyConfiguration {
+	b.ImageTag = &value
+	return b
+}
+
+// WithGenesis sets the Genesis field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Genesis field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithGenesis(value *GenesisConfigApplyConfiguration) *OrdererRouterSpecApplyConfiguration {
+	b.Genesis = value
 	return b
 }
 
@@ -194,11 +222,19 @@ func (b *OrdererRouterSpecApplyConfiguration) WithIngress(value *IngressConfigAp
 	return b
 }
 
-// WithCertificates sets the Certificates field in the declarative configuration to the given value
+// WithEnrollment sets the Enrollment field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Certificates field is set to the value of the last call.
-func (b *OrdererRouterSpecApplyConfiguration) WithCertificates(value *CertificateConfigApplyConfiguration) *OrdererRouterSpecApplyConfiguration {
-	b.Certificates = value
+// If called multiple times, the Enrollment field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithEnrollment(value *EnrollmentConfigApplyConfiguration) *OrdererRouterSpecApplyConfiguration {
+	b.Enrollment = value
+	return b
+}
+
+// WithSANS sets the SANS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *OrdererRouterSpecApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *OrdererRouterSpecApplyConfiguration {
+	b.SANS = value
 	return b
 }
 
@@ -215,12 +251,9 @@ func (b *OrdererRouterSpecApplyConfiguration) WithEndpoints(values ...string) *O
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
-func (b *OrdererRouterSpecApplyConfiguration) WithEnv(values ...*EnvVarApplyConfiguration) *OrdererRouterSpecApplyConfiguration {
+func (b *OrdererRouterSpecApplyConfiguration) WithEnv(values ...v1.EnvVar) *OrdererRouterSpecApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithEnv")
-		}
-		b.Env = append(b.Env, *values[i])
+		b.Env = append(b.Env, values[i])
 	}
 	return b
 }

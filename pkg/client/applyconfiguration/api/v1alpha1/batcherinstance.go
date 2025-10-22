@@ -15,13 +15,14 @@ import (
 // with apply.
 type BatcherInstanceApplyConfiguration struct {
 	CommonComponentConfigApplyConfiguration `json:",inline"`
-	ShardID                                 *int32                               `json:"shardID,omitempty"`
-	Ingress                                 *IngressConfigApplyConfiguration     `json:"ingress,omitempty"`
-	Certificates                            *CertificateConfigApplyConfiguration `json:"certificates,omitempty"`
-	Endpoints                               []string                             `json:"endpoints,omitempty"`
-	Env                                     []EnvVarApplyConfiguration           `json:"env,omitempty"`
-	Command                                 []string                             `json:"command,omitempty"`
-	Args                                    []string                             `json:"args,omitempty"`
+	ShardID                                 *int32                              `json:"shardID,omitempty"`
+	Ingress                                 *IngressConfigApplyConfiguration    `json:"ingress,omitempty"`
+	Enrollment                              *EnrollmentConfigApplyConfiguration `json:"enrollment,omitempty"`
+	SANS                                    *SANSConfigApplyConfiguration       `json:"sans,omitempty"`
+	Endpoints                               []string                            `json:"endpoints,omitempty"`
+	Env                                     []v1.EnvVar                         `json:"env,omitempty"`
+	Command                                 []string                            `json:"command,omitempty"`
+	Args                                    []string                            `json:"args,omitempty"`
 }
 
 // BatcherInstanceApplyConfiguration constructs a declarative configuration of the BatcherInstance type for use with
@@ -166,11 +167,19 @@ func (b *BatcherInstanceApplyConfiguration) WithIngress(value *IngressConfigAppl
 	return b
 }
 
-// WithCertificates sets the Certificates field in the declarative configuration to the given value
+// WithEnrollment sets the Enrollment field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Certificates field is set to the value of the last call.
-func (b *BatcherInstanceApplyConfiguration) WithCertificates(value *CertificateConfigApplyConfiguration) *BatcherInstanceApplyConfiguration {
-	b.Certificates = value
+// If called multiple times, the Enrollment field is set to the value of the last call.
+func (b *BatcherInstanceApplyConfiguration) WithEnrollment(value *EnrollmentConfigApplyConfiguration) *BatcherInstanceApplyConfiguration {
+	b.Enrollment = value
+	return b
+}
+
+// WithSANS sets the SANS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *BatcherInstanceApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *BatcherInstanceApplyConfiguration {
+	b.SANS = value
 	return b
 }
 
@@ -187,12 +196,9 @@ func (b *BatcherInstanceApplyConfiguration) WithEndpoints(values ...string) *Bat
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
-func (b *BatcherInstanceApplyConfiguration) WithEnv(values ...*EnvVarApplyConfiguration) *BatcherInstanceApplyConfiguration {
+func (b *BatcherInstanceApplyConfiguration) WithEnv(values ...v1.EnvVar) *BatcherInstanceApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithEnv")
-		}
-		b.Env = append(b.Env, *values[i])
+		b.Env = append(b.Env, values[i])
 	}
 	return b
 }

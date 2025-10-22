@@ -51,25 +51,25 @@ func NewFilteredCommitterInformer(client versioned.Interface, namespace string, 
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().Committers(namespace).List(context.Background(), options)
+				return client.FabricxV1alpha1().Committers(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().Committers(namespace).Watch(context.Background(), options)
+				return client.FabricxV1alpha1().Committers(namespace).Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().Committers(namespace).List(ctx, options)
+				return client.FabricxV1alpha1().Committers(namespace).List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ApiV1alpha1().Committers(namespace).Watch(ctx, options)
+				return client.FabricxV1alpha1().Committers(namespace).Watch(ctx, options)
 			},
 		},
 		&fabricxoperatorapiv1alpha1.Committer{},

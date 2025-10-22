@@ -10,10 +10,16 @@ package v1alpha1
 // CommitterComponentsApplyConfiguration represents a declarative configuration of the CommitterComponents type for use
 // with apply.
 type CommitterComponentsApplyConfiguration struct {
-	Sidecar         *ComponentConfigApplyConfiguration `json:"sidecar,omitempty"`
-	Coordinator     *ComponentConfigApplyConfiguration `json:"coordinator,omitempty"`
-	VerifierService *ComponentConfigApplyConfiguration `json:"verifierService,omitempty"`
-	Validator       *ComponentConfigApplyConfiguration `json:"validator,omitempty"`
+	Sidecar                                *ComponentConfigApplyConfiguration          `json:"sidecar,omitempty"`
+	Coordinator                            *ComponentConfigApplyConfiguration          `json:"coordinator,omitempty"`
+	VerifierService                        *ComponentConfigApplyConfiguration          `json:"verifierService,omitempty"`
+	Validator                              *ValidatorComponentConfigApplyConfiguration `json:"validator,omitempty"`
+	QueryService                           *ComponentConfigApplyConfiguration          `json:"queryService,omitempty"`
+	OrdererEndpoints                       []string                                    `json:"ordererEndpoints,omitempty"`
+	CommitterHost                          *string                                     `json:"committerHost,omitempty"`
+	CommitterPort                          *int32                                      `json:"committerPort,omitempty"`
+	CoordinatorVerifierEndpoints           []string                                    `json:"coordinatorVerifierEndpoints,omitempty"`
+	CoordinatorValidatorCommitterEndpoints []string                                    `json:"coordinatorValidatorCommitterEndpoints,omitempty"`
 }
 
 // CommitterComponentsApplyConfiguration constructs a declarative configuration of the CommitterComponents type for use with
@@ -49,7 +55,61 @@ func (b *CommitterComponentsApplyConfiguration) WithVerifierService(value *Compo
 // WithValidator sets the Validator field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Validator field is set to the value of the last call.
-func (b *CommitterComponentsApplyConfiguration) WithValidator(value *ComponentConfigApplyConfiguration) *CommitterComponentsApplyConfiguration {
+func (b *CommitterComponentsApplyConfiguration) WithValidator(value *ValidatorComponentConfigApplyConfiguration) *CommitterComponentsApplyConfiguration {
 	b.Validator = value
+	return b
+}
+
+// WithQueryService sets the QueryService field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the QueryService field is set to the value of the last call.
+func (b *CommitterComponentsApplyConfiguration) WithQueryService(value *ComponentConfigApplyConfiguration) *CommitterComponentsApplyConfiguration {
+	b.QueryService = value
+	return b
+}
+
+// WithOrdererEndpoints adds the given value to the OrdererEndpoints field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the OrdererEndpoints field.
+func (b *CommitterComponentsApplyConfiguration) WithOrdererEndpoints(values ...string) *CommitterComponentsApplyConfiguration {
+	for i := range values {
+		b.OrdererEndpoints = append(b.OrdererEndpoints, values[i])
+	}
+	return b
+}
+
+// WithCommitterHost sets the CommitterHost field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the CommitterHost field is set to the value of the last call.
+func (b *CommitterComponentsApplyConfiguration) WithCommitterHost(value string) *CommitterComponentsApplyConfiguration {
+	b.CommitterHost = &value
+	return b
+}
+
+// WithCommitterPort sets the CommitterPort field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the CommitterPort field is set to the value of the last call.
+func (b *CommitterComponentsApplyConfiguration) WithCommitterPort(value int32) *CommitterComponentsApplyConfiguration {
+	b.CommitterPort = &value
+	return b
+}
+
+// WithCoordinatorVerifierEndpoints adds the given value to the CoordinatorVerifierEndpoints field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the CoordinatorVerifierEndpoints field.
+func (b *CommitterComponentsApplyConfiguration) WithCoordinatorVerifierEndpoints(values ...string) *CommitterComponentsApplyConfiguration {
+	for i := range values {
+		b.CoordinatorVerifierEndpoints = append(b.CoordinatorVerifierEndpoints, values[i])
+	}
+	return b
+}
+
+// WithCoordinatorValidatorCommitterEndpoints adds the given value to the CoordinatorValidatorCommitterEndpoints field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the CoordinatorValidatorCommitterEndpoints field.
+func (b *CommitterComponentsApplyConfiguration) WithCoordinatorValidatorCommitterEndpoints(values ...string) *CommitterComponentsApplyConfiguration {
+	for i := range values {
+		b.CoordinatorValidatorCommitterEndpoints = append(b.CoordinatorValidatorCommitterEndpoints, values[i])
+	}
 	return b
 }

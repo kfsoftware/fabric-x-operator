@@ -29,7 +29,7 @@ func OrdererAssembler(name, namespace string) *OrdererAssemblerApplyConfiguratio
 	b.WithName(name)
 	b.WithNamespace(namespace)
 	b.WithKind("OrdererAssembler")
-	b.WithAPIVersion("api/v1alpha1")
+	b.WithAPIVersion("fabricx.kfsoft.tech/v1alpha1")
 	return b
 }
 

@@ -14,26 +14,34 @@ import (
 // OrdererConsenterSpecApplyConfiguration represents a declarative configuration of the OrdererConsenterSpec type for use
 // with apply.
 type OrdererConsenterSpecApplyConfiguration struct {
-	DeploymentMode   *string                              `json:"deploymentMode,omitempty"`
-	MSPID            *string                              `json:"mspid,omitempty"`
-	PartyID          *int32                               `json:"partyID,omitempty"`
-	Replicas         *int32                               `json:"replicas,omitempty"`
-	Storage          *StorageConfigApplyConfiguration     `json:"storage,omitempty"`
-	Resources        *v1.ResourceRequirements             `json:"resources,omitempty"`
-	SecurityContext  *SecurityContextApplyConfiguration   `json:"securityContext,omitempty"`
-	PodAnnotations   map[string]string                    `json:"podAnnotations,omitempty"`
-	PodLabels        map[string]string                    `json:"podLabels,omitempty"`
-	Volumes          []VolumeApplyConfiguration           `json:"volumes,omitempty"`
-	Affinity         *AffinityApplyConfiguration          `json:"affinity,omitempty"`
-	VolumeMounts     []VolumeMountApplyConfiguration      `json:"volumeMounts,omitempty"`
-	ImagePullSecrets []ImagePullSecretApplyConfiguration  `json:"imagePullSecrets,omitempty"`
-	Tolerations      []TolerationApplyConfiguration       `json:"tolerations,omitempty"`
-	Ingress          *IngressConfigApplyConfiguration     `json:"ingress,omitempty"`
-	Certificates     *CertificateConfigApplyConfiguration `json:"certificates,omitempty"`
-	Endpoints        []string                             `json:"endpoints,omitempty"`
-	Env              []EnvVarApplyConfiguration           `json:"env,omitempty"`
-	Command          []string                             `json:"command,omitempty"`
-	Args             []string                             `json:"args,omitempty"`
+	BootstrapMode    *string                             `json:"bootstrapMode,omitempty"`
+	MSPID            *string                             `json:"mspid,omitempty"`
+	PartyID          *int32                              `json:"partyID,omitempty"`
+	ConsenterID      *int32                              `json:"consenterID,omitempty"`
+	Image            *string                             `json:"image,omitempty"`
+	ImageTag         *string                             `json:"imageTag,omitempty"`
+	Genesis          *GenesisConfigApplyConfiguration    `json:"genesis,omitempty"`
+	Replicas         *int32                              `json:"replicas,omitempty"`
+	Storage          *StorageConfigApplyConfiguration    `json:"storage,omitempty"`
+	StorageClassName *string                             `json:"storageClassName,omitempty"`
+	PVCAccessModes   []string                            `json:"pvcAccessModes,omitempty"`
+	PVCStorageSize   *string                             `json:"pvcStorageSize,omitempty"`
+	Resources        *v1.ResourceRequirements            `json:"resources,omitempty"`
+	SecurityContext  *SecurityContextApplyConfiguration  `json:"securityContext,omitempty"`
+	PodAnnotations   map[string]string                   `json:"podAnnotations,omitempty"`
+	PodLabels        map[string]string                   `json:"podLabels,omitempty"`
+	Volumes          []VolumeApplyConfiguration          `json:"volumes,omitempty"`
+	Affinity         *AffinityApplyConfiguration         `json:"affinity,omitempty"`
+	VolumeMounts     []VolumeMountApplyConfiguration     `json:"volumeMounts,omitempty"`
+	ImagePullSecrets []ImagePullSecretApplyConfiguration `json:"imagePullSecrets,omitempty"`
+	Tolerations      []TolerationApplyConfiguration      `json:"tolerations,omitempty"`
+	Ingress          *IngressConfigApplyConfiguration    `json:"ingress,omitempty"`
+	Enrollment       *EnrollmentConfigApplyConfiguration `json:"enrollment,omitempty"`
+	SANS             *SANSConfigApplyConfiguration       `json:"sans,omitempty"`
+	Endpoints        []string                            `json:"endpoints,omitempty"`
+	Env              []v1.EnvVar                         `json:"env,omitempty"`
+	Command          []string                            `json:"command,omitempty"`
+	Args             []string                            `json:"args,omitempty"`
 }
 
 // OrdererConsenterSpecApplyConfiguration constructs a declarative configuration of the OrdererConsenterSpec type for use with
@@ -42,11 +50,11 @@ func OrdererConsenterSpec() *OrdererConsenterSpecApplyConfiguration {
 	return &OrdererConsenterSpecApplyConfiguration{}
 }
 
-// WithDeploymentMode sets the DeploymentMode field in the declarative configuration to the given value
+// WithBootstrapMode sets the BootstrapMode field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the DeploymentMode field is set to the value of the last call.
-func (b *OrdererConsenterSpecApplyConfiguration) WithDeploymentMode(value string) *OrdererConsenterSpecApplyConfiguration {
-	b.DeploymentMode = &value
+// If called multiple times, the BootstrapMode field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithBootstrapMode(value string) *OrdererConsenterSpecApplyConfiguration {
+	b.BootstrapMode = &value
 	return b
 }
 
@@ -66,6 +74,38 @@ func (b *OrdererConsenterSpecApplyConfiguration) WithPartyID(value int32) *Order
 	return b
 }
 
+// WithConsenterID sets the ConsenterID field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ConsenterID field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithConsenterID(value int32) *OrdererConsenterSpecApplyConfiguration {
+	b.ConsenterID = &value
+	return b
+}
+
+// WithImage sets the Image field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Image field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithImage(value string) *OrdererConsenterSpecApplyConfiguration {
+	b.Image = &value
+	return b
+}
+
+// WithImageTag sets the ImageTag field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the ImageTag field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithImageTag(value string) *OrdererConsenterSpecApplyConfiguration {
+	b.ImageTag = &value
+	return b
+}
+
+// WithGenesis sets the Genesis field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Genesis field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithGenesis(value *GenesisConfigApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
+	b.Genesis = value
+	return b
+}
+
 // WithReplicas sets the Replicas field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Replicas field is set to the value of the last call.
@@ -79,6 +119,32 @@ func (b *OrdererConsenterSpecApplyConfiguration) WithReplicas(value int32) *Orde
 // If called multiple times, the Storage field is set to the value of the last call.
 func (b *OrdererConsenterSpecApplyConfiguration) WithStorage(value *StorageConfigApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
 	b.Storage = value
+	return b
+}
+
+// WithStorageClassName sets the StorageClassName field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the StorageClassName field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithStorageClassName(value string) *OrdererConsenterSpecApplyConfiguration {
+	b.StorageClassName = &value
+	return b
+}
+
+// WithPVCAccessModes adds the given value to the PVCAccessModes field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the PVCAccessModes field.
+func (b *OrdererConsenterSpecApplyConfiguration) WithPVCAccessModes(values ...string) *OrdererConsenterSpecApplyConfiguration {
+	for i := range values {
+		b.PVCAccessModes = append(b.PVCAccessModes, values[i])
+	}
+	return b
+}
+
+// WithPVCStorageSize sets the PVCStorageSize field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PVCStorageSize field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithPVCStorageSize(value string) *OrdererConsenterSpecApplyConfiguration {
+	b.PVCStorageSize = &value
 	return b
 }
 
@@ -194,11 +260,19 @@ func (b *OrdererConsenterSpecApplyConfiguration) WithIngress(value *IngressConfi
 	return b
 }
 
-// WithCertificates sets the Certificates field in the declarative configuration to the given value
+// WithEnrollment sets the Enrollment field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Certificates field is set to the value of the last call.
-func (b *OrdererConsenterSpecApplyConfiguration) WithCertificates(value *CertificateConfigApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
-	b.Certificates = value
+// If called multiple times, the Enrollment field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithEnrollment(value *EnrollmentConfigApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
+	b.Enrollment = value
+	return b
+}
+
+// WithSANS sets the SANS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *OrdererConsenterSpecApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
+	b.SANS = value
 	return b
 }
 
@@ -215,12 +289,9 @@ func (b *OrdererConsenterSpecApplyConfiguration) WithEndpoints(values ...string)
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
-func (b *OrdererConsenterSpecApplyConfiguration) WithEnv(values ...*EnvVarApplyConfiguration) *OrdererConsenterSpecApplyConfiguration {
+func (b *OrdererConsenterSpecApplyConfiguration) WithEnv(values ...v1.EnvVar) *OrdererConsenterSpecApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithEnv")
-		}
-		b.Env = append(b.Env, *values[i])
+		b.Env = append(b.Env, values[i])
 	}
 	return b
 }

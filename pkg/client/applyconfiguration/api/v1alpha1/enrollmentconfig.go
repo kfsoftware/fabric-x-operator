@@ -10,8 +10,9 @@ package v1alpha1
 // EnrollmentConfigApplyConfiguration represents a declarative configuration of the EnrollmentConfig type for use
 // with apply.
 type EnrollmentConfigApplyConfiguration struct {
-	Sign *CertificateConfigApplyConfiguration `json:"sign,omitempty"`
-	TLS  *CertificateConfigApplyConfiguration `json:"tls,omitempty"`
+	Sign   *CertificateConfigApplyConfiguration      `json:"sign,omitempty"`
+	TLS    *CertificateConfigApplyConfiguration      `json:"tls,omitempty"`
+	Idemix *IdemixEnrollmentConfigApplyConfiguration `json:"idemix,omitempty"`
 }
 
 // EnrollmentConfigApplyConfiguration constructs a declarative configuration of the EnrollmentConfig type for use with
@@ -33,5 +34,13 @@ func (b *EnrollmentConfigApplyConfiguration) WithSign(value *CertificateConfigAp
 // If called multiple times, the TLS field is set to the value of the last call.
 func (b *EnrollmentConfigApplyConfiguration) WithTLS(value *CertificateConfigApplyConfiguration) *EnrollmentConfigApplyConfiguration {
 	b.TLS = value
+	return b
+}
+
+// WithIdemix sets the Idemix field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Idemix field is set to the value of the last call.
+func (b *EnrollmentConfigApplyConfiguration) WithIdemix(value *IdemixEnrollmentConfigApplyConfiguration) *EnrollmentConfigApplyConfiguration {
+	b.Idemix = value
 	return b
 }

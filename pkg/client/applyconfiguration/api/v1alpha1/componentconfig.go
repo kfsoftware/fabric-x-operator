@@ -15,12 +15,14 @@ import (
 // with apply.
 type ComponentConfigApplyConfiguration struct {
 	CommonComponentConfigApplyConfiguration `json:",inline"`
-	Ingress                                 *IngressConfigApplyConfiguration     `json:"ingress,omitempty"`
-	Certificates                            *CertificateConfigApplyConfiguration `json:"certificates,omitempty"`
-	Endpoints                               []string                             `json:"endpoints,omitempty"`
-	Env                                     []EnvVarApplyConfiguration           `json:"env,omitempty"`
-	Command                                 []string                             `json:"command,omitempty"`
-	Args                                    []string                             `json:"args,omitempty"`
+	Ingress                                 *IngressConfigApplyConfiguration    `json:"ingress,omitempty"`
+	Enrollment                              *EnrollmentConfigApplyConfiguration `json:"enrollment,omitempty"`
+	SANS                                    *SANSConfigApplyConfiguration       `json:"sans,omitempty"`
+	Endpoints                               []string                            `json:"endpoints,omitempty"`
+	Env                                     []v1.EnvVar                         `json:"env,omitempty"`
+	Command                                 []string                            `json:"command,omitempty"`
+	Args                                    []string                            `json:"args,omitempty"`
+	PostgreSQL                              *PostgreSQLConfigApplyConfiguration `json:"postgresql,omitempty"`
 }
 
 // ComponentConfigApplyConfiguration constructs a declarative configuration of the ComponentConfig type for use with
@@ -157,11 +159,19 @@ func (b *ComponentConfigApplyConfiguration) WithIngress(value *IngressConfigAppl
 	return b
 }
 
-// WithCertificates sets the Certificates field in the declarative configuration to the given value
+// WithEnrollment sets the Enrollment field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
-// If called multiple times, the Certificates field is set to the value of the last call.
-func (b *ComponentConfigApplyConfiguration) WithCertificates(value *CertificateConfigApplyConfiguration) *ComponentConfigApplyConfiguration {
-	b.Certificates = value
+// If called multiple times, the Enrollment field is set to the value of the last call.
+func (b *ComponentConfigApplyConfiguration) WithEnrollment(value *EnrollmentConfigApplyConfiguration) *ComponentConfigApplyConfiguration {
+	b.Enrollment = value
+	return b
+}
+
+// WithSANS sets the SANS field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the SANS field is set to the value of the last call.
+func (b *ComponentConfigApplyConfiguration) WithSANS(value *SANSConfigApplyConfiguration) *ComponentConfigApplyConfiguration {
+	b.SANS = value
 	return b
 }
 
@@ -178,12 +188,9 @@ func (b *ComponentConfigApplyConfiguration) WithEndpoints(values ...string) *Com
 // WithEnv adds the given value to the Env field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Env field.
-func (b *ComponentConfigApplyConfiguration) WithEnv(values ...*EnvVarApplyConfiguration) *ComponentConfigApplyConfiguration {
+func (b *ComponentConfigApplyConfiguration) WithEnv(values ...v1.EnvVar) *ComponentConfigApplyConfiguration {
 	for i := range values {
-		if values[i] == nil {
-			panic("nil value passed to WithEnv")
-		}
-		b.Env = append(b.Env, *values[i])
+		b.Env = append(b.Env, values[i])
 	}
 	return b
 }
@@ -205,5 +212,13 @@ func (b *ComponentConfigApplyConfiguration) WithArgs(values ...string) *Componen
 	for i := range values {
 		b.Args = append(b.Args, values[i])
 	}
+	return b
+}
+
+// WithPostgreSQL sets the PostgreSQL field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the PostgreSQL field is set to the value of the last call.
+func (b *ComponentConfigApplyConfiguration) WithPostgreSQL(value *PostgreSQLConfigApplyConfiguration) *ComponentConfigApplyConfiguration {
+	b.PostgreSQL = value
 	return b
 }

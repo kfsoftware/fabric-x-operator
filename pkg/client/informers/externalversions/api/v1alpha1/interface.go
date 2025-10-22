@@ -15,12 +15,18 @@ import (
 type Interface interface {
 	// CAs returns a CAInformer.
 	CAs() CAInformer
+	// CAEnrollments returns a CAEnrollmentInformer.
+	CAEnrollments() CAEnrollmentInformer
+	// ChainNamespaces returns a ChainNamespaceInformer.
+	ChainNamespaces() ChainNamespaceInformer
 	// Committers returns a CommitterInformer.
 	Committers() CommitterInformer
 	// Endorsers returns a EndorserInformer.
 	Endorsers() EndorserInformer
 	// Genesises returns a GenesisInformer.
 	Genesises() GenesisInformer
+	// Identities returns a IdentityInformer.
+	Identities() IdentityInformer
 	// OrdererAssemblers returns a OrdererAssemblerInformer.
 	OrdererAssemblers() OrdererAssemblerInformer
 	// OrdererBatchers returns a OrdererBatcherInformer.
@@ -49,6 +55,16 @@ func (v *version) CAs() CAInformer {
 	return &cAInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// CAEnrollments returns a CAEnrollmentInformer.
+func (v *version) CAEnrollments() CAEnrollmentInformer {
+	return &cAEnrollmentInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ChainNamespaces returns a ChainNamespaceInformer.
+func (v *version) ChainNamespaces() ChainNamespaceInformer {
+	return &chainNamespaceInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // Committers returns a CommitterInformer.
 func (v *version) Committers() CommitterInformer {
 	return &committerInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
@@ -62,6 +78,11 @@ func (v *version) Endorsers() EndorserInformer {
 // Genesises returns a GenesisInformer.
 func (v *version) Genesises() GenesisInformer {
 	return &genesisInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Identities returns a IdentityInformer.
+func (v *version) Identities() IdentityInformer {
+	return &identityInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // OrdererAssemblers returns a OrdererAssemblerInformer.

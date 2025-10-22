@@ -17,10 +17,10 @@ import (
 // fakeOrdererGroups implements OrdererGroupInterface
 type fakeOrdererGroups struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.OrdererGroup, *v1alpha1.OrdererGroupList, *apiv1alpha1.OrdererGroupApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeOrdererGroups(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.OrdererGroupInterface {
+func newFakeOrdererGroups(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.OrdererGroupInterface {
 	return &fakeOrdererGroups{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.OrdererGroup, *v1alpha1.OrdererGroupList, *apiv1alpha1.OrdererGroupApplyConfiguration](
 			fake.Fake,

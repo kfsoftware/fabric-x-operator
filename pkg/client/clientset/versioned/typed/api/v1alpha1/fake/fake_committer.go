@@ -17,10 +17,10 @@ import (
 // fakeCommitters implements CommitterInterface
 type fakeCommitters struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.Committer, *v1alpha1.CommitterList, *apiv1alpha1.CommitterApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeCommitters(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.CommitterInterface {
+func newFakeCommitters(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.CommitterInterface {
 	return &fakeCommitters{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.Committer, *v1alpha1.CommitterList, *apiv1alpha1.CommitterApplyConfiguration](
 			fake.Fake,

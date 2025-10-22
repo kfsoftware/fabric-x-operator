@@ -17,10 +17,10 @@ import (
 // fakeEndorsers implements EndorserInterface
 type fakeEndorsers struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.Endorser, *v1alpha1.EndorserList, *apiv1alpha1.EndorserApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeEndorsers(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.EndorserInterface {
+func newFakeEndorsers(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.EndorserInterface {
 	return &fakeEndorsers{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.Endorser, *v1alpha1.EndorserList, *apiv1alpha1.EndorserApplyConfiguration](
 			fake.Fake,

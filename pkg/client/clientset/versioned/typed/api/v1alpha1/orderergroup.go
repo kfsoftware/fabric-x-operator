@@ -49,7 +49,7 @@ type ordererGroups struct {
 }
 
 // newOrdererGroups returns a OrdererGroups
-func newOrdererGroups(c *ApiV1alpha1Client, namespace string) *ordererGroups {
+func newOrdererGroups(c *FabricxV1alpha1Client, namespace string) *ordererGroups {
 	return &ordererGroups{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.OrdererGroup, *apiv1alpha1.OrdererGroupList, *applyconfigurationapiv1alpha1.OrdererGroupApplyConfiguration](
 			"orderergroups",

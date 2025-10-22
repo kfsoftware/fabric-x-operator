@@ -15,6 +15,10 @@ type OrdererOrganizationApplyConfiguration struct {
 	SignCACertRef *SecretKeyNSSelectorApplyConfiguration `json:"signCaCertRef,omitempty"`
 	TLSCACertRef  *SecretKeyNSSelectorApplyConfiguration `json:"tlsCaCertRef,omitempty"`
 	AdminCertRef  *SecretKeyNSSelectorApplyConfiguration `json:"adminCertRef,omitempty"`
+	Router        *RouterConfigApplyConfiguration        `json:"router,omitempty"`
+	Batchers      []BatcherConfigApplyConfiguration      `json:"batchers,omitempty"`
+	Consenter     *ConsenterConfigApplyConfiguration     `json:"consenter,omitempty"`
+	Assembler     *AssemblerConfigApplyConfiguration     `json:"assembler,omitempty"`
 }
 
 // OrdererOrganizationApplyConfiguration constructs a declarative configuration of the OrdererOrganization type for use with
@@ -60,5 +64,42 @@ func (b *OrdererOrganizationApplyConfiguration) WithTLSCACertRef(value *SecretKe
 // If called multiple times, the AdminCertRef field is set to the value of the last call.
 func (b *OrdererOrganizationApplyConfiguration) WithAdminCertRef(value *SecretKeyNSSelectorApplyConfiguration) *OrdererOrganizationApplyConfiguration {
 	b.AdminCertRef = value
+	return b
+}
+
+// WithRouter sets the Router field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Router field is set to the value of the last call.
+func (b *OrdererOrganizationApplyConfiguration) WithRouter(value *RouterConfigApplyConfiguration) *OrdererOrganizationApplyConfiguration {
+	b.Router = value
+	return b
+}
+
+// WithBatchers adds the given value to the Batchers field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the Batchers field.
+func (b *OrdererOrganizationApplyConfiguration) WithBatchers(values ...*BatcherConfigApplyConfiguration) *OrdererOrganizationApplyConfiguration {
+	for i := range values {
+		if values[i] == nil {
+			panic("nil value passed to WithBatchers")
+		}
+		b.Batchers = append(b.Batchers, *values[i])
+	}
+	return b
+}
+
+// WithConsenter sets the Consenter field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Consenter field is set to the value of the last call.
+func (b *OrdererOrganizationApplyConfiguration) WithConsenter(value *ConsenterConfigApplyConfiguration) *OrdererOrganizationApplyConfiguration {
+	b.Consenter = value
+	return b
+}
+
+// WithAssembler sets the Assembler field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Assembler field is set to the value of the last call.
+func (b *OrdererOrganizationApplyConfiguration) WithAssembler(value *AssemblerConfigApplyConfiguration) *OrdererOrganizationApplyConfiguration {
+	b.Assembler = value
 	return b
 }

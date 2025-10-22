@@ -4,5 +4,5 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
 - name: controller
-  newName: local/fabric-x-operator
-  newTag: "20251021183421"
+  newName: kfsoftware/fabric-x-operator
+  newTag: "20251021180900"

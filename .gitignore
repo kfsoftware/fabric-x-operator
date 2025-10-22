@@ -32,3 +32,11 @@ fabric-ca-client
 msp
 
 istio-*
+# Act (GitHub Actions local testing)
+.secrets
+.env
+.vars
+.input
+
+
+kubectl-fabricx 

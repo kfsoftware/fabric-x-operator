@@ -17,10 +17,10 @@ import (
 // fakeOrdererBatchers implements OrdererBatcherInterface
 type fakeOrdererBatchers struct {
 	*gentype.FakeClientWithListAndApply[*v1alpha1.OrdererBatcher, *v1alpha1.OrdererBatcherList, *apiv1alpha1.OrdererBatcherApplyConfiguration]
-	Fake *FakeApiV1alpha1
+	Fake *FakeFabricxV1alpha1
 }
 
-func newFakeOrdererBatchers(fake *FakeApiV1alpha1, namespace string) typedapiv1alpha1.OrdererBatcherInterface {
+func newFakeOrdererBatchers(fake *FakeFabricxV1alpha1, namespace string) typedapiv1alpha1.OrdererBatcherInterface {
 	return &fakeOrdererBatchers{
 		gentype.NewFakeClientWithListAndApply[*v1alpha1.OrdererBatcher, *v1alpha1.OrdererBatcherList, *apiv1alpha1.OrdererBatcherApplyConfiguration](
 			fake.Fake,

@@ -10,8 +10,8 @@ package fake
 import (
 	applyconfiguration "github.com/kfsoftware/fabric-x-operator/pkg/client/applyconfiguration"
 	clientset "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned"
-	apiv1alpha1 "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/typed/api/v1alpha1"
-	fakeapiv1alpha1 "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/typed/api/v1alpha1/fake"
+	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/typed/api/v1alpha1"
+	fakefabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/pkg/client/clientset/versioned/typed/api/v1alpha1/fake"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -114,7 +114,7 @@ var (
 	_ testing.FakeClient  = &Clientset{}
 )
 
-// ApiV1alpha1 retrieves the ApiV1alpha1Client
-func (c *Clientset) ApiV1alpha1() apiv1alpha1.ApiV1alpha1Interface {
-	return &fakeapiv1alpha1.FakeApiV1alpha1{Fake: &c.Fake}
+// FabricxV1alpha1 retrieves the FabricxV1alpha1Client
+func (c *Clientset) FabricxV1alpha1() fabricxv1alpha1.FabricxV1alpha1Interface {
+	return &fakefabricxv1alpha1.FakeFabricxV1alpha1{Fake: &c.Fake}
 }

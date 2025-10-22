@@ -49,7 +49,7 @@ type ordererRouters struct {
 }
 
 // newOrdererRouters returns a OrdererRouters
-func newOrdererRouters(c *ApiV1alpha1Client, namespace string) *ordererRouters {
+func newOrdererRouters(c *FabricxV1alpha1Client, namespace string) *ordererRouters {
 	return &ordererRouters{
 		gentype.NewClientWithListAndApply[*apiv1alpha1.OrdererRouter, *apiv1alpha1.OrdererRouterList, *applyconfigurationapiv1alpha1.OrdererRouterApplyConfiguration](
 			"ordererrouters",
