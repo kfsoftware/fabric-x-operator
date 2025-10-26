@@ -1046,8 +1046,9 @@ spec:
               ingress:
                 description: Component-specific ingress configuration
                 properties:
-                  istio:
-                    description: Istio-specific configuration
+                  gateway:
+                    description: Gateway-specific configuration (optional - for Istio
+                      or other gateway implementations)
                     properties:
                       hosts:
                         description: Hosts for this component

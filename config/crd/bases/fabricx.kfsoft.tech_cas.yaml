@@ -1353,8 +1353,9 @@ spec:
                   enabled:
                     description: Enabled flag to enable/disable ingress
                     type: boolean
-                  istio:
-                    description: Istio-specific configuration
+                  gateway:
+                    description: Gateway-specific configuration (optional - for Istio
+                      or other gateway implementations)
                     properties:
                       hosts:
                         description: Hosts for this CA

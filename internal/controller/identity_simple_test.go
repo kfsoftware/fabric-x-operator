@@ -63,10 +63,9 @@ func TestIdentityReconciler_ValidateSpec(t *testing.T) {
 							Namespace: "default",
 							Key:       "password",
 						},
-						EnrollTLS: true,
 					},
 					Output: fabricxv1alpha1.IdentityOutput{
-						SecretPrefix: "org1-admin",
+						SecretName: "org1-admin",
 					},
 				},
 			},
@@ -79,7 +78,7 @@ func TestIdentityReconciler_ValidateSpec(t *testing.T) {
 					Type:  "admin",
 					MspID: "Org1MSP",
 					Output: fabricxv1alpha1.IdentityOutput{
-						SecretPrefix: "org1-admin",
+						SecretName: "org1-admin",
 					},
 				},
 			},
@@ -160,7 +159,7 @@ func TestIdentityReconciler_IdemixConfiguration(t *testing.T) {
 				},
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
-				SecretPrefix: "org1-user1",
+				SecretName: "org1-user1",
 			},
 		},
 	}
@@ -186,12 +185,9 @@ func TestIdentityReconciler_OutputSecretsExist(t *testing.T) {
 		},
 		Status: fabricxv1alpha1.IdentityStatus{
 			OutputSecrets: fabricxv1alpha1.IdentityOutputSecrets{
-				SignCert:   "test-sign-cert",
-				SignKey:    "test-sign-key",
-				SignCACert: "test-sign-cacert",
-				TLSCert:    "test-tls-cert",
-				TLSKey:     "test-tls-key",
-				TLSCACert:  "test-tls-cacert",
+				SignCert:   "test-cert",
+				SignKey:    "test-cert",
+				SignCACert: "test-cert",
 			},
 		},
 	}

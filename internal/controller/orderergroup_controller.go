@@ -219,11 +219,11 @@ func (r *OrdererGroupReconciler) reconcileAssemblerCRD(ctx context.Context, orde
 	assemblerName := fmt.Sprintf("%s-assembler", ordererGroup.Name)
 
 	// Check if the CRD already exists
-	existingAssembler, err := r.Clientset.ApiV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Get(ctx, assemblerName, metav1.GetOptions{})
+	existingAssembler, err := r.Clientset.FabricxV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Get(ctx, assemblerName, metav1.GetOptions{})
 	if err == nil {
 		// Update existing CRD
 		existingAssembler.Spec = r.buildAssemblerSpec(ordererGroup, ordererGroup.Spec.Components.Assembler)
-		_, err = r.Clientset.ApiV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Update(ctx, existingAssembler, metav1.UpdateOptions{})
+		_, err = r.Clientset.FabricxV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Update(ctx, existingAssembler, metav1.UpdateOptions{})
 		return err
 	}
 
@@ -245,7 +245,7 @@ func (r *OrdererGroupReconciler) reconcileAssemblerCRD(ctx context.Context, orde
 		Spec: r.buildAssemblerSpec(ordererGroup, ordererGroup.Spec.Components.Assembler),
 	}
 
-	_, err = r.Clientset.ApiV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Create(ctx, assembler, metav1.CreateOptions{})
+	_, err = r.Clientset.FabricxV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Create(ctx, assembler, metav1.CreateOptions{})
 	return err
 }
 
@@ -254,11 +254,11 @@ func (r *OrdererGroupReconciler) reconcileRouterCRD(ctx context.Context, orderer
 	routerName := fmt.Sprintf("%s-router", ordererGroup.Name)
 
 	// Check if the CRD already exists
-	existingRouter, err := r.Clientset.ApiV1alpha1().OrdererRouters(ordererGroup.Namespace).Get(ctx, routerName, metav1.GetOptions{})
+	existingRouter, err := r.Clientset.FabricxV1alpha1().OrdererRouters(ordererGroup.Namespace).Get(ctx, routerName, metav1.GetOptions{})
 	if err == nil {
 		// Update existing CRD
 		existingRouter.Spec = r.buildRouterSpec(ordererGroup, ordererGroup.Spec.Components.Router)
-		_, err = r.Clientset.ApiV1alpha1().OrdererRouters(ordererGroup.Namespace).Update(ctx, existingRouter, metav1.UpdateOptions{})
+		_, err = r.Clientset.FabricxV1alpha1().OrdererRouters(ordererGroup.Namespace).Update(ctx, existingRouter, metav1.UpdateOptions{})
 		return err
 	}
 
@@ -280,7 +280,7 @@ func (r *OrdererGroupReconciler) reconcileRouterCRD(ctx context.Context, orderer
 		Spec: r.buildRouterSpec(ordererGroup, ordererGroup.Spec.Components.Router),
 	}
 
-	_, err = r.Clientset.ApiV1alpha1().OrdererRouters(ordererGroup.Namespace).Create(ctx, router, metav1.CreateOptions{})
+	_, err = r.Clientset.FabricxV1alpha1().OrdererRouters(ordererGroup.Namespace).Create(ctx, router, metav1.CreateOptions{})
 	return err
 }
 
@@ -290,11 +290,11 @@ func (r *OrdererGroupReconciler) reconcileBatcherCRDs(ctx context.Context, order
 		batcherName := fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, i)
 
 		// Check if the CRD already exists
-		existingBatcher, err := r.Clientset.ApiV1alpha1().OrdererBatchers(ordererGroup.Namespace).Get(ctx, batcherName, metav1.GetOptions{})
+		existingBatcher, err := r.Clientset.FabricxV1alpha1().OrdererBatchers(ordererGroup.Namespace).Get(ctx, batcherName, metav1.GetOptions{})
 		if err == nil {
 			// Update existing CRD
 			existingBatcher.Spec = r.buildBatcherSpec(ordererGroup, &batcherInstance)
-			_, err = r.Clientset.ApiV1alpha1().OrdererBatchers(ordererGroup.Namespace).Update(ctx, existingBatcher, metav1.UpdateOptions{})
+			_, err = r.Clientset.FabricxV1alpha1().OrdererBatchers(ordererGroup.Namespace).Update(ctx, existingBatcher, metav1.UpdateOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to update batcher CRD %s: %w", batcherName, err)
 			}
@@ -319,7 +319,7 @@ func (r *OrdererGroupReconciler) reconcileBatcherCRDs(ctx context.Context, order
 			Spec: r.buildBatcherSpec(ordererGroup, &batcherInstance),
 		}
 
-		_, err = r.Clientset.ApiV1alpha1().OrdererBatchers(ordererGroup.Namespace).Create(ctx, batcher, metav1.CreateOptions{})
+		_, err = r.Clientset.FabricxV1alpha1().OrdererBatchers(ordererGroup.Namespace).Create(ctx, batcher, metav1.CreateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to create batcher CRD %s: %w", batcherName, err)
 		}
@@ -338,11 +338,11 @@ func (r *OrdererGroupReconciler) reconcileConsenterCRDs(ctx context.Context, ord
 	consenterName := fmt.Sprintf("%s-consenter", ordererGroup.Name)
 
 	// Check if the CRD already exists
-	existingConsenter, err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Get(ctx, consenterName, metav1.GetOptions{})
+	existingConsenter, err := r.Clientset.FabricxV1alpha1().OrdererConsenters(ordererGroup.Namespace).Get(ctx, consenterName, metav1.GetOptions{})
 	if err == nil {
 		// Update existing CRD
 		existingConsenter.Spec = r.buildConsenterSpecFromInstance(ordererGroup, ordererGroup.Spec.Components.Consenter)
-		_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Update(ctx, existingConsenter, metav1.UpdateOptions{})
+		_, err = r.Clientset.FabricxV1alpha1().OrdererConsenters(ordererGroup.Namespace).Update(ctx, existingConsenter, metav1.UpdateOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to update consenter CRD %s: %w", consenterName, err)
 		}
@@ -367,7 +367,7 @@ func (r *OrdererGroupReconciler) reconcileConsenterCRDs(ctx context.Context, ord
 		Spec: r.buildConsenterSpecFromInstance(ordererGroup, ordererGroup.Spec.Components.Consenter),
 	}
 
-	_, err = r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Create(ctx, consenter, metav1.CreateOptions{})
+	_, err = r.Clientset.FabricxV1alpha1().OrdererConsenters(ordererGroup.Namespace).Create(ctx, consenter, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create consenter CRD %s: %w", consenterName, err)
 	}
@@ -854,7 +854,7 @@ func (r *OrdererGroupReconciler) cleanupChildCRDs(ctx context.Context, ordererGr
 // cleanupConsenterCRDs deletes the Consenter CRD
 func (r *OrdererGroupReconciler) cleanupConsenterCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	consenterName := fmt.Sprintf("%s-consenter", ordererGroup.Name)
-	if err := r.Clientset.ApiV1alpha1().OrdererConsenters(ordererGroup.Namespace).Delete(ctx, consenterName, metav1.DeleteOptions{}); err != nil {
+	if err := r.Clientset.FabricxV1alpha1().OrdererConsenters(ordererGroup.Namespace).Delete(ctx, consenterName, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("failed to delete consenter CRD %s: %w", consenterName, err)
 	}
 	return nil
@@ -863,20 +863,20 @@ func (r *OrdererGroupReconciler) cleanupConsenterCRDs(ctx context.Context, order
 // cleanupAssemblerCRD deletes the Assembler CRD
 func (r *OrdererGroupReconciler) cleanupAssemblerCRD(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	assemblerName := fmt.Sprintf("%s-assembler", ordererGroup.Name)
-	return r.Clientset.ApiV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Delete(ctx, assemblerName, metav1.DeleteOptions{})
+	return r.Clientset.FabricxV1alpha1().OrdererAssemblers(ordererGroup.Namespace).Delete(ctx, assemblerName, metav1.DeleteOptions{})
 }
 
 // cleanupRouterCRD deletes the Router CRD
 func (r *OrdererGroupReconciler) cleanupRouterCRD(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	routerName := fmt.Sprintf("%s-router", ordererGroup.Name)
-	return r.Clientset.ApiV1alpha1().OrdererRouters(ordererGroup.Namespace).Delete(ctx, routerName, metav1.DeleteOptions{})
+	return r.Clientset.FabricxV1alpha1().OrdererRouters(ordererGroup.Namespace).Delete(ctx, routerName, metav1.DeleteOptions{})
 }
 
 // cleanupBatcherCRDs deletes all Batcher CRDs
 func (r *OrdererGroupReconciler) cleanupBatcherCRDs(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup) error {
 	for i := range ordererGroup.Spec.Components.Batchers {
 		batcherName := fmt.Sprintf("%s-batcher-%d", ordererGroup.Name, i)
-		if err := r.Clientset.ApiV1alpha1().OrdererBatchers(ordererGroup.Namespace).Delete(ctx, batcherName, metav1.DeleteOptions{}); err != nil {
+		if err := r.Clientset.FabricxV1alpha1().OrdererBatchers(ordererGroup.Namespace).Delete(ctx, batcherName, metav1.DeleteOptions{}); err != nil {
 			return fmt.Errorf("failed to delete batcher CRD %s: %w", batcherName, err)
 		}
 	}
@@ -902,6 +902,18 @@ func (r *OrdererGroupReconciler) removeFinalizer(ctx context.Context, ordererGro
 func (r *OrdererGroupReconciler) updateOrdererGroupStatus(ctx context.Context, ordererGroup *fabricxv1alpha1.OrdererGroup, status fabricxv1alpha1.DeploymentStatus, message string) {
 	log := logf.FromContext(ctx)
 
+	// Check if status actually changed
+	statusChanged := ordererGroup.Status.Status != status || ordererGroup.Status.Message != message
+
+	if !statusChanged {
+		// Status hasn't changed, no need to update
+		log.V(1).Info("OrdererGroup status unchanged, skipping update",
+			"name", ordererGroup.Name,
+			"namespace", ordererGroup.Namespace,
+			"status", status)
+		return
+	}
+
 	log.Info("Updating OrdererGroup status",
 		"name", ordererGroup.Name,
 		"namespace", ordererGroup.Namespace,
@@ -912,13 +924,33 @@ func (r *OrdererGroupReconciler) updateOrdererGroupStatus(ctx context.Context, o
 	ordererGroup.Status.Status = status
 	ordererGroup.Status.Message = message
 
-	// Update the timestamp
+	// Find existing Ready condition
 	now := metav1.Now()
+	var lastTransitionTime metav1.Time
+
+	// Check if we have an existing Ready condition
+	for _, cond := range ordererGroup.Status.Conditions {
+		if cond.Type == "Ready" {
+			// Keep the same lastTransitionTime if the status hasn't actually transitioned
+			if cond.Status == metav1.ConditionTrue && status == fabricxv1alpha1.RunningStatus {
+				lastTransitionTime = cond.LastTransitionTime
+			} else {
+				lastTransitionTime = now
+			}
+			break
+		}
+	}
+
+	// If no existing condition found, use current time
+	if lastTransitionTime.IsZero() {
+		lastTransitionTime = now
+	}
+
 	ordererGroup.Status.Conditions = []metav1.Condition{
 		{
 			Type:               "Ready",
 			Status:             metav1.ConditionTrue,
-			LastTransitionTime: now,
+			LastTransitionTime: lastTransitionTime,
 			Reason:             "Reconciled",
 			Message:            message,
 		},

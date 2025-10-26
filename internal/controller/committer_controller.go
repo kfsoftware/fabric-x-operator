@@ -688,6 +688,11 @@ func (r *CommitterReconciler) cleanupChildCRDs(ctx context.Context, committer *f
 		return fmt.Errorf("failed to cleanup verifier CRD: %w", err)
 	}
 
+	// Clean up QueryService CRD
+	if err := r.cleanupQueryServiceCRD(ctx, committer); err != nil {
+		return fmt.Errorf("failed to cleanup query service CRD: %w", err)
+	}
+
 	log.Info("Child CRDs cleaned up successfully", "committer", committer.Name)
 	return nil
 }
@@ -742,6 +747,20 @@ func (r *CommitterReconciler) cleanupVerifierCRD(ctx context.Context, committer 
 	if err := r.Get(ctx, client.ObjectKey{Name: verifierName, Namespace: committer.Namespace}, verifier); err == nil {
 		if err := r.Delete(ctx, verifier); err != nil {
 			return fmt.Errorf("failed to delete verifier CRD: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// cleanupQueryServiceCRD cleans up the QueryService CRD
+func (r *CommitterReconciler) cleanupQueryServiceCRD(ctx context.Context, committer *fabricxv1alpha1.Committer) error {
+	queryServiceName := fmt.Sprintf("%s-query-service", committer.Name)
+	queryService := &fabricxv1alpha1.CommitterQueryService{}
+
+	if err := r.Get(ctx, client.ObjectKey{Name: queryServiceName, Namespace: committer.Namespace}, queryService); err == nil {
+		if err := r.Delete(ctx, queryService); err != nil {
+			return fmt.Errorf("failed to delete query service CRD: %w", err)
 		}
 	}
 

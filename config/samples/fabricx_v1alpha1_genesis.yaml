@@ -25,7 +25,7 @@ spec:
   # Using the admin identity's signing certificate which contains the public key
   metaNamespaceCA:
     key: cert.pem
-    name: org1-admin-sign-cert
+    name: org1-admin-cert
     namespace: default
   consenters:
     - clientTlsCertRef:
@@ -103,6 +103,25 @@ spec:
         key: certfile
         name: test-ca2-tlsca-crypto
         namespace: default
+      router:
+        host: orderergroup-party1-router-service.default.svc.cluster.local
+        port: 7150
+        partyID: 1
+        signCertRef:
+          key: cert.pem
+          name: orderergroup-party1-router-sign-cert
+          namespace: default
+        tlsCertRef:
+          key: cert.pem
+          name: orderergroup-party1-router-tls-cert
+          namespace: default
+      assembler:
+        host: orderergroup-party1-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCertRef:
+          key: cert.pem
+          name: orderergroup-party1-assembler-tls-cert
+          namespace: default
   parties:
     - partyID: 1
       caCerts:

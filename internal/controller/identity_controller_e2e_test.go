@@ -163,10 +163,9 @@ func testSignEnrollmentX509(t *testing.T, ctx context.Context, k8sClient client.
 					Key:       "password",
 					Namespace: namespace,
 				},
-				EnrollTLS: false, // Only sign certificate
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
-				SecretPrefix: "test-identity-sign",
+				SecretName: "test-identity-sign",
 				Namespace:    namespace,
 			},
 		},
@@ -236,10 +235,9 @@ func testSignAndTLSEnrollmentX509(t *testing.T, ctx context.Context, k8sClient c
 					Key:       "password",
 					Namespace: namespace,
 				},
-				EnrollTLS: true, // Enable TLS enrollment
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
-				SecretPrefix: "test-identity-dual",
+				SecretName: "test-identity-dual",
 				Namespace:    namespace,
 			},
 		},
@@ -309,10 +307,9 @@ func testSecretCleanupOnDeletion(t *testing.T, ctx context.Context, k8sClient cl
 					Key:       "password",
 					Namespace: namespace,
 				},
-				EnrollTLS: false,
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
-				SecretPrefix: "test-identity-cleanup",
+				SecretName: "test-identity-cleanup",
 				Namespace:    namespace,
 			},
 		},

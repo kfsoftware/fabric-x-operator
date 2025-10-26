@@ -395,7 +395,8 @@ func (r *CAReconciler) reconcileCA(ctx context.Context, ca *fabricxv1alpha1.CA) 
 		reconciliationErrors = append(reconciliationErrors, errorMsg)
 	}
 
-	// Reconcile idemix keys extraction Job (if idemix is enabled)
+	// Reconcile idemix keys secret (if idemix is enabled)
+	// TODO: Replace Job-based extraction with direct pod exec from controller using REST client
 	if ca.Spec.Idemix != nil && ca.Spec.Idemix.Curve != "" {
 		if err := r.reconcileIdemixKeysJob(ctx, ca); err != nil {
 			errorMsg := fmt.Sprintf("Idemix keys Job reconciliation failed: %v", err)
@@ -1926,11 +1927,11 @@ func (r *CAReconciler) isPVCResizeError(err error) bool {
 
 // getIngressTemplate returns an ingress template based on the CA spec
 func (r *CAReconciler) getIngressTemplate(ca *fabricxv1alpha1.CA) *networkingv1.Ingress {
-	if ca.Spec.Ingress == nil || !ca.Spec.Ingress.Enabled || ca.Spec.Ingress.Istio == nil {
+	if ca.Spec.Ingress == nil || !ca.Spec.Ingress.Enabled || ca.Spec.Ingress.Gateway == nil {
 		return nil
 	}
 
-	istio := ca.Spec.Ingress.Istio
+	gateway := ca.Spec.Ingress.Gateway
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ca.Name,
@@ -1942,7 +1943,7 @@ func (r *CAReconciler) getIngressTemplate(ca *fabricxv1alpha1.CA) *networkingv1.
 	}
 
 	// Add rules for each host
-	for _, host := range istio.Hosts {
+	for _, host := range gateway.Hosts {
 		rule := networkingv1.IngressRule{
 			Host: host,
 			IngressRuleValue: networkingv1.IngressRuleValue{
@@ -1968,11 +1969,11 @@ func (r *CAReconciler) getIngressTemplate(ca *fabricxv1alpha1.CA) *networkingv1.
 	}
 
 	// Add TLS configuration if enabled
-	if istio.TLS != nil && istio.TLS.Enabled {
+	if gateway.TLS != nil && gateway.TLS.Enabled {
 		ingress.Spec.TLS = []networkingv1.IngressTLS{
 			{
-				Hosts:      istio.Hosts,
-				SecretName: istio.TLS.SecretName,
+				Hosts:      gateway.Hosts,
+				SecretName: gateway.TLS.SecretName,
 			},
 		}
 	}
@@ -2134,6 +2135,7 @@ func (r *CAReconciler) reconcileIdemixServiceAccount(ctx context.Context, ca *fa
 }
 
 // reconcileIdemixKeysJob creates a Job to extract idemix issuer keys from the CA pod to a Kubernetes secret
+// TODO: This should be replaced with direct pod exec using REST client instead of a Job with kubectl
 func (r *CAReconciler) reconcileIdemixKeysJob(ctx context.Context, ca *fabricxv1alpha1.CA) error {
 	log := logf.FromContext(ctx)
 
@@ -2162,7 +2164,18 @@ func (r *CAReconciler) reconcileIdemixKeysJob(ctx context.Context, ca *fabricxv1
 	// Define secret name
 	secretName := fmt.Sprintf("%s-idemix-issuer-keys", ca.Name)
 
-	// Create the Job
+	// Check if secret already exists - if so, no need to create Job
+	existingSecret := &corev1.Secret{}
+	secretNamespacedName := types.NamespacedName{
+		Name:      secretName,
+		Namespace: ca.Namespace,
+	}
+	if err := r.Get(ctx, secretNamespacedName, existingSecret); err == nil {
+		log.Info("Idemix issuer keys secret already exists, skipping Job creation", "secret", secretName)
+		return nil
+	}
+
+	// Create the Job to extract keys
 	jobName := fmt.Sprintf("%s-extract-idemix-keys", ca.Name)
 	job := &batchv1.Job{}
 	jobNamespacedName := types.NamespacedName{
@@ -2170,12 +2183,15 @@ func (r *CAReconciler) reconcileIdemixKeysJob(ctx context.Context, ca *fabricxv1
 		Namespace: ca.Namespace,
 	}
 
-	// Check if job already completed
+	// Check if job already exists
 	if err := r.Get(ctx, jobNamespacedName, job); err == nil {
 		if job.Status.Succeeded > 0 {
 			log.Info("Idemix keys extraction Job already completed", "job", jobName)
 			return nil
 		}
+		// Job exists but hasn't completed yet
+		log.Info("Idemix keys extraction Job still running", "job", jobName)
+		return nil
 	}
 
 	// Create the Job template

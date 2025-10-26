@@ -25,8 +25,7 @@ spec:
       #   name: endorser-idemix-ca
       #   namespace: default
   output:
-    secretPrefix: org1-idemix-user
-    namespace: default
+    secretName: org1-idemix-user
     labels:
       app: fabric-x
       identity-type: idemix

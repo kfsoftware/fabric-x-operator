@@ -11,14 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
@@ -162,10 +160,9 @@ func TestIdentityControllerSimpleE2E(t *testing.T) {
 						Key:       "password",
 						Namespace: namespace,
 					},
-					EnrollTLS: false,
 				},
 				Output: fabricxv1alpha1.IdentityOutput{
-					SecretPrefix: "simple-identity",
+					SecretName: "simple-identity",
 					Namespace:    namespace,
 				},
 			},

@@ -3,12 +3,11 @@ kind: Committer
 metadata:
   name: fabric-x-committer
   namespace: default
-
 spec:
   bootstrapMode: deploy
   mspid: Org1MSP
   image: hyperledger/fabric-x-committer
-  imageTag: "0.1.5"
+  imageTag: 0.1.5
   common:
     replicas: 1
     resources:
@@ -19,8 +18,8 @@ spec:
         cpu: 500m
         memory: 512Mi
     podAnnotations:
-      prometheus.io/port: "8080"
-      prometheus.io/scrape: "true"
+      prometheus.io/port: '8080'
+      prometheus.io/scrape: 'true'
     podLabels:
       app.kubernetes.io/component: fabric-x
       app.kubernetes.io/part-of: committer
@@ -29,20 +28,17 @@ spec:
     secretKey: genesis.block
     secretNamespace: default
   components:
-    # Global endpoints used by sidecar and coordinator
     ordererEndpoints:
-      - orderergroup-party1-assembler.default.svc.cluster.local:7050
-      - orderergroup-party2-assembler.default.svc.cluster.local:7050
-      - orderergroup-party3-assembler.default.svc.cluster.local:7050
-      - orderergroup-party4-assembler.default.svc.cluster.local:7050
+    - orderergroup-party1-assembler.default.svc.cluster.local:7050
+    - orderergroup-party2-assembler.default.svc.cluster.local:7050
+    - orderergroup-party3-assembler.default.svc.cluster.local:7050
+    - orderergroup-party4-assembler.default.svc.cluster.local:7050
     committerHost: fabric-x-committer-coordinator-service.default.svc.cluster.local
     committerPort: 9001
-
-    # Coordinator-specific upstream endpoints
     coordinatorVerifierEndpoints:
-      - fabric-x-committer-verifier-service.default.svc.cluster.local:5001
+    - fabric-x-committer-verifier-service.default.svc.cluster.local:5001
     coordinatorValidatorCommitterEndpoints:
-      - fabric-x-committer-validator-service.default.svc.cluster.local:6001
+    - fabric-x-committer-validator-service.default.svc.cluster.local:6001
     coordinator:
       replicas: 1
       resources:
@@ -53,14 +49,8 @@ spec:
           cpu: 1000m
           memory: 1Gi
       env:
-        - name: COORDINATOR_LOG_LEVEL
-          value: INFO
-      ingress:
-        istio:
-          hosts:
-            - coordinator-committer.localho.st
-          ingressGateway: ingressgateway
-          port: 443
+      - name: COORDINATOR_LOG_LEVEL
+        value: INFO
     sidecar:
       replicas: 1
       resources:
@@ -71,25 +61,19 @@ spec:
           cpu: 1500m
           memory: 2Gi
       env:
-        - name: SC_SIDECAR_LOG_LEVEL
-          value: DEBUG
-        - name: SC_SIDECAR_ORDERER_CHANNEL_ID
-          value: arma
-      ingress:
-        istio:
-          hosts:
-            - sidecar-committer.localho.st
-          ingressGateway: ingressgateway
-          port: 443
+      - name: SC_SIDECAR_LOG_LEVEL
+        value: DEBUG
+      - name: SC_SIDECAR_ORDERER_CHANNEL_ID
+        value: arma
     validator:
       replicas: 1
       postgresql:
-        host: postgresql-rw.default.svc.cluster.local
+        host: fabric-x-postgres-rw.default.svc.cluster.local
         port: 5432
-        database: queryservice
-        username: queryservice
+        database: fabricx
+        username: fabricx
         passwordSecret:
-          name: postgresql-credentials
+          name: fabric-x-postgres-app
           namespace: default
           key: password
         maxConnections: 100
@@ -97,7 +81,6 @@ spec:
         loadBalance: false
         retry:
           maxElapsedTime: 5m
-
       resources:
         requests:
           cpu: 200m
@@ -106,14 +89,8 @@ spec:
           cpu: 1000m
           memory: 1Gi
       env:
-        - name: VALIDATOR_LOG_LEVEL
-          value: INFO
-      ingress:
-        istio:
-          hosts:
-            - validator-committer.localho.st
-          ingressGateway: ingressgateway
-          port: 443
+      - name: VALIDATOR_LOG_LEVEL
+        value: INFO
     verifierService:
       replicas: 1
       resources:
@@ -124,16 +101,10 @@ spec:
           cpu: 1000m
           memory: 1Gi
       env:
-        - name: VERIFIER_LOG_LEVEL
-          value: INFO
-        - name: VERIFIER_PARALLELISM
-          value: "80"
-      ingress:
-        istio:
-          hosts:
-            - verifier-committer.localho.st
-          ingressGateway: ingressgateway
-          port: 443
+      - name: VERIFIER_LOG_LEVEL
+        value: INFO
+      - name: VERIFIER_PARALLELISM
+        value: '80'
     queryService:
       replicas: 1
       resources:
@@ -144,26 +115,20 @@ spec:
           cpu: 1000m
           memory: 1Gi
       env:
-        - name: QUERY_SERVICE_LOG_LEVEL
-          value: INFO
+      - name: QUERY_SERVICE_LOG_LEVEL
+        value: INFO
       command:
-        - committer
+      - committer
       args:
-        - start-query
-        - --config=/config/config.yaml
-      ingress:
-        istio:
-          hosts:
-            - query-service-committer.localho.st
-          ingressGateway: ingressgateway
-          port: 443
+      - start-query
+      - --config=/config/config.yaml
       postgresql:
-        host: postgresql-rw.default.svc.cluster.local
+        host: fabric-x-postgres-rw.default.svc.cluster.local
         port: 5432
-        database: queryservice
-        username: queryservice
+        database: fabricx
+        username: fabricx
         passwordSecret:
-          name: postgresql-credentials
+          name: fabric-x-postgres-app
           namespace: default
           key: password
         maxConnections: 50

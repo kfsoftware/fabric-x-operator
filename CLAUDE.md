@@ -4,12 +4,94 @@ This document contains important learnings and patterns discovered during develo
 
 ## Table of Contents
 
+- [Hash-Based Rollout Detection](#hash-based-rollout-detection)
 - [Endorser Custom Command and Args](#endorser-custom-command-and-args)
 - [Volume Mounts for Data Directory](#volume-mounts-for-data-directory)
 - [Operator Deployment Workflow](#operator-deployment-workflow)
 - [Kubernetes MCP Integration](#kubernetes-mcp-integration)
 - [Testing Patterns](#testing-patterns)
 - [Namespace CRD](#namespace-crd)
+
+---
+
+## Hash-Based Rollout Detection
+
+### Overview
+
+All Fabric X Operator controllers implement hash-based rollout detection to automatically trigger pod updates when configuration changes. This ensures deployments stay synchronized with ConfigMaps and Secrets without manual intervention.
+
+### How It Works
+
+1. **Hash Computation**: Controllers compute SHA256 hashes of all mounted Secrets, ConfigMaps, and environment variables
+2. **Combined Hash**: All individual hashes are combined into a single deterministic hash
+3. **Pod Annotation**: The combined hash is added as a pod template annotation: `fabricx.kfsoft.tech/config-hash`
+4. **Automatic Rollout**: When configuration changes, the hash changes, triggering Kubernetes to rollout new pods
+
+### Implementation Status
+
+#### ✅ All Orderer Components
+- OrdererRouter
+- OrdererBatcher
+- OrdererConsenter
+- OrdererAssembler
+
+#### ✅ All Committer Components
+- CommitterCoordinator
+- CommitterSidecar
+- CommitterValidator
+- CommitterVerifier
+- CommitterQueryService
+
+#### ✅ Endorser
+- Hashes core config and certificates
+
+#### ✅ CA
+- Hashes CA configuration
+
+### Utility Functions
+
+Reusable hash utilities are available in [internal/controller/utils/hash.go](internal/controller/utils/hash.go):
+
+**HashBuilder API (Recommended):**
+```go
+configHash := utils.NewHashBuilder().
+    AddConfigMap(ctx, r.Client, "my-config", namespace).
+    AddSecret(ctx, r.Client, "my-secret", namespace).
+    AddEnvVars(spec.Env).
+    Build()
+
+deployment.Spec.Template.ObjectMeta.Annotations["fabricx.kfsoft.tech/config-hash"] = configHash
+```
+
+**Individual Functions:**
+- `ComputeSecretHash()` - Hash a Secret
+- `ComputeConfigMapHash()` - Hash a ConfigMap
+- `ComputeEnvVarsHash()` - Hash environment variables
+- `ComputeCombinedHash()` - Combine multiple hashes
+
+### Benefits
+
+1. **Automatic Updates**: No manual pod restarts needed when config changes
+2. **Consistency**: Pods always run with current configuration
+3. **Deterministic**: Same config always produces same hash
+4. **Efficient**: Fast SHA256 computation (< 1ms per resource)
+5. **Kubernetes-Native**: Uses standard rolling update mechanism
+
+### Example
+
+When you update a Secret:
+```bash
+# Update secret
+kubectl patch secret my-config -p '{"data":{"key":"new-value"}}'
+
+# Controller detects change and updates hash
+# Kubernetes automatically triggers rolling update
+# New pods start with updated configuration
+```
+
+### See Also
+
+Comprehensive documentation: [docs/hash-based-rollout.md](docs/hash-based-rollout.md)
 
 ---
 
@@ -739,7 +821,7 @@ Creates/Updates:
     - Certificate Secrets (sign + TLS)
     - Deployment (endorser pod)
     - Service (P2P + metrics)
-    - Istio VirtualService (ingress)
+    - Gateway resources (optional - ingress)
 ```
 
 ### Two-Phase Bootstrap Pattern
@@ -1242,9 +1324,9 @@ This is the tested and working deployment sequence for a complete Fabric-X netwo
 
 #### Prerequisites
 
-- K3D cluster with ports mapped: 80→30949, 443→30950
-- Istio installed
+- K3D cluster (or KinD)
 - PostgreSQL deployed for committer validator
+- (Optional) Gateway API implementation (e.g., Istio) for external ingress
 
 #### Step 1: Deploy Certificate Authority
 
@@ -2184,9 +2266,128 @@ kubectl get secret org1-idemix-user-idemix-cred -o jsonpath='{.data.SignerConfig
 4. **Complete**: All credential data stored in single secret
 5. **Flexible**: Can use different CA for idemix vs X.509
 
+### Idemix Issuer Keys Extraction (CA Controller)
+
+#### Problem
+
+When a Fabric CA is started with idemix support (using `--idemix.curve gurvy.Bn254`), it generates issuer keys that are needed by the identity controller for idemix enrollment. These keys are stored inside the CA pod at:
+
+- `/etc/hyperledger/fabric-ca-server/IssuerPublicKey`
+- `/etc/hyperledger/fabric-ca-server/IssuerRevocationPublicKey`
+- `/etc/hyperledger/fabric-ca-server/msp/keystore/IssuerSecretKey`
+- `/etc/hyperledger/fabric-ca-server/msp/keystore/IssuerRevocationPrivateKey`
+
+These keys need to be extracted and stored in a Kubernetes secret so they can be referenced by other components.
+
+#### Current Solution: Job-Based Extraction
+
+The CA controller creates a Kubernetes Job (`{ca-name}-extract-idemix-keys`) that:
+
+1. Uses the `bitnami/kubectl:latest` image
+2. Execs into the CA pod to extract the 4 key files
+3. Creates a secret `{ca-name}-idemix-issuer-keys` with the extracted keys
+4. Runs with a dedicated ServiceAccount that has permissions to:
+   - Get and exec into pods
+   - Get and create secrets
+
+**Location**: [internal/controller/ca/ca_controller.go:2137-2287](internal/controller/ca/ca_controller.go)
+
+**Key Components**:
+
+```go
+func (r *CAReconciler) reconcileIdemixKeysJob(ctx context.Context, ca *fabricxv1alpha1.CA) error {
+    // Check if secret already exists - early return optimization
+    secretName := fmt.Sprintf("%s-idemix-issuer-keys", ca.Name)
+    if secretExists(secretName) {
+        return nil
+    }
+
+    // Ensure ServiceAccount and RBAC are in place
+    r.reconcileIdemixServiceAccount(ctx, ca)
+
+    // Create Job that uses kubectl to extract keys
+    job := &batchv1.Job{
+        Spec: batchv1.JobSpec{
+            Template: corev1.PodTemplateSpec{
+                Spec: corev1.PodSpec{
+                    ServiceAccountName: fmt.Sprintf("%s-idemix-extractor", ca.Name),
+                    Containers: []corev1.Container{{
+                        Image: "bitnami/kubectl:latest",
+                        Command: []string{"/bin/bash", "-c", extractScript},
+                    }},
+                },
+            },
+        },
+    }
+}
+```
+
+**RBAC Resources Created**:
+- ServiceAccount: `{ca-name}-idemix-extractor`
+- Role: Permissions for pods/exec and secrets create/get
+- RoleBinding: Binds role to service account
+
+#### Why Not Use Direct Pod Exec from Controller?
+
+The controller already has `pods/exec` permission (line 73 of ca_controller.go), but using it directly would require:
+
+1. Setting up Kubernetes REST client configuration
+2. Implementing pod exec logic with proper stdin/stdout handling
+3. Error handling for connection issues
+4. More complex code in the controller
+
+The Job approach, while requiring extra RBAC resources, is:
+- Declarative and self-contained
+- Retryable via Kubernetes Job backoff
+- Easier to debug (can view Job logs)
+- Isolated from controller logic
+
+#### Future Improvement: Direct Pod Exec
+
+A better implementation would use the Kubernetes client-go `remotecommand` package to exec directly from the controller:
+
+```go
+import (
+    "k8s.io/client-go/kubernetes/scheme"
+    "k8s.io/client-go/tools/remotecommand"
+)
+
+func (r *CAReconciler) extractIdemixKeys(ctx context.Context, podName string) (map[string][]byte, error) {
+    files := map[string]string{
+        "IssuerPublicKey": "/etc/hyperledger/fabric-ca-server/IssuerPublicKey",
+        // ... other files
+    }
+
+    data := make(map[string][]byte)
+    for key, path := range files {
+        // Use REST client to exec into pod and read file
+        req := r.RESTClient.Post().
+            Resource("pods").
+            Name(podName).
+            Namespace(namespace).
+            SubResource("exec")
+
+        exec, err := remotecommand.NewSPDYExecutor(r.RESTConfig, "POST", req.URL())
+        content, err := exec.Stream(...)
+        data[key] = content
+    }
+
+    return data, nil
+}
+```
+
+This would eliminate the need for:
+- Extra ServiceAccount
+- Role and RoleBinding
+- Job resource
+- kubectl image dependency
+
+**TODO**: Implement direct pod exec using REST client (tracked in ca_controller.go:2138-2139)
+
 ### Future Enhancements
 
 Potential improvements:
+- **Replace Job with direct pod exec** (see above)
 - Support for idemix attribute-based credentials
 - Automatic curve detection from CA
 - Re-enrollment support

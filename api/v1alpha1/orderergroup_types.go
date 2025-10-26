@@ -349,12 +349,12 @@ type SecurityContext struct {
 
 // IngressConfig defines ingress configuration
 type IngressConfig struct {
-	// Istio-specific configuration
-	Istio *IstioConfig `json:"istio,omitempty"`
+	// Gateway-specific configuration (optional - for Istio or other gateway implementations)
+	Gateway *GatewayConfig `json:"gateway,omitempty"`
 }
 
-// IstioConfig defines Istio ingress configuration
-type IstioConfig struct {
+// GatewayConfig defines Gateway ingress configuration
+type GatewayConfig struct {
 	// Hosts for this component
 	Hosts []string `json:"hosts"`
 

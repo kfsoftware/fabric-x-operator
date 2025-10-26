@@ -219,223 +219,85 @@ func (r *IdentityReconciler) handleEnrollment(ctx context.Context, logger logr.L
 	signCACertPEM := signResp.CACertificate
 	signCert := signResp.CertificateRaw
 
-	// Perform TLS certificate enrollment if requested
-	var tlsCertPEM, tlsKeyPEM, tlsCACertPEM []byte
-	if enrollment.EnrollTLS {
-		logger.Info("Enrolling for TLS certificate", "enrollID", enrollment.EnrollID)
-
-		// Get TLS CA ref if specified
-		tlsCAName := ca.Name
-		tlsCANamespace := ca.Namespace
-		if enrollment.TLSCARef != nil {
-			tlsCAName = enrollment.TLSCARef.Name
-			if enrollment.TLSCARef.Namespace != "" {
-				tlsCANamespace = enrollment.TLSCARef.Namespace
-			}
-		}
-
-		// Get TLS certificate (server certificate to trust)
-		tlsCASecret := &corev1.Secret{}
-		err = r.Get(ctx, types.NamespacedName{
-			Name:      fmt.Sprintf("%s-tls-crypto", tlsCAName),
-			Namespace: tlsCANamespace,
-		}, tlsCASecret)
-		if err != nil {
-			return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to get TLS certificate for TLS enrollment: %v", err))
-		}
-
-		tlsCAForTLS, ok := tlsCASecret.Data["tls.crt"]
-		if !ok {
-			return r.updateStatus(ctx, logger, identity, "FAILED", "TLS certificate not found for TLS enrollment")
-		}
-
-		tlsCAURL := fmt.Sprintf("https://%s.%s:7054", tlsCAName, tlsCANamespace)
-
-		// Get the actual CA name for TLS enrollment
-		tlsCAActualName := "ca" // Use default, or get from TLS CA spec if different
-		if enrollment.TLSCARef != nil {
-			// If a different TLS CA is specified, get its name
-			tlsCA := &fabricxv1alpha1.CA{}
-			err = r.Get(ctx, types.NamespacedName{
-				Name:      tlsCAName,
-				Namespace: tlsCANamespace,
-			}, tlsCA)
-			if err == nil && tlsCA.Spec.CA.Name != "" {
-				tlsCAActualName = tlsCA.Spec.CA.Name
-			}
-		} else {
-			// Use same CA name as sign enrollment
-			tlsCAActualName = caName
-		}
-
-		tlsResp, err := enrollmentpkg.EnrollX509(ctx, enrollmentpkg.X509EnrollmentRequest{
-			CAURL:        tlsCAURL,
-			CAName:       tlsCAActualName,
-			EnrollID:     enrollment.EnrollID,
-			EnrollSecret: string(enrollPassword),
-			CATLSCert:    string(tlsCAForTLS),
-			MSPID:        identity.Spec.MspID,
-			CN:           enrollment.EnrollID,
-			Hosts:        []string{},
-			Profile:      "tls",
-			Attributes:   attrs,
-		})
-		if err != nil {
-			return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to enroll for TLS certificate: %v", err))
-		}
-
-		tlsCertPEM = tlsResp.Certificate
-		tlsKeyPEM = tlsResp.PrivateKey
-		tlsCACertPEM = tlsResp.CACertificate
-	}
-
-	// Create output secrets
-	if err := r.createOutputSecrets(ctx, logger, identity, signCertPEM, signKeyPEM, signCACertPEM, tlsCertPEM, tlsKeyPEM, tlsCACertPEM); err != nil {
+	// Create output secret (single secret with all credentials)
+	if err := r.createOutputSecrets(ctx, logger, identity, signCertPEM, signKeyPEM, signCACertPEM, nil, nil, nil); err != nil {
 		return r.updateStatus(ctx, logger, identity, "FAILED", fmt.Sprintf("Failed to create output secrets: %v", err))
 	}
 
 	// Update status with enrollment time and certificate expiry
 	now := metav1.Now()
 	certExpiry := &metav1.Time{Time: signCert.NotAfter}
-	var tlsCertExpiry *metav1.Time
-	if tlsCertPEM != nil {
-		tlsCertExpiry = &metav1.Time{Time: signCert.NotAfter}
-	}
 
-	return r.updateStatusWithCerts(ctx, logger, identity, "READY", "Identity enrolled successfully with CA", &now, certExpiry, tlsCertExpiry)
+	return r.updateStatusWithCerts(ctx, logger, identity, "READY", "Identity enrolled successfully with CA", &now, certExpiry, nil)
 }
 
 // createOutputSecrets creates secrets for the identity materials
 func (r *IdentityReconciler) createOutputSecrets(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, signCert, signKey, signCACert, tlsCert, tlsKey, tlsCACert []byte) error {
 	output := identity.Spec.Output
-	namespace := output.Namespace
-	if namespace == "" {
-		namespace = identity.Namespace
+	namespace := identity.Namespace
+
+	// Create a single secret with all credentials
+	secretName := output.SecretName
+	secretData := map[string][]byte{
+		"cert.pem":   signCert,
+		"key.pem":    signKey,
+		"cacert.pem": signCACert,
 	}
 
-	secrets := map[string][]byte{
-		fmt.Sprintf("%s-sign-cert", output.SecretPrefix):   signCert,
-		fmt.Sprintf("%s-sign-key", output.SecretPrefix):    signKey,
-		fmt.Sprintf("%s-sign-cacert", output.SecretPrefix): signCACert,
-	}
-
+	// Add TLS credentials if present
 	if tlsCert != nil {
-		secrets[fmt.Sprintf("%s-tls-cert", output.SecretPrefix)] = tlsCert
+		secretData["tls-cert.pem"] = tlsCert
 	}
 	if tlsKey != nil {
-		secrets[fmt.Sprintf("%s-tls-key", output.SecretPrefix)] = tlsKey
+		secretData["tls-key.pem"] = tlsKey
 	}
 	if tlsCACert != nil {
-		secrets[fmt.Sprintf("%s-tls-cacert", output.SecretPrefix)] = tlsCACert
+		secretData["tls-cacert.pem"] = tlsCACert
 	}
 
-	// Create secrets
-	for secretName, data := range secrets {
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: namespace,
-				Labels:    output.Labels,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"cert.pem": data,
-			},
-		}
-
-		// Set controller reference
-		if err := controllerutil.SetControllerReference(identity, secret, r.Scheme); err != nil {
-			return errors.Wrapf(err, "failed to set controller reference for secret %s", secretName)
-		}
-
-		// Create or update secret
-		if err := r.Create(ctx, secret); err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				logger.Info("Secret already exists, updating", "secret", secretName)
-				if err := r.Update(ctx, secret); err != nil {
-					return errors.Wrapf(err, "failed to update secret %s", secretName)
-				}
-			} else {
-				return errors.Wrapf(err, "failed to create secret %s", secretName)
-			}
-		}
-		logger.Info("Created secret", "secret", secretName)
-	}
-
-	// Create combined sign secret (cert + key + ca in one secret)
-	combinedSignSecret := &corev1.Secret{
+	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-cert", output.SecretPrefix),
+			Name:      secretName,
 			Namespace: namespace,
 			Labels:    output.Labels,
 		},
 		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"cert.pem": signCert,
-			"key.pem":  signKey,
-			"ca.pem":   signCACert,
-		},
+		Data: secretData,
 	}
-	if err := controllerutil.SetControllerReference(identity, combinedSignSecret, r.Scheme); err != nil {
-		return errors.Wrapf(err, "failed to set controller reference for combined sign secret")
+
+	// Set controller reference
+	if err := controllerutil.SetControllerReference(identity, secret, r.Scheme); err != nil {
+		return errors.Wrapf(err, "failed to set controller reference for secret %s", secretName)
 	}
-	if err := r.Create(ctx, combinedSignSecret); err != nil {
+
+	// Create or update secret
+	if err := r.Create(ctx, secret); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			logger.Info("Combined sign secret already exists, updating", "secret", combinedSignSecret.Name)
-			if err := r.Update(ctx, combinedSignSecret); err != nil {
-				return errors.Wrapf(err, "failed to update combined sign secret")
+			logger.Info("Secret already exists, updating", "secret", secretName)
+			if err := r.Update(ctx, secret); err != nil {
+				return errors.Wrapf(err, "failed to update secret %s", secretName)
 			}
 		} else {
-			return errors.Wrapf(err, "failed to create combined sign secret")
+			return errors.Wrapf(err, "failed to create secret %s", secretName)
 		}
-	}
-	logger.Info("Created combined sign secret", "secret", combinedSignSecret.Name)
-
-	// Create combined TLS secret if TLS certs exist
-	if tlsCert != nil && tlsKey != nil && tlsCACert != nil {
-		combinedTLSSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-tls-combined", output.SecretPrefix),
-				Namespace: namespace,
-				Labels:    output.Labels,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"cert.pem": tlsCert,
-				"key.pem":  tlsKey,
-				"ca.pem":   tlsCACert,
-			},
-		}
-		if err := controllerutil.SetControllerReference(identity, combinedTLSSecret, r.Scheme); err != nil {
-			return errors.Wrapf(err, "failed to set controller reference for combined TLS secret")
-		}
-		if err := r.Create(ctx, combinedTLSSecret); err != nil {
-			if apierrors.IsAlreadyExists(err) {
-				logger.Info("Combined TLS secret already exists, updating", "secret", combinedTLSSecret.Name)
-				if err := r.Update(ctx, combinedTLSSecret); err != nil {
-					return errors.Wrapf(err, "failed to update combined TLS secret")
-				}
-			} else {
-				return errors.Wrapf(err, "failed to create combined TLS secret")
-			}
-		}
-		logger.Info("Created combined TLS secret", "secret", combinedTLSSecret.Name)
+	} else {
+		logger.Info("Created secret", "secret", secretName)
 	}
 
-	// Update status with output secrets
+	// Update status with output secret name
 	identity.Status.OutputSecrets = fabricxv1alpha1.IdentityOutputSecrets{
-		SignCert:   fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
-		SignKey:    fmt.Sprintf("%s-sign-key", output.SecretPrefix),
-		SignCACert: fmt.Sprintf("%s-sign-cacert", output.SecretPrefix),
+		SignCert:   secretName,
+		SignKey:    secretName,
+		SignCACert: secretName,
 	}
 	if tlsCert != nil {
-		identity.Status.OutputSecrets.TLSCert = fmt.Sprintf("%s-tls-cert", output.SecretPrefix)
+		identity.Status.OutputSecrets.TLSCert = secretName
 	}
 	if tlsKey != nil {
-		identity.Status.OutputSecrets.TLSKey = fmt.Sprintf("%s-tls-key", output.SecretPrefix)
+		identity.Status.OutputSecrets.TLSKey = secretName
 	}
 	if tlsCACert != nil {
-		identity.Status.OutputSecrets.TLSCACert = fmt.Sprintf("%s-tls-cacert", output.SecretPrefix)
+		identity.Status.OutputSecrets.TLSCACert = secretName
 	}
 
 	return nil
@@ -459,15 +321,12 @@ func (r *IdentityReconciler) getCertificateExpiry(certPEM []byte) (time.Time, er
 // outputSecretsExist checks if all output secrets already exist
 func (r *IdentityReconciler) outputSecretsExist(ctx context.Context, identity *fabricxv1alpha1.Identity) bool {
 	output := identity.Spec.Output
-	namespace := output.Namespace
-	if namespace == "" {
-		namespace = identity.Namespace
-	}
+	namespace := identity.Namespace
 
 	// Check if this is an idemix enrollment
 	if identity.Spec.Enrollment != nil && identity.Spec.Enrollment.Idemix != nil && identity.Spec.Enrollment.Idemix.Enabled != nil && *identity.Spec.Enrollment.Idemix.Enabled {
 		// For idemix, check for the idemix credential secret
-		idemixSecretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+		idemixSecretName := output.SecretName + "-idemix"
 		secret := &corev1.Secret{}
 		if err := r.Get(ctx, types.NamespacedName{Name: idemixSecretName, Namespace: namespace}, secret); err != nil {
 			return false
@@ -475,18 +334,10 @@ func (r *IdentityReconciler) outputSecretsExist(ctx context.Context, identity *f
 		return true
 	}
 
-	// For X.509, check for the traditional secrets
-	secretNames := []string{
-		fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
-		fmt.Sprintf("%s-sign-key", output.SecretPrefix),
-		fmt.Sprintf("%s-sign-cacert", output.SecretPrefix),
-	}
-
-	for _, secretName := range secretNames {
-		secret := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, secret); err != nil {
-			return false
-		}
+	// For X.509, check for the single consolidated secret
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Name: output.SecretName, Namespace: namespace}, secret); err != nil {
+		return false
 	}
 
 	return true
@@ -495,14 +346,11 @@ func (r *IdentityReconciler) outputSecretsExist(ctx context.Context, identity *f
 // validateExistingSecrets validates that existing secrets contain valid data
 func (r *IdentityReconciler) validateExistingSecrets(ctx context.Context, identity *fabricxv1alpha1.Identity) error {
 	output := identity.Spec.Output
-	namespace := output.Namespace
-	if namespace == "" {
-		namespace = identity.Namespace
-	}
+	namespace := identity.Namespace
 
 	// For idemix, validate the idemix credential secret
 	if identity.Spec.Enrollment != nil && identity.Spec.Enrollment.Idemix != nil && identity.Spec.Enrollment.Idemix.Enabled != nil && *identity.Spec.Enrollment.Idemix.Enabled {
-		idemixSecretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+		idemixSecretName := output.SecretName + "-idemix"
 		idemixSecret := &corev1.Secret{}
 		if err := r.Get(ctx, types.NamespacedName{Name: idemixSecretName, Namespace: namespace}, idemixSecret); err != nil {
 			return errors.Wrapf(err, "failed to get idemix secret %s", idemixSecretName)
@@ -519,68 +367,34 @@ func (r *IdentityReconciler) validateExistingSecrets(ctx context.Context, identi
 		return nil
 	}
 
-	// For X.509, validate signing cert
-	signCertSecret := &corev1.Secret{}
+	// For X.509, validate the single secret with all credentials
+	secretName := output.SecretName
+	secret := &corev1.Secret{}
 	if err := r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-sign-cert", output.SecretPrefix),
+		Name:      secretName,
 		Namespace: namespace,
-	}, signCertSecret); err != nil {
-		return errors.Wrap(err, "failed to get sign cert secret")
+	}, secret); err != nil {
+		return errors.Wrap(err, "failed to get identity secret")
 	}
 
-	signCertData, ok := signCertSecret.Data["cert.pem"]
-	if !ok || len(signCertData) == 0 {
-		return errors.New("sign cert secret missing cert.pem data")
+	// Validate required keys exist
+	certData, hasCert := secret.Data["cert.pem"]
+	keyData, hasKey := secret.Data["key.pem"]
+	cacertData, hasCACert := secret.Data["cacert.pem"]
+
+	if !hasCert || len(certData) == 0 {
+		return errors.New("identity secret missing cert.pem")
+	}
+	if !hasKey || len(keyData) == 0 {
+		return errors.New("identity secret missing key.pem")
+	}
+	if !hasCACert || len(cacertData) == 0 {
+		return errors.New("identity secret missing cacert.pem")
 	}
 
-	// Parse to ensure it's valid
-	if _, err := r.getCertificateExpiry(signCertData); err != nil {
-		return errors.Wrap(err, "invalid sign certificate")
-	}
-
-	// Create combined secret if it doesn't exist
-	// Fetch individual secrets
-	signKeySecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-sign-key", output.SecretPrefix),
-		Namespace: namespace,
-	}, signKeySecret); err != nil {
-		return errors.Wrap(err, "failed to get sign key secret")
-	}
-
-	signCACertSecret := &corev1.Secret{}
-	if err := r.Get(ctx, types.NamespacedName{
-		Name:      fmt.Sprintf("%s-sign-cacert", output.SecretPrefix),
-		Namespace: namespace,
-	}, signCACertSecret); err != nil {
-		return errors.Wrap(err, "failed to get sign cacert secret")
-	}
-
-	// Create combined sign secret
-	combinedSecretName := fmt.Sprintf("%s-cert", output.SecretPrefix)
-	combinedSecret := &corev1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{Name: combinedSecretName, Namespace: namespace}, combinedSecret)
-	if err != nil && apierrors.IsNotFound(err) {
-		// Create combined secret
-		combinedSecret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      combinedSecretName,
-				Namespace: namespace,
-				Labels:    output.Labels,
-			},
-			Type: corev1.SecretTypeOpaque,
-			Data: map[string][]byte{
-				"cert.pem": signCertSecret.Data["cert.pem"],
-				"key.pem":  signKeySecret.Data["cert.pem"],
-				"ca.pem":   signCACertSecret.Data["cert.pem"],
-			},
-		}
-		if err := controllerutil.SetControllerReference(identity, combinedSecret, r.Scheme); err != nil {
-			return errors.Wrapf(err, "failed to set controller reference for combined secret")
-		}
-		if err := r.Create(ctx, combinedSecret); err != nil {
-			return errors.Wrapf(err, "failed to create combined secret %s", combinedSecretName)
-		}
+	// Parse to ensure cert is valid
+	if _, err := r.getCertificateExpiry(certData); err != nil {
+		return errors.Wrap(err, "invalid certificate in secret")
 	}
 
 	return nil
@@ -790,12 +604,9 @@ func (r *IdentityReconciler) handleIdemixEnrollment(ctx context.Context, logger 
 // Each field from SignerConfig is stored as a separate key in the Kubernetes secret
 func (r *IdentityReconciler) createIdemixSecret(ctx context.Context, logger logr.Logger, identity *fabricxv1alpha1.Identity, enrollResp *idemix.EnrollmentResponse, caName string) error {
 	output := identity.Spec.Output
-	namespace := output.Namespace
-	if namespace == "" {
-		namespace = identity.Namespace
-	}
+	namespace := identity.Namespace
 
-	secretName := fmt.Sprintf("%s-idemix-cred", output.SecretPrefix)
+	secretName := output.SecretName + "-idemix"
 
 	// Prepare secret data - one key per SignerConfig field
 	secretData := make(map[string][]byte)

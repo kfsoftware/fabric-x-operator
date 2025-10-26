@@ -21,8 +21,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-issuer-idemix
-    namespace: default
+    secretName: org1-issuer-idemix
     labels:
       app: fabric-x
       identity-type: idemix
@@ -58,8 +57,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-owner1-idemix
-    namespace: default
+    secretName: org1-owner1-idemix
     labels:
       app: fabric-x
       identity-type: idemix
@@ -95,8 +93,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-owner2-idemix
-    namespace: default
+    secretName: org1-owner2-idemix
     labels:
       app: fabric-x
       identity-type: idemix
@@ -132,8 +129,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-endorser1-idemix
-    namespace: default
+    secretName: org1-endorser1-idemix
     labels:
       app: fabric-x
       identity-type: idemix
@@ -169,8 +165,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-endorser2-idemix
-    namespace: default
+    secretName: org1-endorser2-idemix
     labels:
       app: fabric-x
       identity-type: idemix
@@ -206,8 +201,7 @@ spec:
     idemix:
       enabled: true
   output:
-    secretPrefix: org1-auditor-idemix
-    namespace: default
+    secretName: org1-auditor-idemix
     labels:
       app: fabric-x
       identity-type: idemix

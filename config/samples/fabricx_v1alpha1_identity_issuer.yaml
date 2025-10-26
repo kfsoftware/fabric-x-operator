@@ -1,0 +1,23 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-issuer
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: test-ca2
+      namespace: default
+    enrollID: admin
+    enrollSecretRef:
+      name: admin-enroll-secret
+      key: password
+      namespace: default
+    enrollTLS: true
+  output:
+    secretName: org1-issuer-cert
+    labels:
+      app: fabric-x
+      endorser: org1-issuer

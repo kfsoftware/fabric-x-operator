@@ -17,6 +17,18 @@ spec:
     - "--conf=/var/hyperledger/fabric/config"
     - "--port=9000"
 
+  # Service ports to expose
+  ports:
+    - name: http
+      port: 9000
+      protocol: TCP
+    - name: p2p
+      port: 9301
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      protocol: TCP
+
   common:
     replicas: 1
     resources:
@@ -42,27 +54,47 @@ spec:
       - name: sign-identity
         volumeSource:
           secret:
-            secretName: org1-owner1-sign-cert
+            secretName: org1-owner1-cert
             items:
               - key: key.pem
-                path: keystore/priv_sk
+                path: priv_sk
               - key: key.pem
-                path: keystore/key.pem
+                path: key.pem
+      - name: sign-cert
+        volumeSource:
+          secret:
+            secretName: org1-owner1-cert
+            items:
               - key: cert.pem
-                path: signcerts/cert.pem
-              - key: ca.pem
-                path: cacerts/ca.pem
+                path: cert.pem
+      - name: sign-cacert
+        volumeSource:
+          secret:
+            secretName: org1-owner1-cert
+            items:
+              - key: cacert.pem
+                path: ca.pem
       - name: x509-msp
         volumeSource:
           secret:
-            secretName: org1-owner1-sign-cert
+            secretName: org1-owner1-cert
             items:
               - key: cert.pem
-                path: signcerts/cert.pem
+                path: cert.pem
+      - name: x509-msp-key
+        volumeSource:
+          secret:
+            secretName: org1-owner1-cert
+            items:
               - key: key.pem
-                path: keystore/key.pem
-              - key: ca.pem
-                path: cacerts/ca.pem
+                path: key.pem
+      - name: x509-msp-cacert
+        volumeSource:
+          secret:
+            secretName: org1-owner1-cert
+            items:
+              - key: cacert.pem
+                path: ca.pem
       - name: namespace-params
         volumeSource:
           secret:
@@ -79,10 +111,22 @@ spec:
         mountPath: /var/hyperledger/fabric/config/data
         readOnly: false
       - name: sign-identity
-        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/keystore
+        readOnly: true
+      - name: sign-cert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/signcerts
+        readOnly: true
+      - name: sign-cacert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts
         readOnly: true
       - name: x509-msp
-        mountPath: /var/hyperledger/fabric/msp
+        mountPath: /var/hyperledger/fabric/msp/signcerts
+        readOnly: true
+      - name: x509-msp-key
+        mountPath: /var/hyperledger/fabric/msp/keystore
+        readOnly: true
+      - name: x509-msp-cacert
+        mountPath: /var/hyperledger/fabric/msp/cacerts
         readOnly: true
       - name: namespace-params
         mountPath: /var/hyperledger/fabric/config/namespace
@@ -125,36 +169,36 @@ spec:
             identity:
               id: issuer
               secretRef:
-                name: org1-issuer-sign-cert
+                name: org1-issuer-cert
                 namespace: default
-                key: cert.pem
+                key: key.pem
             addresses:
               P2P: org1-issuer-service.default.svc.cluster.local:9301
           - name: endorser1
             identity:
               id: endorser1
               secretRef:
-                name: org1-endorser1-sign-cert
+                name: org1-endorser1-cert
                 namespace: default
-                key: cert.pem
+                key: key.pem
             addresses:
               P2P: org1-endorser1-service.default.svc.cluster.local:9301
           - name: endorser2
             identity:
               id: endorser2
               secretRef:
-                name: org1-endorser2-sign-cert
+                name: org1-endorser2-cert
                 namespace: default
-                key: cert.pem
+                key: key.pem
             addresses:
               P2P: org1-endorser2-service.default.svc.cluster.local:9301
           - name: owner2
             identity:
               id: owner2
               secretRef:
-                name: org1-owner2-sign-cert
+                name: org1-owner2-cert
                 namespace: default
-                key: cert.pem
+                key: key.pem
             addresses:
               P2P: org1-owner2-service.default.svc.cluster.local:9301
 
@@ -188,7 +232,7 @@ spec:
           namespace: token_namespace
           driver: zkatdlog
           publicParameters:
-            path: ../namespace/zkatdlognoghv1_pp.json
+            path: /var/hyperledger/fabric/config/namespace/zkatdlognoghv1_pp.json
           services:
             network:
               fabric:
@@ -200,15 +244,6 @@ spec:
                   endorsers:
                     - endorser1
                     - endorser2
-
-  ingress:
-    istio:
-      hosts:
-        - owner1.localho.st
-      ingressGateway: istio-ingressgateway
-      port: 443
-      tls:
-        enabled: true
 
 ---
 apiVersion: v1

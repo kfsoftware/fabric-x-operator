@@ -53,16 +53,8 @@ spec:
     datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
     type: sqlite3
   image: hyperledger/fabric-ca
-  ingress:
-    istio:
-      hosts:
-        - ca.org1.localho.st
-        - ca.org1.example.com
-      ingressGateway: istio-ingressgateway
-      port: 443
-      tls:
-        enabled: true
-        secretName: ca-tls-secret
+  idemix:
+    curve: gurvy.Bn254
   metrics:
     statsd: {}
   resources: {}

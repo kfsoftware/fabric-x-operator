@@ -194,7 +194,7 @@ monitoring:
     enabled: true
     port: 2120
 logging:
-  level: DEBUG
+  level: debug
   format: json`
 }
 
@@ -270,7 +270,7 @@ General:
         File: /{{.Name}}/genesis.block
     LocalMSPDir: /{{.Name}}/msp
     LocalMSPID: {{.MSPID}}
-    LogSpec: info
+    LogSpec: debug
 FileStore:
     Location: /{{.Name}}/store
 Batcher:
@@ -349,7 +349,7 @@ General:
         ClientPrivateKey: /etc/hyperledger/fabricx/consenter/tls/server.key
     LocalMSPDir: /etc/hyperledger/fabricx/consenter/msp
     LocalMSPID: {{.MSPID}}
-    LogSpec: info
+    LogSpec: debug
 FileStore:
     Location: {{.DataDir}}/store
 Consensus:
@@ -391,7 +391,7 @@ General:
         File: /etc/hyperledger/fabricx/assembler/genesis/genesis.block
     LocalMSPDir: /etc/hyperledger/fabricx/assembler/msp
     LocalMSPID: {{.MSPID}}
-    LogSpec: info
+    LogSpec: debug
 FileStore:
     Location: /etc/hyperledger/fabricx/assembler/store
 Assembler:
@@ -429,7 +429,7 @@ monitoring:
     enabled: true
     port: 2120
 logging:
-  level: DEBUG
+  level: debug
   format: json`
 
 	// SidecarConfigTemplate is the Go template for sidecar configuration
@@ -465,7 +465,7 @@ monitoring:
     enabled: true
     port: 2111
 logging:
-  level: DEBUG
+  level: debug
   format: json`
 
 	// ValidatorConfigTemplate is the Go template for validator configuration
@@ -495,7 +495,7 @@ monitoring:
     enabled: true
     port: 2116
 logging:
-  level: DEBUG
+  level: debug
   format: json`
 
 	// VerifierConfigTemplate is the Go template for verifier configuration
@@ -511,6 +511,6 @@ monitoring:
     enabled: true
     port: 2115
 logging:
-  level: DEBUG
+  level: debug
   format: json`
 )

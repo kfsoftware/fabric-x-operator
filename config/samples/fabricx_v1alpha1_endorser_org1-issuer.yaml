@@ -1,54 +1,26 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Identity
 metadata:
-  name: org1-issuer-sign
+  name: org1-issuer
   namespace: default
 spec:
   enrollment:
     caRef:
-      name: endorser-idemix-ca
+      name: test-ca2
       namespace: default
-    enrollID: issuer
+    enrollID: admin
     enrollSecretRef:
       key: password
       name: issuer-enrollment-secret
       namespace: default
-    enrollTLS: false
   mspID: Org1MSP
   output:
     labels:
       app: fabric-x
       endorser: issuer
-      identity-type: x509-sign
+      identity-type: x509
     namespace: default
-    secretPrefix: org1-issuer-sign
-  type: client
-
----
-apiVersion: fabricx.kfsoft.tech/v1alpha1
-kind: Identity
-metadata:
-  name: org1-issuer-tls
-  namespace: default
-spec:
-  enrollment:
-    caRef:
-      name: endorser-idemix-ca
-      namespace: default
-    enrollID: issuer
-    enrollSecretRef:
-      key: password
-      name: issuer-enrollment-secret
-      namespace: default
-    enrollTLS: true
-  mspID: Org1MSP
-  output:
-    labels:
-      app: fabric-x
-      endorser: issuer
-      identity-type: x509-tls
-    namespace: default
-    secretPrefix: org1-issuer-tls
+    secretPrefix: org1-issuer
   type: client
 
 ---
@@ -70,6 +42,18 @@ spec:
   args:
     - "--conf=/var/hyperledger/fabric/config"
     - "--port=9000"
+
+  # Service ports to expose
+  ports:
+    - name: http
+      port: 9000
+      protocol: TCP
+    - name: p2p
+      port: 9301
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      protocol: TCP
 
   common:
     replicas: 1
@@ -99,43 +83,52 @@ spec:
             secretName: org1-issuer-idemix-idemix-cred
             items:
               - key: Sk
-                path: keystore/priv_sk
+                path: priv_sk
               - key: Cred
-                path: signcerts/cert.pem
+                path: cert.pem
       - name: sign-identity
         volumeSource:
           secret:
-            secretName: org1-issuer-sign-cert
+            secretName: org1-issuer-cert
             items:
               - key: key.pem
-                path: keystore/priv_sk
+                path: priv_sk
               - key: key.pem
-                path: keystore/key.pem
-              - key: cert.pem
-                path: signcerts/cert.pem
-              - key: ca.pem
-                path: cacerts/ca.pem
-      - name: x509-msp
+                path: key.pem
+      - name: sign-cert
         volumeSource:
           secret:
-            secretName: org1-issuer-sign-cert
-            items:
-              - key: cert.pem
-                path: signcerts/cert.pem
-              - key: key.pem
-                path: keystore/key.pem
-              - key: ca.pem
-                path: cacerts/ca.pem
-      - name: x509-tls
-        volumeSource:
-          secret:
-            secretName: org1-issuer-tls-cert
+            secretName: org1-issuer-cert
             items:
               - key: cert.pem
                 path: cert.pem
+      - name: sign-cacert
+        volumeSource:
+          secret:
+            secretName: org1-issuer-cert
+            items:
+              - key: cacert.pem
+                path: ca.pem
+      - name: x509-msp
+        volumeSource:
+          secret:
+            secretName: org1-issuer-cert
+            items:
+              - key: cert.pem
+                path: cert.pem
+      - name: x509-msp-key
+        volumeSource:
+          secret:
+            secretName: org1-issuer-cert
+            items:
               - key: key.pem
                 path: key.pem
-              - key: ca.pem
+      - name: x509-msp-cacert
+        volumeSource:
+          secret:
+            secretName: org1-issuer-cert
+            items:
+              - key: cacert.pem
                 path: ca.pem
 
     volumeMounts:
@@ -149,13 +142,22 @@ spec:
         mountPath: /var/hyperledger/fabric/config/wallet/iss
         readOnly: true
       - name: sign-identity
-        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/keystore
+        readOnly: true
+      - name: sign-cert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/signcerts
+        readOnly: true
+      - name: sign-cacert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts
         readOnly: true
       - name: x509-msp
-        mountPath: /var/hyperledger/fabric/msp
+        mountPath: /var/hyperledger/fabric/msp/signcerts
         readOnly: true
-      - name: x509-tls
-        mountPath: /var/hyperledger/fabric/tls
+      - name: x509-msp-key
+        mountPath: /var/hyperledger/fabric/msp/keystore
+        readOnly: true
+      - name: x509-msp-cacert
+        mountPath: /var/hyperledger/fabric/msp/cacerts
         readOnly: true
 
   core:
@@ -184,7 +186,7 @@ spec:
             identity:
               id: endorser1
               secretRef:
-                name: org1-endorser1-sign-cert
+                name: org1-endorser1-cert
                 namespace: default
                 key: cert.pem
             addresses:
@@ -193,7 +195,7 @@ spec:
             identity:
               id: endorser2
               secretRef:
-                name: org1-endorser2-sign-cert
+                name: org1-endorser2-cert
                 namespace: default
                 key: cert.pem
             addresses:
@@ -202,7 +204,7 @@ spec:
             identity:
               id: owner1
               secretRef:
-                name: org1-owner1-sign-cert
+                name: org1-owner1-cert
                 namespace: default
                 key: cert.pem
             addresses:
@@ -211,7 +213,7 @@ spec:
             identity:
               id: owner2
               secretRef:
-                name: org1-owner2-sign-cert
+                name: org1-owner2-cert
                 namespace: default
                 key: cert.pem
             addresses:
@@ -257,15 +259,6 @@ spec:
                   endorsers:
                     - endorser1
                     - endorser2
-
-  ingress:
-    istio:
-      hosts:
-        - issuer.localho.st
-      ingressGateway: istio-ingressgateway
-      port: 443
-      tls:
-        enabled: true
 
 ---
 apiVersion: v1

@@ -204,10 +204,9 @@ var _ = Describe("Identity Controller Standalone E2E", Ordered, func() {
 							Key:       "password",
 							Namespace: namespace,
 						},
-						EnrollTLS: false,
 					},
 					Output: fabricxv1alpha1.IdentityOutput{
-						SecretPrefix: identityName,
+						SecretName: identityName,
 						Namespace:    namespace,
 					},
 				},

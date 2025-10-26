@@ -72,7 +72,7 @@ spec:
   # Output configuration
   output:
     # Prefix for output secrets
-    secretPrefix: admin-identity
+    secretName: admin-identity
 
     # Optional: namespace for output secrets (defaults to identity namespace)
     # namespace: default

@@ -62,15 +62,6 @@ type IdentityEnrollment struct {
 	// +optional
 	Attrs []IdentityAttribute `json:"attrs,omitempty"`
 
-	// Whether to also enroll for TLS certificates
-	// +optional
-	// +kubebuilder:default=true
-	EnrollTLS bool `json:"enrollTLS,omitempty"`
-
-	// TLS CA reference (if different from signing CA)
-	// +optional
-	TLSCARef *IdentityCARef `json:"tlsCARef,omitempty"`
-
 	// Idemix enrollment configuration (if using idemix instead of X.509)
 	// +optional
 	Idemix *IdentityIdemixEnrollment `json:"idemix,omitempty"`
@@ -98,6 +89,11 @@ type IdentityCARef struct {
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
+	// CA name within Fabric CA server (e.g., "ca" for signing CA, "tlsca" for TLS CA)
+	// If not specified, uses the default CA
+	// +optional
+	CAName string `json:"caName,omitempty"`
+
 	// TLS CA certificate reference for connecting to the CA
 	// +optional
 	CACertRef *SecretKeyNSSelector `json:"caCertRef,omitempty"`
@@ -121,14 +117,11 @@ type IdentityAttribute struct {
 
 // IdentityOutput defines where to store the identity materials
 type IdentityOutput struct {
-	// Secret name prefix for storing identity materials
-	// Will create secrets: <prefix>-sign-cert, <prefix>-sign-key, <prefix>-tls-cert, <prefix>-tls-key
+	// Secret name for storing identity materials
+	// Will create a single secret with keys: cert.pem, key.pem, cacert.pem
+	// Namespace is inferred from the Identity resource namespace
 	// +kubebuilder:validation:Required
-	SecretPrefix string `json:"secretPrefix"`
-
-	// Namespace for output secrets (optional, defaults to identity's namespace)
-	// +optional
-	Namespace string `json:"namespace,omitempty"`
+	SecretName string `json:"secretName"`
 
 	// Additional labels to apply to output secrets
 	// +optional

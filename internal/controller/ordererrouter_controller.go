@@ -95,8 +95,6 @@ type OrdererRouterReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.istio.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -493,9 +491,9 @@ func (r *OrdererRouterReconciler) reconcileDeployMode(ctx context.Context, order
 		return fmt.Errorf("failed to reconcile service: %w", err)
 	}
 
-	// 3. Create/Update Istio resources
-	if err := r.reconcileIstioResources(ctx, ordererRouter); err != nil {
-		return fmt.Errorf("failed to reconcile Istio resources: %w", err)
+	// 3. Create/Update Gateway resources
+	if err := r.reconcileGatewayResources(ctx, ordererRouter); err != nil {
+		return fmt.Errorf("failed to reconcile Gateway resources: %w", err)
 	}
 
 	// 4. Create/Update ConfigMap for Router configuration
@@ -545,10 +543,10 @@ func (r *OrdererRouterReconciler) handleDeletion(ctx context.Context, ordererRou
 	// Set status to indicate deletion
 	r.updateOrdererRouterStatus(ctx, ordererRouter, fabricxv1alpha1.PendingStatus, "Deleting OrdererRouter resources")
 
-	// Clean up Istio resources if they exist
-	if ordererRouter.Spec.Ingress != nil && ordererRouter.Spec.Ingress.Istio != nil {
-		if err := r.cleanupIstioResources(ctx, ordererRouter); err != nil {
-			log.Error(err, "Failed to cleanup Istio resources")
+	// Clean up Gateway resources if they exist
+	if ordererRouter.Spec.Ingress != nil && ordererRouter.Spec.Ingress.Gateway != nil {
+		if err := r.cleanupGatewayResources(ctx, ordererRouter); err != nil {
+			log.Error(err, "Failed to cleanup Gateway resources")
 		}
 	}
 
@@ -1090,23 +1088,23 @@ func (r *OrdererRouterReconciler) reconcileIngress(ctx context.Context, ordererR
 	return nil
 }
 
-// reconcileIstioGateway creates or updates the Gateway API TLSRoute for Router
-func (r *OrdererRouterReconciler) reconcileIstioGateway(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
+// reconcileGatewayGateway creates or updates the Gateway API TLSRoute for Router
+func (r *OrdererRouterReconciler) reconcileGatewayGateway(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Istio configuration is provided
-	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping TLSRoute creation")
+	// Check if Gateway configuration is provided
+	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Gateway == nil {
+		log.Info("No Gateway configuration found, skipping TLSRoute creation")
 		return nil
 	}
 
-	istioConfig := ordererRouter.Spec.Ingress.Istio
+	gatewayConfig := ordererRouter.Spec.Ingress.Gateway
 
 	// Use shared helper function to reconcile TLSRoute
 	return ReconcileTLSRoute(ctx, r.Client, TLSRouteConfig{
 		Name:        fmt.Sprintf("%s-tlsroute", ordererRouter.Name),
 		Namespace:   ordererRouter.Namespace,
-		Hostnames:   istioConfig.Hosts,
+		Hostnames:   gatewayConfig.Hosts,
 		ServiceName: r.getServiceName(ordererRouter),
 		ServicePort: r.getServicePort(),
 		Labels: map[string]string{
@@ -1119,40 +1117,40 @@ func (r *OrdererRouterReconciler) reconcileIstioGateway(ctx context.Context, ord
 	})
 }
 
-// reconcileIstioVirtualService is no longer needed with Gateway API - using TLSRoute only
-func (r *OrdererRouterReconciler) reconcileIstioVirtualService(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
+// reconcileGatewayVirtualService is no longer needed with Gateway API - using TLSRoute only
+func (r *OrdererRouterReconciler) reconcileGatewayVirtualService(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
 	// With Gateway API, we only need TLSRoute - no separate VirtualService
 	return nil
 }
 
-// reconcileIstioResources creates or updates Istio Gateway and VirtualService resources
-func (r *OrdererRouterReconciler) reconcileIstioResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
+// reconcileGatewayResources creates or updates Istio Gateway and VirtualService resources
+func (r *OrdererRouterReconciler) reconcileGatewayResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Istio configuration is provided
-	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping Istio resources")
+	// Check if Gateway configuration is provided
+	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Gateway == nil {
+		log.Info("No Gateway configuration found, skipping Gateway resources")
 		return nil
 	}
 
 	// Reconcile Gateway
-	if err := r.reconcileIstioGateway(ctx, ordererRouter); err != nil {
+	if err := r.reconcileGatewayGateway(ctx, ordererRouter); err != nil {
 		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
 	}
 
 	// Reconcile VirtualService
-	if err := r.reconcileIstioVirtualService(ctx, ordererRouter); err != nil {
+	if err := r.reconcileGatewayVirtualService(ctx, ordererRouter); err != nil {
 		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
 	}
 
-	log.Info("Istio resources reconciled successfully")
+	log.Info("Gateway resources reconciled successfully")
 	return nil
 }
 
-// cleanupIstioResources cleans up Gateway API TLSRoute resources
-func (r *OrdererRouterReconciler) cleanupIstioResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
-	// Check if Istio configuration is provided
-	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Istio == nil {
+// cleanupGatewayResources cleans up Gateway API TLSRoute resources
+func (r *OrdererRouterReconciler) cleanupGatewayResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
+	// Check if Gateway configuration is provided
+	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Gateway == nil {
 		return nil
 	}
 

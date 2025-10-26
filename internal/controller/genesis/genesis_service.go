@@ -28,6 +28,7 @@ import (
 	"github.com/hyperledger/fabric-config/protolator"
 	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen"
 	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen/genesisconfig"
+	"gopkg.in/yaml.v2"
 
 	"github.com/go-logr/logr"
 	"github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
@@ -112,6 +113,7 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 		return nil, errors.Wrap(err, "failed to fetch meta namespace CA certificate")
 	}
 	s.logger.Info("Successfully fetched meta namespace CA certificate", "size", len(metaNamespaceCA))
+	s.logger.V(1).Info("Meta namespace CA certificate", "certificate", string(metaNamespaceCA))
 
 	// Create temporary directory for MSP files
 	tempDir, err := os.MkdirTemp("", "genesis-msp")
@@ -283,48 +285,6 @@ func (s *GenesisService) fetchAndValidateX509Certificate(ctx context.Context, se
 	return certData, nil
 }
 
-// createOrganizationConfig creates a genesisconfig.Organization from certificates
-func (s *GenesisService) createOrganizationConfig(mspID string, adminCert, ordererCert []byte, metaNamespaceCA []byte) (*genesisconfig.Organization, error) {
-	// Create organization configuration
-	org := &genesisconfig.Organization{
-		Name:    mspID,
-		ID:      mspID,
-		MSPType: "bccsp",
-		Policies: map[string]*genesisconfig.Policy{
-			"Readers": {
-				Type: "ImplicitMeta",
-				Rule: "ANY Readers",
-			},
-			"Writers": {
-				Type: "ImplicitMeta",
-				Rule: "ANY Writers",
-			},
-			"Admins": {
-				Type: "ImplicitMeta",
-				Rule: "MAJORITY Admins",
-			},
-		},
-	}
-
-	// Use adminCert as signing CA cert and ordererCert as TLS CA cert
-	// If ordererCert is not provided, use adminCert for both
-	signCACert := adminCert
-	tlsCACert := ordererCert
-	if len(tlsCACert) == 0 {
-		tlsCACert = adminCert
-	}
-
-	// Provision MSP directory
-	tempMSPDir, _, err := s.provisionMSPDirectory(mspID, signCACert, tlsCACert, metaNamespaceCA)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to provision MSP directory for %s", mspID)
-	}
-
-	org.MSPDir = tempMSPDir
-
-	return org, nil
-}
-
 // createOrdererOrganizations creates orderer organizations from orderer organizations
 func (s *GenesisService) createOrdererOrganizations(ctx context.Context, ordererOrgs []v1alpha1.OrdererOrganization, allOrgs []*genesisconfig.Organization, metaNamespaceCA []byte) ([]*genesisconfig.Organization, error) {
 	var resultOrgs []*genesisconfig.Organization
@@ -353,11 +313,34 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 			return nil, errors.Errorf("organization %s not found", mspID)
 		}
 
+		// Build orderer endpoints from router and assembler configuration
+		var ordererEndpoints []string
+
+		// Add router endpoint (broadcast)
+		if genesisOrg.Router != nil {
+			endpoint := fmt.Sprintf("id=%d,broadcast,%s:%d", genesisOrg.Router.PartyID, genesisOrg.Router.Host, genesisOrg.Router.Port)
+			ordererEndpoints = append(ordererEndpoints, endpoint)
+			s.logger.Info("Adding router endpoint", "mspID", mspID, "endpoint", endpoint)
+		}
+
+		// Add assembler endpoint (deliver)
+		if genesisOrg.Assembler != nil {
+			// Extract partyID from router config since assembler doesn't have it
+			partyID := int32(0)
+			if genesisOrg.Router != nil {
+				partyID = genesisOrg.Router.PartyID
+			}
+			endpoint := fmt.Sprintf("id=%d,deliver,%s:%d", partyID, genesisOrg.Assembler.Host, genesisOrg.Assembler.Port)
+			ordererEndpoints = append(ordererEndpoints, endpoint)
+			s.logger.Info("Adding assembler endpoint", "mspID", mspID, "endpoint", endpoint)
+		}
+
 		// Create a new orderer organization with proper MSP structure
 		ordererOrg := &genesisconfig.Organization{
-			Name:    sourceOrg.Name,
-			ID:      sourceOrg.ID,
-			MSPType: sourceOrg.MSPType,
+			Name:             sourceOrg.Name,
+			ID:               sourceOrg.ID,
+			MSPType:          sourceOrg.MSPType,
+			OrdererEndpoints: ordererEndpoints,
 			Policies: map[string]*genesisconfig.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
@@ -605,7 +588,7 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 				},
 			},
 			Capabilities: map[string]bool{
-				"V3_0": true,
+				"V2_0": true,
 			},
 		},
 		Application: &genesisconfig.Application{
@@ -630,7 +613,7 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 			},
 		},
 		Capabilities: map[string]bool{
-			"V2_0": true,
+			"V3_0": true,
 		},
 		Policies: map[string]*genesisconfig.Policy{
 			"Readers": {
@@ -658,7 +641,11 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 	if genesisBlock == nil {
 		return nil, errors.New("genesis block is nil")
 	}
-
+	profileYaml, err := yaml.Marshal(profile)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal profile")
+	}
+	s.logger.V(1).Info("Genesis block", "block", string(profileYaml))
 	// Marshal to protobuf
 	blockBytes, err := proto.Marshal(genesisBlock)
 	if err != nil {

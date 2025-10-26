@@ -108,6 +108,11 @@ spec:
                         - name
                         - namespace
                         type: object
+                      caName:
+                        description: |-
+                          CA name within Fabric CA server (e.g., "ca" for signing CA, "tlsca" for TLS CA)
+                          If not specified, uses the default CA
+                        type: string
                       name:
                         description: Name of the CA custom resource
                         type: string
@@ -138,10 +143,6 @@ spec:
                     - name
                     - namespace
                     type: object
-                  enrollTLS:
-                    default: true
-                    description: Whether to also enroll for TLS certificates
-                    type: boolean
                   idemix:
                     description: Idemix enrollment configuration (if using idemix
                       instead of X.509)
@@ -168,6 +169,11 @@ spec:
                             - name
                             - namespace
                             type: object
+                          caName:
+                            description: |-
+                              CA name within Fabric CA server (e.g., "ca" for signing CA, "tlsca" for TLS CA)
+                              If not specified, uses the default CA
+                            type: string
                           name:
                             description: Name of the CA custom resource
                             type: string
@@ -183,37 +189,6 @@ spec:
                         description: Enabled indicates whether idemix enrollment is
                           enabled
                         type: boolean
-                    type: object
-                  tlsCARef:
-                    description: TLS CA reference (if different from signing CA)
-                    properties:
-                      caCertRef:
-                        description: TLS CA certificate reference for connecting to
-                          the CA
-                        properties:
-                          key:
-                            description: Secret key
-                            type: string
-                          name:
-                            description: Secret name
-                            type: string
-                          namespace:
-                            description: Namespace of the secret
-                            type: string
-                        required:
-                        - key
-                        - name
-                        - namespace
-                        type: object
-                      name:
-                        description: Name of the CA custom resource
-                        type: string
-                      namespace:
-                        description: Namespace of the CA (optional, defaults to identity's
-                          namespace)
-                        type: string
-                    required:
-                    - name
                     type: object
                 required:
                 - caRef
@@ -231,17 +206,14 @@ spec:
                       type: string
                     description: Additional labels to apply to output secrets
                     type: object
-                  namespace:
-                    description: Namespace for output secrets (optional, defaults
-                      to identity's namespace)
-                    type: string
-                  secretPrefix:
+                  secretName:
                     description: |-
-                      Secret name prefix for storing identity materials
-                      Will create secrets: <prefix>-sign-cert, <prefix>-sign-key, <prefix>-tls-cert, <prefix>-tls-key
+                      Secret name for storing identity materials
+                      Will create a single secret with keys: cert.pem, key.pem, cacert.pem
+                      Namespace is inferred from the Identity resource namespace
                     type: string
                 required:
-                - secretPrefix
+                - secretName
                 type: object
               type:
                 description: Type of identity

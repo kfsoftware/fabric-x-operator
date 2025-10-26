@@ -509,22 +509,12 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 	mspID := identity.Spec.MspID
 	log.Info("Setting up MSP from Identity", "identity", identityRef.Name, "mspID", mspID)
 
-	// Determine the secret names from the identity's output configuration
-	// This is more reliable than using status.outputSecrets which might not be populated yet
-	secretPrefix := identity.Spec.Output.SecretPrefix
+	// Use the single consolidated secret from the identity's output configuration
+	secretName := identity.Spec.Output.SecretName
 	outputNamespace := identityRef.Namespace
-	if identity.Spec.Output.Namespace != "" {
-		outputNamespace = identity.Spec.Output.Namespace
-	}
 
-	signCertSecretName := fmt.Sprintf("%s-sign-cert", secretPrefix)
-	signKeySecretName := fmt.Sprintf("%s-sign-key", secretPrefix)
-	signCACertSecretName := fmt.Sprintf("%s-sign-cacert", secretPrefix)
-
-	log.Info("Using secrets from identity output",
-		"signCert", signCertSecretName,
-		"signKey", signKeySecretName,
-		"signCACert", signCACertSecretName,
+	log.Info("Using consolidated secret from identity output",
+		"secretName", secretName,
 		"namespace", outputNamespace)
 
 	// Create MSP directory structure
@@ -545,12 +535,12 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 		log.V(1).Info("Directory created successfully", "path", dir)
 	}
 
-	// Retrieve signing certificate from secret
+	// Retrieve signing certificate from consolidated secret
 	log.V(1).Info("Retrieving signing certificate from secret",
-		"secretName", signCertSecretName,
+		"secretName", secretName,
 		"namespace", outputNamespace,
 		"key", "cert.pem")
-	signCertData, err := r.getSecretData(ctx, signCertSecretName, outputNamespace, "cert.pem")
+	signCertData, err := r.getSecretData(ctx, secretName, outputNamespace, "cert.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sign certificate: %w", err)
 	}
@@ -564,12 +554,12 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 	}
 	log.V(1).Info("Signing certificate written successfully", "path", certPath)
 
-	// Retrieve signing key from secret (stored as cert.pem in the secret)
+	// Retrieve signing key from consolidated secret (stored as key.pem)
 	log.V(1).Info("Retrieving signing key from secret",
-		"secretName", signKeySecretName,
+		"secretName", secretName,
 		"namespace", outputNamespace,
-		"key", "cert.pem")
-	signKeyData, err := r.getSecretData(ctx, signKeySecretName, outputNamespace, "cert.pem")
+		"key", "key.pem")
+	signKeyData, err := r.getSecretData(ctx, secretName, outputNamespace, "key.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sign key: %w", err)
 	}
@@ -583,12 +573,12 @@ func (r *ChainNamespaceReconciler) setupMSPFromIdentity(ctx context.Context, ide
 	}
 	log.V(1).Info("Signing key written successfully", "path", keyPath)
 
-	// Retrieve CA certificate from secret (stored as cert.pem in the secret)
+	// Retrieve CA certificate from consolidated secret (stored as cacert.pem)
 	log.V(1).Info("Retrieving CA certificate from secret",
-		"secretName", signCACertSecretName,
+		"secretName", secretName,
 		"namespace", outputNamespace,
-		"key", "cert.pem")
-	caCertData, err := r.getSecretData(ctx, signCACertSecretName, outputNamespace, "cert.pem")
+		"key", "cacert.pem")
+	caCertData, err := r.getSecretData(ctx, secretName, outputNamespace, "cacert.pem")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get CA certificate: %w", err)
 	}

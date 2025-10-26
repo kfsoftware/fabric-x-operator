@@ -38,13 +38,10 @@ spec:
         value: "true"
         ecert: true
 
-    # Also enroll for TLS certificates
-    enrollTLS: true
-
   # Output configuration
   output:
-    # Prefix for output secrets
-    secretPrefix: org1-admin
+    # Secret name for storing identity materials
+    secretName: org1-admin-cert
 
     # Optional: labels to apply to output secrets
     labels:

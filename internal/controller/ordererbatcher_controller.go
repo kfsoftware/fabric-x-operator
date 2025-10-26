@@ -125,8 +125,6 @@ type OrdererBatcherReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.istio.io,resources=gateways,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -866,23 +864,23 @@ func (r *OrdererBatcherReconciler) reconcileIngress(ctx context.Context, orderer
 	return nil
 }
 
-// reconcileIstioGateway creates or updates the Gateway API TLSRoute for Batcher
-func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+// reconcileGatewayGateway creates or updates the Gateway API TLSRoute for Batcher
+func (r *OrdererBatcherReconciler) reconcileGatewayGateway(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Istio configuration is provided
-	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping TLSRoute creation")
+	// Check if Gateway configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Gateway == nil {
+		log.Info("No Gateway configuration found, skipping TLSRoute creation")
 		return nil
 	}
 
-	istioConfig := ordererBatcher.Spec.Ingress.Istio
+	gatewayConfig := ordererBatcher.Spec.Ingress.Gateway
 
 	// Use shared helper function to reconcile TLSRoute
 	return ReconcileTLSRoute(ctx, r.Client, TLSRouteConfig{
 		Name:        fmt.Sprintf("%s-tlsroute", ordererBatcher.Name),
 		Namespace:   ordererBatcher.Namespace,
-		Hostnames:   istioConfig.Hosts,
+		Hostnames:   gatewayConfig.Hosts,
 		ServiceName: r.getServiceName(ordererBatcher),
 		ServicePort: r.getServicePort(),
 		Labels: map[string]string{
@@ -895,40 +893,40 @@ func (r *OrdererBatcherReconciler) reconcileIstioGateway(ctx context.Context, or
 	})
 }
 
-// reconcileIstioVirtualService is no longer needed with Gateway API - using TLSRoute only
-func (r *OrdererBatcherReconciler) reconcileIstioVirtualService(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+// reconcileGatewayVirtualService is no longer needed with Gateway API - using TLSRoute only
+func (r *OrdererBatcherReconciler) reconcileGatewayVirtualService(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	// With Gateway API, we only need TLSRoute - no separate VirtualService
 	return nil
 }
 
-// reconcileIstioResources creates or updates Istio Gateway and VirtualService resources
-func (r *OrdererBatcherReconciler) reconcileIstioResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+// reconcileGatewayResources creates or updates Istio Gateway and VirtualService resources
+func (r *OrdererBatcherReconciler) reconcileGatewayResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Istio configuration is provided
-	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
-		log.Info("No Istio configuration found, skipping Istio resources")
+	// Check if Gateway configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Gateway == nil {
+		log.Info("No Gateway configuration found, skipping Gateway resources")
 		return nil
 	}
 
 	// Reconcile Gateway
-	if err := r.reconcileIstioGateway(ctx, ordererBatcher); err != nil {
+	if err := r.reconcileGatewayGateway(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
 	}
 
 	// Reconcile VirtualService
-	if err := r.reconcileIstioVirtualService(ctx, ordererBatcher); err != nil {
+	if err := r.reconcileGatewayVirtualService(ctx, ordererBatcher); err != nil {
 		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
 	}
 
-	log.Info("Istio resources reconciled successfully")
+	log.Info("Gateway resources reconciled successfully")
 	return nil
 }
 
-// cleanupIstioResources cleans up Gateway API TLSRoute resources
-func (r *OrdererBatcherReconciler) cleanupIstioResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
-	// Check if Istio configuration is provided
-	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Istio == nil {
+// cleanupGatewayResources cleans up Gateway API TLSRoute resources
+func (r *OrdererBatcherReconciler) cleanupGatewayResources(ctx context.Context, ordererBatcher *fabricxv1alpha1.OrdererBatcher) error {
+	// Check if Gateway configuration is provided
+	if ordererBatcher.Spec.Ingress == nil || ordererBatcher.Spec.Ingress.Gateway == nil {
 		return nil
 	}
 
@@ -983,9 +981,9 @@ func (r *OrdererBatcherReconciler) reconcileDeployMode(ctx context.Context, orde
 	}
 
 	// 8. Create/Update Istio Gateway and VirtualService (if Istio is configured)
-	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Istio != nil {
-		if err := r.reconcileIstioResources(ctx, ordererBatcher); err != nil {
-			return fmt.Errorf("failed to reconcile Istio resources: %w", err)
+	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Gateway != nil {
+		if err := r.reconcileGatewayResources(ctx, ordererBatcher); err != nil {
+			return fmt.Errorf("failed to reconcile Gateway resources: %w", err)
 		}
 	}
 
@@ -1016,10 +1014,10 @@ func (r *OrdererBatcherReconciler) handleDeletion(ctx context.Context, ordererBa
 	// Set status to indicate deletion
 	r.updateOrdererBatcherStatus(ctx, ordererBatcher, fabricxv1alpha1.PendingStatus, "Deleting OrdererBatcher resources")
 
-	// Clean up Istio resources if they exist
-	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Istio != nil {
-		if err := r.cleanupIstioResources(ctx, ordererBatcher); err != nil {
-			log.Error(err, "Failed to cleanup Istio resources")
+	// Clean up Gateway resources if they exist
+	if ordererBatcher.Spec.Ingress != nil && ordererBatcher.Spec.Ingress.Gateway != nil {
+		if err := r.cleanupGatewayResources(ctx, ordererBatcher); err != nil {
+			log.Error(err, "Failed to cleanup Gateway resources")
 		}
 	}
 

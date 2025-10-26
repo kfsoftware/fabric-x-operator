@@ -203,12 +203,12 @@ type FabricCAIngress struct {
 	// Enabled flag to enable/disable ingress
 	Enabled bool `json:"enabled,omitempty"`
 
-	// Istio-specific configuration
-	Istio *FabricCAIstioConfig `json:"istio,omitempty"`
+	// Gateway-specific configuration (optional - for Istio or other gateway implementations)
+	Gateway *FabricCAGatewayConfig `json:"gateway,omitempty"`
 }
 
-// FabricCAIstioConfig defines Istio ingress configuration
-type FabricCAIstioConfig struct {
+// FabricCAGatewayConfig defines Gateway ingress configuration
+type FabricCAGatewayConfig struct {
 	// Hosts for this CA
 	Hosts []string `json:"hosts"`
 
