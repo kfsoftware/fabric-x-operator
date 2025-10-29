@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: local/fabric-x-operator
-  newTag: "20251023144859"
+  newTag: "20251029144624"

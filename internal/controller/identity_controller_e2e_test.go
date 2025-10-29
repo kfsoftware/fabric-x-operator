@@ -166,7 +166,6 @@ func testSignEnrollmentX509(t *testing.T, ctx context.Context, k8sClient client.
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
 				SecretName: "test-identity-sign",
-				Namespace:    namespace,
 			},
 		},
 	}
@@ -238,7 +237,6 @@ func testSignAndTLSEnrollmentX509(t *testing.T, ctx context.Context, k8sClient c
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
 				SecretName: "test-identity-dual",
-				Namespace:    namespace,
 			},
 		},
 	}
@@ -310,7 +308,6 @@ func testSecretCleanupOnDeletion(t *testing.T, ctx context.Context, k8sClient cl
 			},
 			Output: fabricxv1alpha1.IdentityOutput{
 				SecretName: "test-identity-cleanup",
-				Namespace:    namespace,
 			},
 		},
 	}

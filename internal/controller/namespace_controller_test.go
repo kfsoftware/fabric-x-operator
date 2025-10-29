@@ -82,11 +82,9 @@ var _ = Describe("ChainNamespace Controller", func() {
 							Key:       "password",
 							Namespace: "default",
 						},
-						EnrollTLS: false,
 					},
 					Output: fabricxv1alpha1.IdentityOutput{
 						SecretName: identityName,
-						Namespace:    "default",
 					},
 				},
 				Status: fabricxv1alpha1.IdentityStatus{

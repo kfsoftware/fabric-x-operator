@@ -67,7 +67,7 @@ func TestMultipleReconcilesForCoverage(t *testing.T) {
 					NamespacedName: types.NamespacedName{Name: "test", Namespace: "default"},
 				})
 			}
-			
+
 			if i%5 == 0 {
 				ordererGroup := &fabricxv1alpha1.OrdererGroup{
 					ObjectMeta: metav1.ObjectMeta{
@@ -95,7 +95,7 @@ func TestMultipleReconcilesForCoverage(t *testing.T) {
 					NamespacedName: types.NamespacedName{Name: "test", Namespace: "default"},
 				})
 			}
-			
+
 			if i%7 == 0 {
 				committer := &fabricxv1alpha1.Committer{
 					ObjectMeta: metav1.ObjectMeta{
@@ -103,7 +103,7 @@ func TestMultipleReconcilesForCoverage(t *testing.T) {
 						Namespace: "default",
 					},
 					Spec: fabricxv1alpha1.CommitterSpec{
-						MSPID: "Org1MSP",
+						MSPID:         "Org1MSP",
 						BootstrapMode: "deploy",
 					},
 				}

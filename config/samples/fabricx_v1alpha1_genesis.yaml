@@ -38,7 +38,7 @@ spec:
         key: cert.pem
         name: orderergroup-party1-consenter-sign-cert
         namespace: default
-      mspId: OrdererMSP
+      mspId: Org1MSP
       port: 7052
       serverTlsCertRef:
         key: cert.pem
@@ -54,7 +54,7 @@ spec:
         key: cert.pem
         name: orderergroup-party2-consenter-sign-cert
         namespace: default
-      mspId: OrdererMSP
+      mspId: Org1MSP
       port: 7052
       serverTlsCertRef:
         key: cert.pem
@@ -70,7 +70,7 @@ spec:
         key: cert.pem
         name: orderergroup-party3-consenter-sign-cert
         namespace: default
-      mspId: OrdererMSP
+      mspId: Org1MSP
       port: 7052
       serverTlsCertRef:
         key: cert.pem
@@ -86,15 +86,15 @@ spec:
         key: cert.pem
         name: orderergroup-party4-consenter-sign-cert
         namespace: default
-      mspId: OrdererMSP
+      mspId: Org1MSP
       port: 7052
       serverTlsCertRef:
         key: cert.pem
         name: orderergroup-party4-consenter-tls-cert
         namespace: default
   ordererOrganizations:
-    - mspId: OrdererMSP
-      name: OrdererMSP
+    - mspId: Org1MSP
+      name: Org1MSP
       signCaCertRef:
         key: certfile
         name: test-ca2-msp-crypto
@@ -103,6 +103,20 @@ spec:
         key: certfile
         name: test-ca2-tlsca-crypto
         namespace: default
+      # Orderer endpoints for all 4 parties
+      endpoints:
+        # Party 1 endpoints
+        - "id=1,broadcast,orderergroup-party1-router-service.default.svc.cluster.local:7150"
+        - "id=1,deliver,orderergroup-party1-assembler.default.svc.cluster.local:7050"
+        # Party 2 endpoints
+        - "id=2,broadcast,orderergroup-party2-router-service.default.svc.cluster.local:7150"
+        - "id=2,deliver,orderergroup-party2-assembler.default.svc.cluster.local:7050"
+        # Party 3 endpoints
+        - "id=3,broadcast,orderergroup-party3-router-service.default.svc.cluster.local:7150"
+        - "id=3,deliver,orderergroup-party3-assembler.default.svc.cluster.local:7050"
+        # Party 4 endpoints
+        - "id=4,broadcast,orderergroup-party4-router-service.default.svc.cluster.local:7150"
+        - "id=4,deliver,orderergroup-party4-assembler.default.svc.cluster.local:7050"
       router:
         host: orderergroup-party1-router-service.default.svc.cluster.local
         port: 7150

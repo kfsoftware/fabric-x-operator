@@ -202,11 +202,9 @@ var _ = Describe("Identity Controller E2E", Ordered, func() {
 							Key:       "password",
 							Namespace: namespace,
 						},
-						EnrollTLS: false,
 					},
 					Output: fabricxv1alpha1.IdentityOutput{
-						SecretPrefix: identityName,
-						Namespace:    namespace,
+						SecretName: identityName,
 					},
 				},
 			}
@@ -229,8 +227,7 @@ var _ = Describe("Identity Controller E2E", Ordered, func() {
 					msg := id.Status.Message
 
 					// If it failed due to TLS cert verification, that's SUCCESS for service DNS test
-					if msg != "" && (
-						strings.Contains(msg, "tls: failed to verify certificate") ||
+					if msg != "" && (strings.Contains(msg, "tls: failed to verify certificate") ||
 						strings.Contains(msg, "certificate is not valid for any names") ||
 						strings.Contains(msg, "x509: certificate")) {
 						fmt.Fprintf(GinkgoWriter, "\n")

@@ -231,6 +231,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: ## Build docker image with the manager.
 	$(CONTAINER_TOOL) build -t ${IMG} .
 
+.PHONY: docker-build-binary
+docker-build-binary: ## Build docker image with pre-built binary (faster). Builds for linux automatically.
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/manager cmd/main.go
+	$(CONTAINER_TOOL) build -f Dockerfile.binary -t ${IMG} .
+
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}

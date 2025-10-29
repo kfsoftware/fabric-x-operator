@@ -313,26 +313,36 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 			return nil, errors.Errorf("organization %s not found", mspID)
 		}
 
-		// Build orderer endpoints from router and assembler configuration
+		// Build orderer endpoints from direct endpoints field or router/assembler configuration
 		var ordererEndpoints []string
 
-		// Add router endpoint (broadcast)
-		if genesisOrg.Router != nil {
-			endpoint := fmt.Sprintf("id=%d,broadcast,%s:%d", genesisOrg.Router.PartyID, genesisOrg.Router.Host, genesisOrg.Router.Port)
-			ordererEndpoints = append(ordererEndpoints, endpoint)
-			s.logger.Info("Adding router endpoint", "mspID", mspID, "endpoint", endpoint)
-		}
-
-		// Add assembler endpoint (deliver)
-		if genesisOrg.Assembler != nil {
-			// Extract partyID from router config since assembler doesn't have it
-			partyID := int32(0)
-			if genesisOrg.Router != nil {
-				partyID = genesisOrg.Router.PartyID
+		// Prefer direct endpoints if provided
+		if len(genesisOrg.Endpoints) > 0 {
+			ordererEndpoints = append(ordererEndpoints, genesisOrg.Endpoints...)
+			s.logger.Info("Using direct endpoints", "mspID", mspID, "count", len(genesisOrg.Endpoints))
+			for _, endpoint := range genesisOrg.Endpoints {
+				s.logger.Info("  Endpoint", "mspID", mspID, "endpoint", endpoint)
 			}
-			endpoint := fmt.Sprintf("id=%d,deliver,%s:%d", partyID, genesisOrg.Assembler.Host, genesisOrg.Assembler.Port)
-			ordererEndpoints = append(ordererEndpoints, endpoint)
-			s.logger.Info("Adding assembler endpoint", "mspID", mspID, "endpoint", endpoint)
+		} else {
+			// Fall back to building from router and assembler configuration
+			// Add router endpoint (broadcast)
+			if genesisOrg.Router != nil {
+				endpoint := fmt.Sprintf("id=%d,broadcast,%s:%d", genesisOrg.Router.PartyID, genesisOrg.Router.Host, genesisOrg.Router.Port)
+				ordererEndpoints = append(ordererEndpoints, endpoint)
+				s.logger.Info("Adding router endpoint", "mspID", mspID, "endpoint", endpoint)
+			}
+
+			// Add assembler endpoint (deliver)
+			if genesisOrg.Assembler != nil {
+				// Extract partyID from router config since assembler doesn't have it
+				partyID := int32(0)
+				if genesisOrg.Router != nil {
+					partyID = genesisOrg.Router.PartyID
+				}
+				endpoint := fmt.Sprintf("id=%d,deliver,%s:%d", partyID, genesisOrg.Assembler.Host, genesisOrg.Assembler.Port)
+				ordererEndpoints = append(ordererEndpoints, endpoint)
+				s.logger.Info("Adding assembler endpoint", "mspID", mspID, "endpoint", endpoint)
+			}
 		}
 
 		// Create a new orderer organization with proper MSP structure

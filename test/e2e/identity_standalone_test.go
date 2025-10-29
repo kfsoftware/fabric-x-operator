@@ -207,7 +207,6 @@ var _ = Describe("Identity Controller Standalone E2E", Ordered, func() {
 					},
 					Output: fabricxv1alpha1.IdentityOutput{
 						SecretName: identityName,
-						Namespace:    namespace,
 					},
 				},
 			}
@@ -231,8 +230,7 @@ var _ = Describe("Identity Controller Standalone E2E", Ordered, func() {
 
 					// If it failed due to TLS cert verification (expected with self-signed certs),
 					// that's actually SUCCESS for this test because it proves service DNS resolution worked
-					if msg != "" && (
-						strings.Contains(msg, "tls: failed to verify certificate") ||
+					if msg != "" && (strings.Contains(msg, "tls: failed to verify certificate") ||
 						strings.Contains(msg, "certificate is not valid for any names") ||
 						strings.Contains(msg, "x509: certificate")) {
 						fmt.Fprintf(GinkgoWriter, "✅ Service DNS resolution worked! (TLS cert validation failed as expected with self-signed certs)\n")

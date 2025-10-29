@@ -163,7 +163,6 @@ func TestIdentityControllerSimpleE2E(t *testing.T) {
 				},
 				Output: fabricxv1alpha1.IdentityOutput{
 					SecretName: "simple-identity",
-					Namespace:    namespace,
 				},
 			},
 		}

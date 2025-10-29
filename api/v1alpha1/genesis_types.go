@@ -49,6 +49,12 @@ type OrdererOrganization struct {
 	// Admin certificate reference (optional)
 	AdminCertRef *SecretKeyNSSelector `json:"adminCertRef,omitempty"`
 
+	// Orderer endpoints in the format: "id=<partyID>,<type>,<host>:<port>"
+	// Example: "id=1,broadcast,orderergroup-party1-router-service.default.svc.cluster.local:7150"
+	// Types: "broadcast" (router), "deliver" (assembler)
+	// +optional
+	Endpoints []string `json:"endpoints,omitempty"`
+
 	// Router configuration for this organization
 	Router *RouterConfig `json:"router,omitempty"`
 

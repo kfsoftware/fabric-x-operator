@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"reflect"
 
 	"github.com/hyperledger/fabric-config/protolator"
@@ -41,45 +39,12 @@ import (
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/genesis"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller/utils"
-	pkgerrors "github.com/pkg/errors"
 )
 
 const (
 	// GenesisFinalizerName is the name of the finalizer used by Genesis
 	GenesisFinalizerName = "genesis.fabricx.kfsoft.tech/finalizer"
 )
-
-// decodeProto decodes a protobuf message and converts it to JSON
-func decodeProto(msgName string, input, output *os.File) error {
-	mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(msgName))
-	if err != nil {
-		return pkgerrors.Wrapf(err, "error encode input")
-	}
-
-	msgType := reflect.TypeOf(mt.Zero().Interface())
-
-	if msgType == nil {
-		return pkgerrors.Errorf("message of type %s unknown", msgType)
-	}
-	msg := reflect.New(msgType.Elem()).Interface().(proto.Message)
-
-	in, err := io.ReadAll(input)
-	if err != nil {
-		return pkgerrors.Wrapf(err, "error reading input")
-	}
-
-	err = proto.Unmarshal(in, msg)
-	if err != nil {
-		return pkgerrors.Wrapf(err, "error unmarshalling")
-	}
-
-	err = protolator.DeepMarshalJSON(output, msg)
-	if err != nil {
-		return pkgerrors.Wrapf(err, "error encoding output")
-	}
-
-	return nil
-}
 
 // GenesisReconciler reconciles a Genesis object
 type GenesisReconciler struct {

@@ -556,6 +556,14 @@ spec:
                       - signCertRef
                       - tlsCertRef
                       type: object
+                    endpoints:
+                      description: |-
+                        Orderer endpoints in the format: "id=<partyID>,<type>,<host>:<port>"
+                        Example: "id=1,broadcast,orderergroup-party1-router-service.default.svc.cluster.local:7150"
+                        Types: "broadcast" (router), "deliver" (assembler)
+                      items:
+                        type: string
+                      type: array
                     mspId:
                       description: MSP ID for the organization
                       type: string
