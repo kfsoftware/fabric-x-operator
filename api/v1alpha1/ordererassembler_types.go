@@ -101,6 +101,9 @@ type OrdererAssemblerSpec struct {
 
 	// Component-specific args
 	Args []string `json:"args,omitempty"`
+
+	// TLS configuration
+	TLS *TLSConfig `json:"tls,omitempty"`
 }
 
 // OrdererAssemblerStatus defines the observed state of OrdererAssembler.

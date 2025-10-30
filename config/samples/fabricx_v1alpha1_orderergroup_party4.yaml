@@ -43,10 +43,17 @@ spec:
       sans:
         dnsNames:
         - orderergroup-party4-assembler.default.svc.cluster.local
+        - orderergroup-party4-assembler.localho.st
       env:
       - name: ASSEMBLER_MAX_MESSAGE_COUNT
         value: '500'
       replicas: 1
+      ingress:
+        gateway:
+          hosts:
+          - orderergroup-party4-assembler.localho.st
+          port: 7050
+          ingressGateway: istio-system/istio-ingressgateway
     batchers:
     - shardID: 1
       sans:
@@ -106,11 +113,18 @@ spec:
       sans:
         dnsNames:
         - orderergroup-party4-router-service.default.svc.cluster.local
+        - orderergroup-party4-router.localho.st
       env:
       - name: ROUTER_CHANNEL_BUFFER_SIZE
         value: '1000'
       imagePullSecrets: []
       replicas: 1
+      ingress:
+        gateway:
+          hosts:
+          - orderergroup-party4-router.localho.st
+          port: 7150
+          ingressGateway: istio-system/istio-ingressgateway
       volumes:
       - name: router-cache
         volumeSource:

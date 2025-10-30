@@ -1,7 +1,7 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Identity
 metadata:
-  name: admin-identity
+  name: org1-admin
   namespace: default
 spec:
   # Type of identity
@@ -10,74 +10,17 @@ spec:
   # MSPID for this identity
   mspID: Org1MSP
 
-  # Option 1: Import existing certificates
-  existingCertificates:
-    # Signing certificate reference
-    signCertRef:
-      name: admin-sign-cert
-      key: cert.pem
+  # Enroll with CA
+  enrollment:
+    caRef:
+      name: test-ca2
       namespace: default
-
-    # Signing private key reference
-    signKeyRef:
-      name: admin-sign-key
-      key: key.pem
+    enrollID: admin
+    enrollSecretRef:
+      name: admin-enroll-secret
+      key: password
       namespace: default
-
-    # Signing CA certificate reference
-    signCACertRef:
-      name: test-ca2-msp-crypto
-      key: certfile
-      namespace: default
-
-    # Optional: TLS certificate reference
-    tlsCertRef:
-      name: admin-tls-cert
-      key: cert.pem
-      namespace: default
-
-    # Optional: TLS private key reference
-    tlsKeyRef:
-      name: admin-tls-key
-      key: key.pem
-      namespace: default
-
-    # Optional: TLS CA certificate reference
-    tlsCACertRef:
-      name: test-ca2-tlsca-crypto
-      key: certfile
-      namespace: default
-
-  # Option 2: Enroll with CA (not yet implemented)
-  # enrollment:
-  #   caRef:
-  #     name: test-ca2
-  #     namespace: default
-  #   enrollID: admin
-  #   enrollSecretRef:
-  #     name: admin-password
-  #     key: password
-  #     namespace: default
-  #   enrollTLS: true
-
-  # Option 3: Register and enroll with CA (not yet implemented)
-  # register:
-  #   registrarID: admin
-  #   registrarSecretRef:
-  #     name: admin-password
-  #     key: password
-  #     namespace: default
-  #   maxEnrollments: -1
 
   # Output configuration
   output:
-    # Prefix for output secrets
-    secretName: admin-identity
-
-    # Optional: namespace for output secrets (defaults to identity namespace)
-    # namespace: default
-
-    # Optional: labels to apply to output secrets
-    labels:
-      app: admin
-      identity: admin-identity
+    secretName: org1-admin

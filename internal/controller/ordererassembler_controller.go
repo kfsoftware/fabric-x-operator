@@ -692,10 +692,11 @@ func (r *OrdererAssemblerReconciler) getServiceTemplate(ordererAssembler *fabric
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Name:       "assembler",
-					Protocol:   corev1.ProtocolTCP,
-					Port:       7050,
-					TargetPort: intstr.FromInt32(7050),
+					Name:        "assembler",
+					Protocol:    corev1.ProtocolTCP,
+					Port:        7050,
+					TargetPort:  intstr.FromInt32(7050),
+					AppProtocol: func() *string { s := "h2c"; return &s }(),
 				},
 			},
 			Type: corev1.ServiceTypeClusterIP,
@@ -725,33 +726,62 @@ func (r *OrdererAssemblerReconciler) updateService(ctx context.Context, ordererA
 	return nil
 }
 
-// reconcileGatewayGateway creates or updates the Gateway API TLSRoute for Assembler
+// reconcileGatewayGateway creates or updates the Gateway API Route for Assembler
 func (r *OrdererAssemblerReconciler) reconcileGatewayGateway(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
 	log := logf.FromContext(ctx)
 
 	// Check if Gateway configuration is provided
 	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Gateway == nil {
-		log.Info("No Gateway configuration found, skipping TLSRoute creation")
+		log.Info("No Gateway configuration found, skipping route creation")
 		return nil
+	}
+
+	// Determine if TLS is enabled
+	tlsEnabled := false
+	if ordererAssembler.Spec.TLS != nil {
+		tlsEnabled = ordererAssembler.Spec.TLS.Enabled
 	}
 
 	gatewayConfig := ordererAssembler.Spec.Ingress.Gateway
 
-	// Use shared helper function to reconcile TLSRoute
-	return ReconcileTLSRoute(ctx, r.Client, TLSRouteConfig{
-		Name:        fmt.Sprintf("%s-tlsroute", ordererAssembler.Name),
-		Namespace:   ordererAssembler.Namespace,
-		Hostnames:   gatewayConfig.Hosts,
-		ServiceName: r.getServiceName(ordererAssembler),
-		ServicePort: r.getServicePort(),
-		Labels: map[string]string{
-			"app":                      "fabric-x",
-			"ordererassembler":         ordererAssembler.Name,
-			"fabricx.kfsoft.tech/type": "tlsroute",
-		},
-		Owner:  ordererAssembler,
-		Scheme: r.Scheme,
-	})
+	if tlsEnabled {
+		// Create TLSRoute for TLS-enabled assemblers (uses SNI-based routing on port 443)
+		log.Info("TLS enabled, creating TLSRoute", "assembler", ordererAssembler.Name)
+		return ReconcileTLSRoute(ctx, r.Client, RouteConfig{
+			Name:           fmt.Sprintf("%s-tlsroute", ordererAssembler.Name),
+			Namespace:      ordererAssembler.Namespace,
+			Hostnames:      gatewayConfig.Hosts,
+			ServiceName:    r.getServiceName(ordererAssembler),
+			ServicePort:    r.getServicePort(),
+			IngressGateway: gatewayConfig.IngressGateway,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererassembler":         ordererAssembler.Name,
+				"fabricx.kfsoft.tech/type": "tlsroute",
+			},
+			Owner:  ordererAssembler,
+			Scheme: r.Scheme,
+		})
+	} else {
+		// Create HTTPRoute for non-TLS assemblers (uses Host header-based routing on port 80)
+		// gRPC uses HTTP/2, so HTTPRoute can route by hostname
+		log.Info("TLS disabled, creating HTTPRoute for hostname-based routing on port 80", "assembler", ordererAssembler.Name)
+		return ReconcileHTTPRoute(ctx, r.Client, RouteConfig{
+			Name:           fmt.Sprintf("%s-httproute", ordererAssembler.Name),
+			Namespace:      ordererAssembler.Namespace,
+			Hostnames:      gatewayConfig.Hosts,
+			ServiceName:    r.getServiceName(ordererAssembler),
+			ServicePort:    r.getServicePort(),
+			IngressGateway: gatewayConfig.IngressGateway,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererassembler":         ordererAssembler.Name,
+				"fabricx.kfsoft.tech/type": "httproute",
+			},
+			Owner:  ordererAssembler,
+			Scheme: r.Scheme,
+		})
+	}
 }
 
 // reconcileGatewayVirtualService is no longer needed with Gateway API - using TLSRoute only
@@ -764,23 +794,64 @@ func (r *OrdererAssemblerReconciler) reconcileGatewayVirtualService(ctx context.
 func (r *OrdererAssemblerReconciler) reconcileGatewayResources(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Gateway configuration is provided
+	// Check if Istio native configuration is provided
+	if ordererAssembler.Spec.Ingress != nil && ordererAssembler.Spec.Ingress.Istio != nil {
+		log.Info("Istio native configuration found, creating VirtualService and DestinationRule")
+		return r.reconcileIstioNativeResources(ctx, ordererAssembler)
+	}
+
+	// Check if Gateway API configuration is provided
 	if ordererAssembler.Spec.Ingress == nil || ordererAssembler.Spec.Ingress.Gateway == nil {
-		log.Info("No Gateway configuration found, skipping Gateway resources")
+		log.Info("No Gateway or Istio configuration found, skipping ingress resources")
 		return nil
 	}
 
-	// Reconcile Gateway
+	// Reconcile Gateway API resources (TLSRoute/HTTPRoute)
 	if err := r.reconcileGatewayGateway(ctx, ordererAssembler); err != nil {
-		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
-	}
-
-	// Reconcile VirtualService
-	if err := r.reconcileGatewayVirtualService(ctx, ordererAssembler); err != nil {
-		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
+		return fmt.Errorf("failed to reconcile Gateway API route: %w", err)
 	}
 
 	log.Info("Gateway resources reconciled successfully")
+	return nil
+}
+
+// reconcileIstioNativeResources creates or updates Istio VirtualService and DestinationRule
+func (r *OrdererAssemblerReconciler) reconcileIstioNativeResources(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) error {
+	log := logf.FromContext(ctx)
+	istioConfig := ordererAssembler.Spec.Ingress.Istio
+
+	// Prepare resource config
+	resourceConfig := IstioResourceConfig{
+		Name:        fmt.Sprintf("%s-vs", ordererAssembler.Name),
+		Namespace:   ordererAssembler.Namespace,
+		Hosts:       istioConfig.Hosts,
+		ServiceName: r.getServiceName(ordererAssembler),
+		ServicePort: 7050,
+		Gateway:     istioConfig.Gateway,
+		EnableHTTP2: istioConfig.EnableHTTP2,
+		Labels: map[string]string{
+			"app":                      "fabric-x",
+			"ordererassembler":         ordererAssembler.Name,
+			"fabricx.kfsoft.tech/type": "istio",
+		},
+		Owner:  ordererAssembler,
+		Scheme: r.Scheme,
+	}
+
+	// Reconcile VirtualService
+	if err := ReconcileIstioVirtualService(ctx, r.Client, resourceConfig); err != nil {
+		log.Error(err, "Failed to reconcile VirtualService")
+		return fmt.Errorf("failed to reconcile VirtualService: %w", err)
+	}
+
+	// Reconcile DestinationRule (for HTTP/2 support)
+	resourceConfig.Name = fmt.Sprintf("%s-dr", ordererAssembler.Name)
+	if err := ReconcileIstioDestinationRule(ctx, r.Client, resourceConfig); err != nil {
+		log.Error(err, "Failed to reconcile DestinationRule")
+		return fmt.Errorf("failed to reconcile DestinationRule: %w", err)
+	}
+
+	log.Info("Istio native resources reconciled successfully", "assembler", ordererAssembler.Name)
 	return nil
 }
 
@@ -837,12 +908,20 @@ func (r *OrdererAssemblerReconciler) getConfigMapTemplate(ctx context.Context, o
 // generateAssemblerConfig generates the assembler configuration
 func (r *OrdererAssemblerReconciler) generateAssemblerConfig(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) string {
 	log := logf.FromContext(ctx)
+
+	// Determine TLS enabled flag
+	tlsEnabled := false
+	if ordererAssembler.Spec.TLS != nil {
+		tlsEnabled = ordererAssembler.Spec.TLS.Enabled
+	}
+
 	// Create template data for assembler
 	templateData := utils.AssemblerTemplateData{
-		Name:    ordererAssembler.Name,
-		PartyID: ordererAssembler.Spec.PartyID,
-		MSPID:   ordererAssembler.Spec.MSPID,
-		Port:    7050, // Assembler port
+		Name:       ordererAssembler.Name,
+		PartyID:    ordererAssembler.Spec.PartyID,
+		MSPID:      ordererAssembler.Spec.MSPID,
+		Port:       7050, // Assembler port
+		TLSEnabled: tlsEnabled,
 	}
 
 	// Execute the template

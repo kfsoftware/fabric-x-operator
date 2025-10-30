@@ -1076,6 +1076,27 @@ spec:
                     - ingressGateway
                     - port
                     type: object
+                  istio:
+                    description: Istio-specific configuration (optional - for native
+                      Istio VirtualService and DestinationRule)
+                    properties:
+                      enableHTTP2:
+                        default: true
+                        description: Enable HTTP/2 (h2c) for backend connections
+                        type: boolean
+                      gateway:
+                        description: Gateway name to attach VirtualService to (e.g.,
+                          "istio-system/istio-ingressgateway")
+                        type: string
+                      hosts:
+                        description: Hosts for this component (used in VirtualService)
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - gateway
+                    - hosts
+                    type: object
                 type: object
               mspid:
                 description: MSP ID

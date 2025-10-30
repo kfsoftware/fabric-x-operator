@@ -44,10 +44,11 @@ type BatcherTemplateData struct {
 
 // RouterTemplateData represents data specific to router templates
 type RouterTemplateData struct {
-	Name    string
-	PartyID int32
-	MSPID   string
-	Port    int32
+	Name       string
+	PartyID    int32
+	MSPID      string
+	Port       int32
+	TLSEnabled bool
 }
 
 // ConsenterTemplateData represents data specific to consenter templates
@@ -62,10 +63,11 @@ type ConsenterTemplateData struct {
 
 // AssemblerTemplateData represents data specific to assembler templates
 type AssemblerTemplateData struct {
-	Name    string
-	PartyID int32
-	MSPID   string
-	Port    int32
+	Name       string
+	PartyID    int32
+	MSPID      string
+	Port       int32
+	TLSEnabled bool
 }
 
 // ExecuteTemplate executes a Go template with the given data
@@ -285,7 +287,7 @@ General:
     ListenAddress: 0.0.0.0
     ListenPort: {{.Port}}
     TLS:
-        Enabled: false
+        Enabled: {{.TLSEnabled}}
         PrivateKey: /etc/hyperledger/fabricx/router/tls/server.key
         Certificate: /etc/hyperledger/fabricx/router/tls/server.crt
         RootCAs:
@@ -368,7 +370,7 @@ General:
     ListenAddress: 0.0.0.0
     ListenPort: {{.Port}}
     TLS:
-        Enabled: false
+        Enabled: {{.TLSEnabled}}
         PrivateKey: /etc/hyperledger/fabricx/assembler/tls/server.key
         Certificate: /etc/hyperledger/fabricx/assembler/tls/server.crt
         RootCAs:

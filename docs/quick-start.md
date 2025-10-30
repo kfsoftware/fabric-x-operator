@@ -7,16 +7,15 @@ This guide will walk you through setting up a complete Hyperledger Fabric X netw
 - [Prerequisites](#prerequisites)
 - [Step 1: Set Up Kubernetes Cluster](#step-1-set-up-kubernetes-cluster)
 - [Step 2: Install the Kubernetes Operator](#step-2-install-the-kubernetes-operator)
-- [Step 3: Install the Kubectl Plugin](#step-3-install-the-kubectl-plugin)
-- [Step 4: Install Istio](#step-4-install-istio)
-- [Step 5: Configure Environment Variables](#step-5-configure-environment-variables)
-- [Step 6: Configure Internal DNS](#step-6-configure-internal-dns)
-- [Step 7: Deploy Certificate Authority](#step-7-deploy-certificate-authority)
-- [Step 8: Create Admin Identity](#step-8-create-admin-identity-optional)
-- [Step 9: Deploy Orderer Groups](#step-9-deploy-orderer-groups)
-- [Step 10: Create Genesis Block](#step-10-create-genesis-block)
-- [Step 11: Patch Orderer Groups to Deploy Mode](#step-11-patch-orderer-groups-to-deploy-mode)
-- [Step 12: Deploy Committer](#step-12-deploy-committer)
+- [Step 3: Install Istio Gateway and Configure DNS](#step-3-install-istio-gateway-and-configure-dns)
+- [Step 4: Configure Environment Variables](#step-4-configure-environment-variables)
+- [Step 5: Deploy Certificate Authority](#step-5-deploy-certificate-authority)
+- [Step 6: Create Admin Identity](#step-6-create-admin-identity)
+- [Step 7: Deploy Orderer Groups](#step-7-deploy-orderer-groups)
+- [Step 8: Create Genesis Block](#step-8-create-genesis-block)
+- [Step 9: Patch Orderer Groups to Deploy Mode](#step-9-patch-orderer-groups-to-deploy-mode)
+- [Step 10: Deploy Committer](#step-10-deploy-committer)
+- [Step 11: Deploy Endorsers](#step-11-deploy-endorsers)
 - [Verification](#verification)
 - [Next Steps](#next-steps)
 - [Troubleshooting](#troubleshooting)
@@ -111,161 +110,64 @@ kubectl get pods
 
 You should see the operator pod running.
 
-## Step 3: Install Istio
+## Step 3: Install Istio Gateway and Configure DNS
 
-Istio provides service mesh capabilities including traffic management, security, and observability.
+The Fabric X Operator uses Istio for external ingress to orderer components. This enables gRPC routing with HTTP/2 support (h2c) for non-TLS communication on port 80, or TLS passthrough routing with SNI-based hostname matching on port 443.
 
-### Download Istio 1.26
+### Install Istio with Gateway API Support
 
 ```bash
+# Download Istio 1.26.3
 curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.26.3 sh -
+export PATH="$PATH:$(pwd)/istio-1.26.3/bin"
+
+# Install Istio with minimal profile
+istioctl install --set profile=minimal -y
 ```
 
-### Move to Istio Directory and Add to PATH
+### Configure Istio Gateway Service with NodePorts
+
+Update the Istio gateway service to use specific NodePorts that match your K3D cluster port mappings:
 
 ```bash
-cd istio-1.26.3
-export PATH=$PWD/bin:$PATH
+kubectl patch svc istio-ingressgateway -n istio-system --type=json -p='[
+  {"op": "replace", "path": "/spec/type", "value": "NodePort"},
+  {"op": "add", "path": "/spec/ports/-", "value": {"name": "http2", "port": 80, "protocol": "TCP", "targetPort": 80, "nodePort": 30949}},
+  {"op": "add", "path": "/spec/ports/-", "value": {"name": "https", "port": 443, "protocol": "TCP", "targetPort": 443, "nodePort": 30950}}
+]'
 ```
-
-To make this permanent, add it to your `~/.bashrc` or `~/.zshrc`:
-
-```bash
-echo 'export PATH=$PATH:'"$PWD/bin" >> ~/.bashrc
-# Or for zsh:
-echo 'export PATH=$PATH:'"$PWD/bin" >> ~/.zshrc
-```
-
-### Verify istioctl Version
-
-```bash
-istioctl version
-```
-
-### Create IstioOperator Configuration
-
-Create an IstioOperator manifest file with the configuration optimized for Fabric X Operator and K3D cluster:
-
-```bash
-cat <<EOF > istio-operator.yaml
-apiVersion: install.istio.io/v1alpha1
-kind: IstioOperator
-metadata:
-  name: istio-control-plane
-spec:
-  profile: default
-  tag: 1.26.3
-  meshConfig:
-    accessLogFile: /dev/stdout
-    enableTracing: false
-    outboundTrafficPolicy:
-      mode: ALLOW_ANY
-  components:
-    ingressGateways:
-    - name: istio-ingressgateway
-      enabled: true
-      k8s:
-        hpaSpec:
-          minReplicas: 1
-        service:
-          type: NodePort
-          ports:
-          - name: http
-            port: 80
-            targetPort: 8080
-            nodePort: 30949
-          - name: https
-            port: 443
-            targetPort: 8443
-            nodePort: 30950
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
-    pilot:
-      enabled: true
-      k8s:
-        hpaSpec:
-          minReplicas: 1
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 300m
-            memory: 512Mi
-EOF
-```
-
-**Note**: This IstioOperator configuration:
-- Uses the `default` profile (production-ready settings)
-- Sets version to 1.26.3
-- Configures the ingress gateway with NodePort type
-- Maps ports 80→30949 and 443→30950 (matching your K3D cluster)
-- Sets resource limits for efficient resource usage
-- Enables access logging for troubleshooting
-- Sets HPA min replicas to 1 (suitable for development)
-
-### Install Istio Using the Configuration
-
-```bash
-istioctl install -f istio-operator.yaml -y
-```
-
-### Verify Istio Installation
-
-```bash
-kubectl get pods -n istio-system
-```
-
-Wait for all Istio pods to be in `Running` status:
-
-```bash
-kubectl wait --for=condition=ready pod -l app=istiod -n istio-system --timeout=300s
-kubectl wait --for=condition=ready pod -l app=istio-ingressgateway -n istio-system --timeout=300s
-```
-
-### Verify Installation with istioctl
-
-```bash
-istioctl verify-install
-```
-
-This should output "Installation verified successfully" if all components are correctly installed.
 
 ### Install Gateway API CRDs
 
-The Fabric X Operator uses Kubernetes Gateway API for traffic routing. Install the Gateway API CRDs:
-
 ```bash
+# Install standard Gateway API CRDs
 kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+
+# Install experimental Gateway API CRDs (for TLSRoute)
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/experimental-install.yaml
 ```
 
-Verify Gateway API CRDs are installed:
-
-```bash
-kubectl get crd gateways.gateway.networking.k8s.io
-kubectl get crd tlsroutes.gateway.networking.k8s.io
-```
-
-### Create Shared Gateway for TLS Passthrough
-
-Create a shared Gateway resource that all orderer components will use:
+### Create Gateway Resource
 
 ```bash
 kubectl apply -f - <<EOF
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: fabric-x-gateway
-  namespace: default
+  name: istio-ingressgateway
+  namespace: istio-system
+  annotations:
+    networking.istio.io/service-type: NodePort
 spec:
   gatewayClassName: istio
   listeners:
-  - name: tls-passthrough
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: https-passthrough
     port: 443
     protocol: TLS
     tls:
@@ -276,32 +178,13 @@ spec:
 EOF
 ```
 
-Verify the Gateway is ready:
+**Note**: The Gateway has two listeners:
+- **Port 80 (HTTP)**: For gRPC with HTTP/2 (h2c) without TLS
+- **Port 443 (TLS)**: For TLS passthrough routing with SNI
 
-```bash
-kubectl get gateway fabric-x-gateway
-```
+### Configure CoreDNS for In-Cluster DNS Resolution
 
-## Step 5: Configure Environment Variables
-
-Set the container image versions for Fabric components:
-
-```bash
-export PEER_IMAGE=hyperledger/fabric-peer
-export PEER_VERSION=3.1.0
-
-export ORDERER_IMAGE=hyperledger/fabric-orderer
-export ORDERER_VERSION=3.1.0
-
-export CA_IMAGE=hyperledger/fabric-ca
-export CA_VERSION=1.5.15
-```
-
-These environment variables can be referenced in your deployment scripts and configurations.
-
-## Step 6: Configure Internal DNS
-
-Configure CoreDNS to resolve `*.localho.st` domains to the Istio ingress gateway:
+This configuration allows pods inside the Kubernetes cluster to resolve `*.localho.st` domains to the Istio gateway, enabling the same domain names to work both externally and internally.
 
 ```bash
 kubectl apply -f - <<EOF
@@ -337,11 +220,121 @@ data:
         loadbalance
     }
 EOF
+
+# Restart CoreDNS to apply the configuration
+kubectl rollout restart deployment coredns -n kube-system
+kubectl rollout status deployment coredns -n kube-system --timeout=60s
 ```
 
-This configuration allows services within the cluster to access Fabric components using friendly domain names like `ca.org1.localho.st`.
+**How it works:**
+- External clients: `orderergroup-party1-router.localho.st:80` resolves to `127.0.0.1` (via public DNS), routes through k3d port mapping (80→30949) to Istio gateway
+- Internal pods: `orderergroup-party1-router.localho.st` is rewritten by CoreDNS to `istio-ingressgateway.istio-system.svc.cluster.local`, routes directly to Istio gateway service
 
-## Step 7: Deploy Certificate Authority
+### Verify Installation
+
+```bash
+# Check Istio installation
+kubectl get pods -n istio-system
+
+# Check Gateway resource
+kubectl get gateway -n istio-system
+
+# Verify Gateway is programmed
+kubectl get gateway istio-ingressgateway -n istio-system -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}'
+# Should output: True
+```
+
+### Understanding Istio Configuration for Orderer Groups
+
+The Fabric X Operator supports native Istio configuration for orderer components (routers and assemblers). This provides direct control over Istio VirtualService and DestinationRule resources, enabling proper gRPC/HTTP2 support.
+
+#### Istio Native vs Gateway API
+
+You can configure ingress in two ways:
+
+**Option 1: Istio Native Configuration (Recommended for gRPC)**
+```yaml
+spec:
+  ingress:
+    istio:
+      hosts:
+        - "orderergroup-party1-router.localho.st"
+      gateway: "istio-system/istio-ingressgateway"
+      enableHTTP2: true  # Enable HTTP/2 (h2c) for gRPC
+```
+
+Creates native Istio resources:
+- **VirtualService**: Routes traffic based on hostname
+- **DestinationRule**: Configures HTTP/2 support for backend connections
+
+**Option 2: Gateway API Configuration**
+```yaml
+spec:
+  ingress:
+    gateway:
+      hosts:
+        - "orderergroup-party1-router.localho.st"
+      ingressGateway: "istio-system/istio-ingressgateway"
+      port: 7150
+      tls:
+        enabled: false  # Use HTTPRoute for port 80
+```
+
+Creates Gateway API resources:
+- **HTTPRoute** (when TLS disabled): HTTP routing on port 80
+- **TLSRoute** (when TLS enabled): TLS passthrough on port 443
+
+#### When to Use Istio Native Configuration
+
+Use Istio native configuration when:
+- You need gRPC/HTTP2 support without TLS (h2c)
+- You want direct control over DestinationRule traffic policies
+- You're using Istio-specific features
+
+#### Orderer Group Sample Updates
+
+All orderer group samples have been updated to use Istio native configuration with HTTP/2 enabled:
+
+```yaml
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererGroup
+spec:
+  router:
+    ingress:
+      istio:
+        hosts:
+          - "orderergroup-party1-router.localho.st"
+        gateway: "istio-system/istio-ingressgateway"
+        enableHTTP2: true
+  assembler:
+    ingress:
+      istio:
+        hosts:
+          - "orderergroup-party1-assembler.localho.st"
+        gateway: "istio-system/istio-ingressgateway"
+        enableHTTP2: true
+```
+
+**Note**: All orderer endpoints use **port 80** (not 443) for gRPC communication with HTTP/2 support.
+
+## Step 4: Configure Environment Variables
+
+Set the container image versions for Fabric components:
+
+```bash
+export PEER_IMAGE=hyperledger/fabric-peer
+export PEER_VERSION=3.1.0
+
+export ORDERER_IMAGE=hyperledger/fabric-orderer
+export ORDERER_VERSION=3.1.0
+
+export CA_IMAGE=hyperledger/fabric-ca
+export CA_VERSION=1.5.15
+```
+
+These environment variables can be referenced in your deployment scripts and configurations.
+
+## Step 5: Deploy Certificate Authority
 
 The Certificate Authority (CA) is responsible for issuing certificates to all network participants.
 
@@ -374,10 +367,9 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=fabric-ca --tim
 
 The CA will be accessible at:
 
-- `https://ca.org1.localho.st` (signing CA)
 - Internal endpoint: `test-ca2.default:7054`
 
-## Step 8: Create Admin Identity
+## Step 6: Create Admin Identity
 
 The Identity CRD allows you to enroll identities with the Fabric CA. **This step is required** as the admin identity's public key will be used for meta namespace verification in the genesis block.
 
@@ -499,7 +491,7 @@ The Identity CRD supports the following configuration:
   - **namespace**: Optional namespace for secrets (defaults to identity namespace)
   - **labels**: Optional labels to apply to generated secrets
 
-## Step 9: Deploy Orderer Groups
+## Step 7: Deploy Orderer Groups
 
 Orderer groups manage the ordering service for the Fabric network. We'll deploy 4 orderer parties to create a Byzantine Fault Tolerant (BFT) consensus network.
 
@@ -568,10 +560,10 @@ Each orderer group deploys several components:
 
 1. **Router** (`router-org[1-4].localho.st`): Entry point for client transactions
 2. **Batchers** (`batcher-[1-2]-org[1-4].localho.st`): Batch transactions for efficient processing
-3. **Consenter** (`consenter-1-org[1-4].localho.st`): Consensus participant (SmartBFT)
-4. **Assembler** (`assembler-org[1-4].localho.st`): Assembles ordered transactions into blocks
+3. **Consenter**: Consensus participant (SmartBFT)
+4. **Assembler**: Assembles ordered transactions into blocks
 
-## Step 10: Create Genesis Block
+## Step 8: Create Genesis Block
 
 The genesis block contains the initial configuration for the channel and must be created before the orderers can fully function.
 
@@ -606,7 +598,7 @@ kubectl get secret fabricx-shared-genesis
 kubectl describe genesis shared-genesis
 ```
 
-## Step 11: Patch Orderer Groups to Deploy Mode
+## Step 9: Patch Orderer Groups to Deploy Mode
 
 After the genesis block is created, you need to patch each orderer group to change from `configure` mode to `deploy` mode. This triggers the actual deployment of the orderer components.
 
@@ -701,7 +693,7 @@ kubectl get pods -l app.kubernetes.io/component=consenter
 kubectl get pods -l app.kubernetes.io/component=assembler
 ```
 
-## Step 12: Deploy Committer
+## Step 10: Deploy Committer
 
 After the orderer groups are fully deployed and operational, you can deploy the Committer component. The Committer is responsible for validating, verifying, and committing transactions to the ledger.
 
@@ -718,118 +710,98 @@ The Committer consists of several components working together:
 
 Before deploying the Committer, you need to set up a PostgreSQL database for the Validator component. The Validator uses PostgreSQL to store transaction validation state.
 
-#### Option 1: Deploy PostgreSQL in Kubernetes (Recommended for Testing)
+#### Deploy PostgreSQL Using CloudNativePG Operator
+
+CloudNativePG (CNPG) is a Kubernetes operator that manages the full lifecycle of PostgreSQL clusters with high availability, automated backups, and rolling updates.
+
+**Step 1: Install CloudNativePG Operator**
 
 ```bash
-# Create PostgreSQL password secret
-kubectl create secret generic postgres-password-secret \
-  --from-literal=password=your-secure-password
+# Install CloudNativePG operator (latest version)
+kubectl apply --server-side -f \
+  https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.27/releases/cnpg-1.27.0.yaml
 
-# Deploy PostgreSQL
-kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres
-  namespace: default
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-      - name: postgres
-        image: postgres:15
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          value: kubernetes_validator
-        - name: POSTGRES_USER
-          value: postgres
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-password-secret
-              key: password
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
-      volumes:
-      - name: postgres-storage
-        emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: default
-spec:
-  selector:
-    app: postgres
-  ports:
-  - port: 5432
-    targetPort: 5432
-  type: ClusterIP
-EOF
+# Wait for the operator to be ready
+kubectl wait --for=condition=Available deployment/cnpg-controller-manager \
+  -n cnpg-system --timeout=120s
+
+# Verify operator installation
+kubectl get deployment -n cnpg-system
 ```
 
-#### Option 2: Use External PostgreSQL
+**Step 2: Deploy PostgreSQL Cluster**
 
-If you have an external PostgreSQL instance, ensure:
+```bash
+# Deploy PostgreSQL cluster using CNPG
+kubectl apply -f config/samples/cnpg_postgres_cluster.yaml
 
-- The database `kubernetes_validator` exists
-- The Kubernetes cluster can reach the PostgreSQL host
-- You have the connection credentials
+# Wait for PostgreSQL cluster to be ready
+kubectl wait --for=condition=Ready cluster/fabric-x-postgres --timeout=300s
+
+# Verify cluster is running
+kubectl get cluster fabric-x-postgres
+kubectl get pods -l cnpg.io/cluster=fabric-x-postgres
+```
+
+**What CNPG Creates Automatically:**
+- PostgreSQL cluster with 1 instance (configurable)
+- Database: `fabricx`
+- Owner/Username: `fabricx`
+- Secret: `fabric-x-postgres-app` (contains auto-generated credentials)
+- Service: `fabric-x-postgres-rw` (read-write connections on port 5432)
+- Service: `fabric-x-postgres-ro` (read-only connections on port 5432)
+- Service: `fabric-x-postgres-r` (read connections, includes primary)
+
+**Step 3: Get Database Credentials**
+
+```bash
+# The password is automatically generated and stored in a secret
+kubectl get secret fabric-x-postgres-app -o jsonpath='{.data.password}' | base64 -d
+echo
+
+# View all connection details
+kubectl get secret fabric-x-postgres-app -o yaml
+
+# Connection details:
+# Host: fabric-x-postgres-rw.default.svc.cluster.local
+# Port: 5432
+# Database: fabricx
+# Username: fabricx
+# Password: (from secret above)
+```
 
 ### Update Committer Configuration
 
-Before deploying, you need to update the committer configuration with your PostgreSQL connection details.
+Before deploying, update the committer configuration to use the CNPG PostgreSQL credentials.
 
-#### If Using In-Cluster PostgreSQL
-
-Edit the committer YAML to use the in-cluster PostgreSQL service:
-
-```bash
-cat > /tmp/committer-patch.yaml <<EOF
-spec:
-  components:
-    validator:
-      postgresql:
-        host: postgres.default.svc.cluster.local
-        port: 5432
-        database: kubernetes_validator
-        username: postgres
-        passwordSecret:
-          name: postgres-password-secret
-          key: password
-          namespace: default
-EOF
-```
-
-#### If Using External PostgreSQL
-
-Update the PostgreSQL configuration in the committer YAML with your external database details:
+The committer YAML should reference the CNPG-managed PostgreSQL cluster:
 
 ```yaml
 spec:
   components:
     validator:
       postgresql:
-        host: your-external-postgres-host
+        host: fabric-x-postgres-rw.default.svc.cluster.local
         port: 5432
-        database: kubernetes_validator
-        username: postgres
+        database: fabricx
+        username: fabricx
         passwordSecret:
-          name: postgres-password-secret
+          name: fabric-x-postgres-app
+          key: password
+          namespace: default
+    queryService:
+      postgresql:
+        host: fabric-x-postgres-rw.default.svc.cluster.local
+        port: 5432
+        database: fabricx
+        username: fabricx
+        passwordSecret:
+          name: fabric-x-postgres-app
           key: password
           namespace: default
 ```
+
+**Note:** The sample `config/samples/fabricx_v1alpha1_committer.yaml` is already configured to use these CNPG defaults. If your CNPG cluster has a different name or namespace, update accordingly.
 
 ### Deploy the Committer
 
@@ -911,20 +883,13 @@ You should see log entries indicating successful connections to the orderer endp
 
 ### Test Committer Services
 
-The Committer components are exposed via Istio ingress:
-
-- **Coordinator**: `https://coordinator-committer.localho.st`
-- **Sidecar**: `https://sidecar-committer.localho.st`
-- **Validator**: `https://validator-committer.localho.st`
-- **Verifier**: `https://verifier-committer.localho.st`
-
-Test connectivity from within the cluster:
+The Committer components are exposed via Kubernetes services. Test connectivity from within the cluster:
 
 ```bash
 kubectl run test-committer --image=curlimages/curl:latest --rm -it -- sh
 # Inside the pod:
-curl -k https://coordinator-committer.localho.st/health
-curl -k https://sidecar-committer.localho.st/health
+curl http://fabric-x-committer-coordinator-service:9001/health
+curl http://fabric-x-committer-sidecar-service:5050/health
 ```
 
 ### Understanding Committer Configuration
@@ -999,8 +964,6 @@ kubectl get pods -o wide
 # Check services
 kubectl get svc
 
-# Check ingress
-kubectl get gateway,virtualservice -n istio-system
 ```
 
 ### Check Orderer Logs
@@ -1039,7 +1002,7 @@ Verify that the consenters are communicating:
 kubectl logs -l app.kubernetes.io/component=consenter | grep -i "consensus"
 ```
 
-## Step 12: Deploy Endorsers
+## Step 11: Deploy Endorsers
 
 Endorsers are Fabric Smart Client (FSC) nodes that participate in token transactions and endorsements. In this step, we'll deploy 5 endorser nodes with different roles: issuer, two owners, and two endorsers.
 
@@ -1388,7 +1351,7 @@ Verify resolver certificates are mounted:
 kubectl exec -it $(kubectl get pod -l app=org1-issuer -o name) -- ls -la /var/hyperledger/fabric/resolvers/
 ```
 
-## Step 13: Managing Identities with Identity CRD
+## Step 12: Managing Identities with Identity CRD
 
 The Identity CRD provides a declarative way to manage Fabric identities and their cryptographic materials.
 
@@ -1619,16 +1582,10 @@ kubectl logs <pod-name>
 
 ### DNS Resolution Issues
 
-Verify CoreDNS configuration:
-
-```bash
-kubectl get configmap coredns -n kube-system -o yaml
-```
-
 Test DNS resolution from within a pod:
 
 ```bash
-kubectl run test-dns --image=busybox --rm -it -- nslookup router-org1.localho.st
+kubectl run test-dns --image=busybox --rm -it -- nslookup test-ca2.default.svc.cluster.local
 ```
 
 ### Certificate Issues
@@ -1677,9 +1634,9 @@ Test connectivity between components:
 # Create a test pod
 kubectl run test-net --image=nicolaka/netshoot --rm -it -- bash
 
-# Inside the pod, test connectivity:
-curl -k https://router-org1.localho.st
-curl -k https://consenter-1-org1.localho.st
+# Inside the pod, test connectivity to services:
+curl http://orderergroup-party1-router-service:443
+curl http://orderergroup-party1-consenter:7052
 ```
 
 ### Clean Up
@@ -1696,10 +1653,7 @@ kubectl delete -f config/samples/fabricx_v1alpha1_orderergroup_party1.yaml
 kubectl delete -f config/samples/fabricx_v1alpha1_ca.yaml
 
 # Uninstall operator
-helm uninstall hlf-operator
-
-# Delete Istio
-kubectl delete namespace istio-system
+make undeploy
 
 # Delete cluster (K3D)
 k3d cluster delete k8s-hlf
@@ -1712,7 +1666,6 @@ kind delete cluster
 
 - [Hyperledger Fabric Documentation](https://hyperledger-fabric.readthedocs.io/)
 - [Fabric X Operator GitHub](https://github.com/kfsoftware/hlf-operator)
-- [Istio Documentation](https://istio.io/latest/docs/)
 - [Kubectl HLF Plugin](https://github.com/kfsoftware/kubectl-hlf)
 
 ## Architecture Overview
@@ -1751,10 +1704,9 @@ Recommended for production:
 
 ### Network Configuration
 
-- All external access is through Istio ingress gateway
 - Internal communication uses Kubernetes service discovery
 - TLS is enabled for all component communication
-- Ports: 80 (HTTP), 443 (HTTPS) exposed via NodePorts 30949 and 30950
+- Components are accessible via ClusterIP services within the cluster
 
 ## Security Considerations
 

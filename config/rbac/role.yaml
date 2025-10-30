@@ -134,7 +134,22 @@ rules:
   - gateway.networking.k8s.io
   resources:
   - gateways
+  - httproutes
+  - tcproutes
   - tlsroutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - virtualservices
   verbs:
   - create
   - delete

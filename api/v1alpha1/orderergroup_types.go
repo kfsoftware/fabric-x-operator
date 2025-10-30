@@ -351,6 +351,9 @@ type SecurityContext struct {
 type IngressConfig struct {
 	// Gateway-specific configuration (optional - for Istio or other gateway implementations)
 	Gateway *GatewayConfig `json:"gateway,omitempty"`
+
+	// Istio-specific configuration (optional - for native Istio VirtualService and DestinationRule)
+	Istio *IstioConfig `json:"istio,omitempty"`
 }
 
 // GatewayConfig defines Gateway ingress configuration
@@ -366,6 +369,19 @@ type GatewayConfig struct {
 
 	// TLS configuration
 	TLS *TLSConfig `json:"tls,omitempty"`
+}
+
+// IstioConfig defines native Istio ingress configuration
+type IstioConfig struct {
+	// Hosts for this component (used in VirtualService)
+	Hosts []string `json:"hosts"`
+
+	// Gateway name to attach VirtualService to (e.g., "istio-system/istio-ingressgateway")
+	Gateway string `json:"gateway"`
+
+	// Enable HTTP/2 (h2c) for backend connections
+	// +kubebuilder:default=true
+	EnableHTTP2 bool `json:"enableHTTP2,omitempty"`
 }
 
 // TLSConfig defines TLS settings

@@ -93,8 +93,13 @@ type OrdererRouterReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tlsroutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=tcproutes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=virtualservices,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.istio.io,resources=destinationrules,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -632,12 +637,19 @@ func (r *OrdererRouterReconciler) reconcileConfigMap(ctx context.Context, ordere
 		},
 	}
 
+	// Determine TLS enabled flag
+	tlsEnabled := false
+	if ordererRouter.Spec.TLS != nil {
+		tlsEnabled = ordererRouter.Spec.TLS.Enabled
+	}
+
 	// Prepare template data
 	templateData := utils.RouterTemplateData{
-		Name:    ordererRouter.Name,
-		PartyID: ordererRouter.Spec.PartyID,
-		MSPID:   ordererRouter.Spec.MSPID,
-		Port:    r.getServicePort(),
+		Name:       ordererRouter.Name,
+		PartyID:    ordererRouter.Spec.PartyID,
+		MSPID:      ordererRouter.Spec.MSPID,
+		Port:       r.getServicePort(),
+		TLSEnabled: tlsEnabled,
 	}
 
 	// Execute the template using the shared utility
@@ -727,10 +739,11 @@ func (r *OrdererRouterReconciler) getServiceTemplate(ordererRouter *fabricxv1alp
 			},
 			Ports: []corev1.ServicePort{
 				{
-					Name:       "router",
-					Protocol:   corev1.ProtocolTCP,
-					Port:       r.getServicePort(),
-					TargetPort: intstr.FromInt(r.getTargetPort()),
+					Name:        "router",
+					Protocol:    corev1.ProtocolTCP,
+					Port:        r.getServicePort(),
+					TargetPort:  intstr.FromInt(r.getTargetPort()),
+					AppProtocol: func() *string { s := "h2c"; return &s }(),
 				},
 			},
 			Type: corev1.ServiceTypeClusterIP,
@@ -1088,33 +1101,62 @@ func (r *OrdererRouterReconciler) reconcileIngress(ctx context.Context, ordererR
 	return nil
 }
 
-// reconcileGatewayGateway creates or updates the Gateway API TLSRoute for Router
+// reconcileGatewayGateway creates or updates the Gateway API Route for Router
 func (r *OrdererRouterReconciler) reconcileGatewayGateway(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
 	log := logf.FromContext(ctx)
 
 	// Check if Gateway configuration is provided
 	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Gateway == nil {
-		log.Info("No Gateway configuration found, skipping TLSRoute creation")
+		log.Info("No Gateway configuration found, skipping route creation")
 		return nil
+	}
+
+	// Determine if TLS is enabled
+	tlsEnabled := false
+	if ordererRouter.Spec.TLS != nil {
+		tlsEnabled = ordererRouter.Spec.TLS.Enabled
 	}
 
 	gatewayConfig := ordererRouter.Spec.Ingress.Gateway
 
-	// Use shared helper function to reconcile TLSRoute
-	return ReconcileTLSRoute(ctx, r.Client, TLSRouteConfig{
-		Name:        fmt.Sprintf("%s-tlsroute", ordererRouter.Name),
-		Namespace:   ordererRouter.Namespace,
-		Hostnames:   gatewayConfig.Hosts,
-		ServiceName: r.getServiceName(ordererRouter),
-		ServicePort: r.getServicePort(),
-		Labels: map[string]string{
-			"app":                      "fabric-x",
-			"ordererrouter":            ordererRouter.Name,
-			"fabricx.kfsoft.tech/type": "tlsroute",
-		},
-		Owner:  ordererRouter,
-		Scheme: r.Scheme,
-	})
+	if tlsEnabled {
+		// Create TLSRoute for TLS-enabled routers (uses SNI-based routing on port 443)
+		log.Info("TLS enabled, creating TLSRoute", "router", ordererRouter.Name)
+		return ReconcileTLSRoute(ctx, r.Client, RouteConfig{
+			Name:           fmt.Sprintf("%s-tlsroute", ordererRouter.Name),
+			Namespace:      ordererRouter.Namespace,
+			Hostnames:      gatewayConfig.Hosts,
+			ServiceName:    r.getServiceName(ordererRouter),
+			ServicePort:    r.getServicePort(),
+			IngressGateway: gatewayConfig.IngressGateway,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererrouter":            ordererRouter.Name,
+				"fabricx.kfsoft.tech/type": "tlsroute",
+			},
+			Owner:  ordererRouter,
+			Scheme: r.Scheme,
+		})
+	} else {
+		// Create HTTPRoute for non-TLS routers (uses Host header-based routing on port 80)
+		// gRPC uses HTTP/2, so HTTPRoute can route by hostname
+		log.Info("TLS disabled, creating HTTPRoute for hostname-based routing on port 80", "router", ordererRouter.Name)
+		return ReconcileHTTPRoute(ctx, r.Client, RouteConfig{
+			Name:           fmt.Sprintf("%s-httproute", ordererRouter.Name),
+			Namespace:      ordererRouter.Namespace,
+			Hostnames:      gatewayConfig.Hosts,
+			ServiceName:    r.getServiceName(ordererRouter),
+			ServicePort:    r.getServicePort(),
+			IngressGateway: gatewayConfig.IngressGateway,
+			Labels: map[string]string{
+				"app":                      "fabric-x",
+				"ordererrouter":            ordererRouter.Name,
+				"fabricx.kfsoft.tech/type": "httproute",
+			},
+			Owner:  ordererRouter,
+			Scheme: r.Scheme,
+		})
+	}
 }
 
 // reconcileGatewayVirtualService is no longer needed with Gateway API - using TLSRoute only
@@ -1127,23 +1169,64 @@ func (r *OrdererRouterReconciler) reconcileGatewayVirtualService(ctx context.Con
 func (r *OrdererRouterReconciler) reconcileGatewayResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
 	log := logf.FromContext(ctx)
 
-	// Check if Gateway configuration is provided
+	// Check if Istio native configuration is provided
+	if ordererRouter.Spec.Ingress != nil && ordererRouter.Spec.Ingress.Istio != nil {
+		log.Info("Istio native configuration found, creating VirtualService and DestinationRule")
+		return r.reconcileIstioNativeResources(ctx, ordererRouter)
+	}
+
+	// Check if Gateway API configuration is provided
 	if ordererRouter.Spec.Ingress == nil || ordererRouter.Spec.Ingress.Gateway == nil {
-		log.Info("No Gateway configuration found, skipping Gateway resources")
+		log.Info("No Gateway or Istio configuration found, skipping ingress resources")
 		return nil
 	}
 
-	// Reconcile Gateway
+	// Reconcile Gateway API resources (TLSRoute/HTTPRoute)
 	if err := r.reconcileGatewayGateway(ctx, ordererRouter); err != nil {
-		return fmt.Errorf("failed to reconcile Istio Gateway: %w", err)
-	}
-
-	// Reconcile VirtualService
-	if err := r.reconcileGatewayVirtualService(ctx, ordererRouter); err != nil {
-		return fmt.Errorf("failed to reconcile Istio VirtualService: %w", err)
+		return fmt.Errorf("failed to reconcile Gateway API route: %w", err)
 	}
 
 	log.Info("Gateway resources reconciled successfully")
+	return nil
+}
+
+// reconcileIstioNativeResources creates or updates Istio VirtualService and DestinationRule
+func (r *OrdererRouterReconciler) reconcileIstioNativeResources(ctx context.Context, ordererRouter *fabricxv1alpha1.OrdererRouter) error {
+	log := logf.FromContext(ctx)
+	istioConfig := ordererRouter.Spec.Ingress.Istio
+
+	// Prepare resource config
+	resourceConfig := IstioResourceConfig{
+		Name:        fmt.Sprintf("%s-vs", ordererRouter.Name),
+		Namespace:   ordererRouter.Namespace,
+		Hosts:       istioConfig.Hosts,
+		ServiceName: r.getServiceName(ordererRouter),
+		ServicePort: r.getServicePort(),
+		Gateway:     istioConfig.Gateway,
+		EnableHTTP2: istioConfig.EnableHTTP2,
+		Labels: map[string]string{
+			"app":                      "fabric-x",
+			"ordererrouter":            ordererRouter.Name,
+			"fabricx.kfsoft.tech/type": "istio",
+		},
+		Owner:  ordererRouter,
+		Scheme: r.Scheme,
+	}
+
+	// Reconcile VirtualService
+	if err := ReconcileIstioVirtualService(ctx, r.Client, resourceConfig); err != nil {
+		log.Error(err, "Failed to reconcile VirtualService")
+		return fmt.Errorf("failed to reconcile VirtualService: %w", err)
+	}
+
+	// Reconcile DestinationRule (for HTTP/2 support)
+	resourceConfig.Name = fmt.Sprintf("%s-dr", ordererRouter.Name)
+	if err := ReconcileIstioDestinationRule(ctx, r.Client, resourceConfig); err != nil {
+		log.Error(err, "Failed to reconcile DestinationRule")
+		return fmt.Errorf("failed to reconcile DestinationRule: %w", err)
+	}
+
+	log.Info("Istio native resources reconciled successfully", "router", ordererRouter.Name)
 	return nil
 }
 

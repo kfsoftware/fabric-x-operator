@@ -100,6 +100,9 @@ type OrdererRouterSpec struct {
 
 	// Component-specific args
 	Args []string `json:"args,omitempty"`
+
+	// TLS configuration
+	TLS *TLSConfig `json:"tls,omitempty"`
 }
 
 // OrdererRouterStatus defines the observed state of OrdererRouter.
