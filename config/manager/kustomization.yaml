@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: kfsoftware/fabric-x-operator
-  newTag: "20251030111644"
+  newTag: "20251030132323"

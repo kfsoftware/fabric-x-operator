@@ -213,8 +213,14 @@ func (r *ChainNamespaceReconciler) validateNamespace(ns *fabricxv1alpha1.ChainNa
 	if ns.Spec.Identity.Name == "" || ns.Spec.Identity.Namespace == "" {
 		return errors.New("identity reference must specify name and namespace")
 	}
-	if ns.Spec.CACert.Name == "" || ns.Spec.CACert.Namespace == "" {
-		return errors.New("caCert reference must specify name and namespace")
+	// Validate TLS configuration
+	if ns.Spec.TLS != nil && ns.Spec.TLS.Enabled {
+		if ns.Spec.TLS.CACert == nil {
+			return errors.New("tls.caCert must be specified when TLS is enabled")
+		}
+		if ns.Spec.TLS.CACert.Name == "" || ns.Spec.TLS.CACert.Namespace == "" {
+			return errors.New("tls.caCert reference must specify name and namespace when TLS is enabled")
+		}
 	}
 	return nil
 }

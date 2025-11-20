@@ -1,23 +1,22 @@
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: ChainNamespace
 metadata:
-  name: token-namespace
+  name: token-namespace-tls
   # Note: This is a cluster-scoped resource (no namespace field)
 spec:
   # Namespace ID
   name: "token_namespace"
 
-  # Orderer router endpoint
-  orderer: "orderergroup-party1-router-service.default.svc.cluster.local:7150"
+  # Orderer router endpoint with TLS
+  orderer: "orderergroup-party1-router.localho.st:443"
 
   # TLS configuration for orderer connection
   tls:
-    enabled: false
-    # caCert only needed if enabled: true
-    # caCert:
-    #   name: "orderergroup-party1-router-tls-cert"
-    #   namespace: "default"
-    #   key: "ca.pem"
+    enabled: true
+    caCert:
+      name: "orderergroup-party1-router-tls-cert"
+      namespace: "default"
+      key: "ca.pem"
 
   # MSPID
   mspID: "Org1MSP"

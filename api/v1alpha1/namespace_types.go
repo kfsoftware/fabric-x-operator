@@ -35,6 +35,16 @@ type SecretKeyRef struct {
 	Key string `json:"key"`
 }
 
+// NamespaceTLS defines TLS configuration for orderer connection
+type NamespaceTLS struct {
+	// Enabled indicates whether TLS is enabled for the orderer connection
+	// +kubebuilder:default=false
+	Enabled bool `json:"enabled,omitempty"`
+
+	// CACert is the reference to the CA certificate (only used if Enabled is true)
+	CACert *SecretKeyRef `json:"caCert,omitempty"`
+}
+
 // NamespaceSpec defines the desired state of Namespace.
 type NamespaceSpec struct {
 	// Name is the namespace ID
@@ -43,8 +53,8 @@ type NamespaceSpec struct {
 	// Orderer endpoint to broadcast the namespace transaction
 	Orderer string `json:"orderer"`
 
-	// CACert is the reference to the CA certificate
-	CACert SecretKeyRef `json:"caCert"`
+	// TLS configuration for orderer connection
+	TLS *NamespaceTLS `json:"tls,omitempty"`
 
 	// MSPID is the MSP identifier
 	MSPID string `json:"mspID"`

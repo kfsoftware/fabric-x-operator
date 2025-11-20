@@ -61,23 +61,6 @@ spec:
           spec:
             description: NamespaceSpec defines the desired state of Namespace.
             properties:
-              caCert:
-                description: CACert is the reference to the CA certificate
-                properties:
-                  key:
-                    description: Key in the secret
-                    type: string
-                  name:
-                    description: Name of the secret
-                    type: string
-                  namespace:
-                    description: Namespace of the secret
-                    type: string
-                required:
-                - key
-                - name
-                - namespace
-                type: object
               channel:
                 description: Channel is the channel name to deploy the namespace to
                 type: string
@@ -107,6 +90,33 @@ spec:
               orderer:
                 description: Orderer endpoint to broadcast the namespace transaction
                 type: string
+              tls:
+                description: TLS configuration for orderer connection
+                properties:
+                  caCert:
+                    description: CACert is the reference to the CA certificate (only
+                      used if Enabled is true)
+                    properties:
+                      key:
+                        description: Key in the secret
+                        type: string
+                      name:
+                        description: Name of the secret
+                        type: string
+                      namespace:
+                        description: Namespace of the secret
+                        type: string
+                    required:
+                    - key
+                    - name
+                    - namespace
+                    type: object
+                  enabled:
+                    default: false
+                    description: Enabled indicates whether TLS is enabled for the
+                      orderer connection
+                    type: boolean
+                type: object
               verificationKeyPath:
                 description: VerificationKeyPath is optional path to verification
                   key (if not using default MSP signer)
@@ -117,7 +127,6 @@ spec:
                   >= 0 for updates)
                 type: integer
             required:
-            - caCert
             - identity
             - mspID
             - name

@@ -202,4 +202,5 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/hyperledger/fabric-config => /Users/davidviejo/github-libs/fabric-config
+// Temporarily disabled for Docker build
+// replace github.com/hyperledger/fabric-config => /Users/davidviejo/github-libs/fabric-config
