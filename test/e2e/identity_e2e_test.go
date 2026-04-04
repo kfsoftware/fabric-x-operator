@@ -55,7 +55,7 @@ spec:
         - name: admin
           pass: adminpw
           type: client
-  tlsCA:
+  tlsca:
     name: tlsca
   service:
     type: ClusterIP
