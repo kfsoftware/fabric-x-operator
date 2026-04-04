@@ -106,10 +106,13 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 				Spec: fabricxv1alpha1.NamespaceSpec{
 					Name:    "test-ns",
 					Orderer: "orderer.example.com:7050",
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      "orderer-ca",
-						Namespace: "default",
-						Key:       "ca.pem",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      "orderer-ca",
+							Namespace: "default",
+							Key:       "ca.pem",
+						},
 					},
 					MSPID: "Org1MSP",
 					Identity: fabricxv1alpha1.SecretKeyRef{
@@ -130,9 +133,12 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 						Name:      "org1-admin",
 						Namespace: "default",
 					},
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      "orderer-ca",
-						Namespace: "default",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      "orderer-ca",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -149,9 +155,12 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 						Name:      "org1-admin",
 						Namespace: "default",
 					},
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      "orderer-ca",
-						Namespace: "default",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      "orderer-ca",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -168,9 +177,12 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 						Name:      "org1-admin",
 						Namespace: "default",
 					},
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      "orderer-ca",
-						Namespace: "default",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      "orderer-ca",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -187,9 +199,12 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 					Identity: fabricxv1alpha1.SecretKeyRef{
 						Namespace: "default",
 					},
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      "orderer-ca",
-						Namespace: "default",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      "orderer-ca",
+							Namespace: "default",
+						},
 					},
 				},
 			},
@@ -207,8 +222,11 @@ func TestChainNamespaceReconciler_ValidateNamespace(t *testing.T) {
 						Name:      "org1-admin",
 						Namespace: "default",
 					},
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Namespace: "default",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Namespace: "default",
+						},
 					},
 				},
 			},

@@ -8,7 +8,7 @@ spec:
   bootstrapMode: configure
   mspid: Org1MSP
   image: hyperledger/fabric-x-orderer
-  imageTag: 0.0.19
+  imageTag: 0.0.24
   common:
     imagePullSecrets: []
     podAnnotations:
@@ -21,7 +21,7 @@ spec:
     storage:
       accessMode: ReadWriteOnce
       size: 10Gi
-      storageClass: fast-ssd
+      storageClass: ""
     volumeMounts:
     - mountPath: /etc/fabric-x/config
       name: shared-config

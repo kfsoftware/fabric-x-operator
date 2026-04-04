@@ -193,10 +193,13 @@ var _ = Describe("ChainNamespace Controller", func() {
 				Spec: fabricxv1alpha1.NamespaceSpec{
 					Name:    "test-ns",
 					Orderer: "orderer.example.com:7050",
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      caCertSecret,
-						Namespace: "default",
-						Key:       "ca.pem",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      caCertSecret,
+							Namespace: "default",
+							Key:       "ca.pem",
+						},
 					},
 					MSPID: "Org1MSP",
 					Identity: fabricxv1alpha1.SecretKeyRef{
@@ -302,10 +305,13 @@ var _ = Describe("ChainNamespace Controller", func() {
 				Spec: fabricxv1alpha1.NamespaceSpec{
 					Name:    "test-ns",
 					Orderer: "orderer.example.com:7050",
-					CACert: fabricxv1alpha1.SecretKeyRef{
-						Name:      caCertSecret,
-						Namespace: "default",
-						Key:       "ca.pem",
+					TLS: &fabricxv1alpha1.NamespaceTLS{
+						Enabled: true,
+						CACert: &fabricxv1alpha1.SecretKeyRef{
+							Name:      caCertSecret,
+							Namespace: "default",
+							Key:       "ca.pem",
+						},
 					},
 					MSPID: "Org1MSP",
 					Identity: fabricxv1alpha1.SecretKeyRef{

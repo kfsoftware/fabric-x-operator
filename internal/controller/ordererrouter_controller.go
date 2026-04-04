@@ -847,10 +847,27 @@ func (r *OrdererRouterReconciler) getDeploymentTemplate(ctx context.Context, ord
 										"cp /sign-certs/ca.pem %s/cacerts/ && "+
 										"cp /tls-certs/cert.pem %s/server.crt && "+
 										"cp /tls-certs/key.pem %s/server.key && "+
-										"cp /tls-certs/ca.pem %s/ca.crt",
+										"cp /tls-certs/ca.pem %s/ca.crt && "+
+										`cat > %s/config.yaml <<'EOF'
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+EOF`,
 									"/etc/hyperledger/fabricx/router/msp", "/etc/hyperledger/fabricx/router/msp", "/etc/hyperledger/fabricx/router/msp", "/etc/hyperledger/fabricx/router/tls",
 									"/etc/hyperledger/fabricx/router/msp", "/etc/hyperledger/fabricx/router/msp", "/etc/hyperledger/fabricx/router/msp",
 									"/etc/hyperledger/fabricx/router/tls", "/etc/hyperledger/fabricx/router/tls", "/etc/hyperledger/fabricx/router/tls",
+									"/etc/hyperledger/fabricx/router/msp",
 								),
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -909,7 +926,7 @@ func (r *OrdererRouterReconciler) getDeploymentTemplate(ctx context.Context, ord
 									if ordererRouter.Spec.ImageTag != "" {
 										return ordererRouter.Spec.ImageTag
 									}
-									return "0.0.19"
+									return "0.0.24"
 								}()),
 							Args: []string{
 								"router",
@@ -939,6 +956,10 @@ func (r *OrdererRouterReconciler) getDeploymentTemplate(ctx context.Context, ord
 								{
 									Name:      "shared-genesis",
 									MountPath: "/etc/hyperledger/fabricx/router/genesis",
+								},
+								{
+									Name:      "router-store",
+									MountPath: "/etc/hyperledger/fabricx/router/store",
 								},
 							},
 						},
@@ -984,6 +1005,12 @@ func (r *OrdererRouterReconciler) getDeploymentTemplate(ctx context.Context, ord
 						},
 						{
 							Name: "shared-genesis",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "router-store",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
@@ -1060,7 +1087,12 @@ func (r *OrdererRouterReconciler) reconcilePVC(ctx context.Context, ordererRoute
 					corev1.ResourceStorage: resource.MustParse(ordererRouter.Spec.Storage.Size),
 				},
 			},
-			StorageClassName: &ordererRouter.Spec.Storage.StorageClass,
+			StorageClassName: func() *string {
+				if ordererRouter.Spec.Storage.StorageClass != "" {
+					return &ordererRouter.Spec.Storage.StorageClass
+				}
+				return nil
+			}(),
 		},
 	}
 

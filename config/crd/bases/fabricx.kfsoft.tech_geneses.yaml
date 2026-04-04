@@ -374,9 +374,8 @@ spec:
                   type: object
                 type: array
               metaNamespaceCA:
-                description: |-
-                  Meta namespace verification CA certificate reference (required)
-                  This CA certificate will be used for MetaNamespaceVerificationKeyPath
+                description: Meta namespace verification CA certificate reference
+                  (deprecated, no longer used)
                 properties:
                   key:
                     description: Secret key
@@ -914,7 +913,6 @@ spec:
             required:
             - channelID
             - configTemplate
-            - metaNamespaceCA
             - output
             type: object
           status:

@@ -1230,7 +1230,7 @@ func (r *OrdererConsenterReconciler) getDeploymentTemplate(ctx context.Context, 
 									if ordererConsenter.Spec.ImageTag != "" {
 										return ordererConsenter.Spec.ImageTag
 									}
-									return "0.0.19"
+									return "0.0.24"
 								}()),
 							Args: []string{
 								"consensus",

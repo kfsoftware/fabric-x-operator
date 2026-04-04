@@ -341,7 +341,7 @@ var _ = Describe("Genesis Controller", func() {
 						// Add orderer nodes for orderer organization
 						Consenters: consenters,
 						// Add required meta namespace CA
-						MetaNamespaceCA: fabricxv1alpha1.SecretKeyNSSelector{
+						MetaNamespaceCA: &fabricxv1alpha1.SecretKeyNSSelector{
 							Name:      "test-meta-ca-secret",
 							Namespace: "default",
 							Key:       "ca.pem",

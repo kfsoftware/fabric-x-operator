@@ -278,7 +278,7 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg},
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
 			Consenters:           consenters,
-			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
@@ -520,7 +520,7 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg, *externalOrg1, *externalOrg2},
 			Consenters:           consenters,
-			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
@@ -711,7 +711,7 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg}, // Add orderer org
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
 			Consenters:           consenters, // Add consenters
-			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
@@ -880,7 +880,7 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
 			Consenters:           consenters, // Add consenters
-			MetaNamespaceCA: v1alpha1.SecretKeyNSSelector{
+			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",

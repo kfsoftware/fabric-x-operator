@@ -205,6 +205,7 @@ type CommitterSidecarTemplateData struct {
 	Name             string
 	PartyID          int32
 	MSPID            string
+	ChannelID        string
 	Port             int32
 	OrdererEndpoints []string
 	CommitterHost    string
@@ -312,6 +313,7 @@ General:
     LocalMSPID: {{.MSPID}}
     LogSpec: debug
 FileStore:
+    Location: /etc/hyperledger/fabricx/router/store
 Router:
     NumberOfConnectionsPerBatcher: 12
     NumberOfStreamsPerConnection: 6
@@ -445,23 +447,20 @@ logging:
       min-time: 60s
       permit-without-stream: false
 orderer:
-  channel-id: arma
-  consensus-type: BFT
-  connection:
-    endpoints:
-{{- range .OrdererEndpoints }}
-      - {{ . }}
-{{- end }}
-
+  channel-id: {{ .ChannelID }}
+  consensus-type: CFT
+  identity:
+    msp-id: {{ .MSPID }}
+    msp-dir: /var/hyperledger/fabricx/msp
 committer:
   endpoint:
     host: {{ .CommitterHost }}
     port: {{ .CommitterPort }}
-ledger: 
+ledger:
   path: /var/hyperledger/fabricx/ledger
 last-committed-block-set-interval: 5s
 bootstrap:
-  genesis-block-file-path: 
+  genesis-block-file-path: /etc/hyperledger/fabricx/genesis/genesis.block
 monitoring:
   prometheus:
     enabled: true

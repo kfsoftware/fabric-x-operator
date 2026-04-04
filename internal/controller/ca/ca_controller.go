@@ -166,10 +166,10 @@ func (r *CAReconciler) setDefaults(ca *fabricxv1alpha1.CA) {
 		ca.Spec.Replicas = &replicas
 	}
 	if ca.Spec.Image == "" {
-		ca.Spec.Image = "hyperledger/fabric-ca:1.4.3"
+		ca.Spec.Image = "hyperledger/fabric-ca:1.5.15"
 	}
 	if ca.Spec.Version == "" {
-		ca.Spec.Version = "1.4.3"
+		ca.Spec.Version = "1.5.15"
 	}
 	if ca.Spec.CredentialStore == "" {
 		ca.Spec.CredentialStore = fabricxv1alpha1.CredentialStoreKubernetes

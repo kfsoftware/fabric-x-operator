@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"github.com/hyperledger/fabric-config/protolator"
-	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen"
-	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen/genesisconfig"
+	"github.com/hyperledger/fabric-x-common/api/types"
+	"github.com/hyperledger/fabric-x-common/tools/configtxgen"
 	"gopkg.in/yaml.v2"
 
 	"github.com/go-logr/logr"
@@ -102,19 +102,6 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 		return nil, errors.New("no organizations specified in genesis spec")
 	}
 
-	// Fetch meta namespace CA certificate (required)
-	s.logger.Info("Fetching meta namespace CA certificate",
-		"secret", req.Genesis.Spec.MetaNamespaceCA.Name,
-		"namespace", req.Genesis.Spec.MetaNamespaceCA.Namespace,
-		"key", req.Genesis.Spec.MetaNamespaceCA.Key)
-
-	metaNamespaceCA, err := s.fetchAndValidateX509Certificate(ctx, req.Genesis.Spec.MetaNamespaceCA)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch meta namespace CA certificate")
-	}
-	s.logger.Info("Successfully fetched meta namespace CA certificate", "size", len(metaNamespaceCA))
-	s.logger.V(1).Info("Meta namespace CA certificate", "certificate", string(metaNamespaceCA))
-
 	// Create temporary directory for MSP files
 	tempDir, err := os.MkdirTemp("", "genesis-msp")
 	if err != nil {
@@ -123,13 +110,13 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 	defer os.RemoveAll(tempDir)
 
 	// Process organizations
-	organizations, metaNamespaceCAPath, err := s.processOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations, metaNamespaceCA)
+	organizations, err := s.processOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process organizations")
 	}
 
 	// Process application organizations
-	applicationOrgs, err := s.processApplicationOrganizations(ctx, req.Genesis.Spec.ApplicationOrgs, tempDir, metaNamespaceCA)
+	applicationOrgs, err := s.processApplicationOrganizations(ctx, req.Genesis.Spec.ApplicationOrgs, tempDir)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process application organizations")
 	}
@@ -138,7 +125,7 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 	allOrgs := append(organizations, applicationOrgs...)
 
 	// Create orderer organizations
-	ordererOrgs, err := s.createOrdererOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations, allOrgs, metaNamespaceCA)
+	ordererOrgs, err := s.createOrdererOrganizations(ctx, req.Genesis.Spec.OrdererOrganizations, allOrgs)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create orderer organizations")
 	}
@@ -173,7 +160,7 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 	}
 
 	// Create genesis block with SharedConfig as consensus metadata
-	genesisBlock, err := s.createGenesisBlock(allOrgs, ordererOrgs, sharedConfigPath, metaNamespaceCAPath)
+	genesisBlock, err := s.createGenesisBlock(allOrgs, ordererOrgs, sharedConfigPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create genesis block")
 	}
@@ -194,10 +181,8 @@ func (s *GenesisService) CreateGenesisBlock(ctx context.Context, req *GenesisReq
 }
 
 // processOrganizations processes organizations with certificates from secrets
-// Returns: (orgConfigs, metaNamespaceCAPath, error)
-func (s *GenesisService) processOrganizations(ctx context.Context, organizations []v1alpha1.OrdererOrganization, metaNamespaceCA []byte) ([]*genesisconfig.Organization, string, error) {
-	var orgConfigs []*genesisconfig.Organization
-	var metaNamespaceCAPath string
+func (s *GenesisService) processOrganizations(ctx context.Context, organizations []v1alpha1.OrdererOrganization) ([]*configtxgen.Organization, error) {
+	var orgConfigs []*configtxgen.Organization
 
 	for _, org := range organizations {
 		s.logger.Info("Processing organization", "name", org.Name)
@@ -205,34 +190,28 @@ func (s *GenesisService) processOrganizations(ctx context.Context, organizations
 		// Fetch signing CA certificate
 		signCACert, err := s.fetchAndValidateX509Certificate(ctx, org.SignCACertRef)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "failed to fetch signing CA certificate for %s", org.Name)
+			return nil, errors.Wrapf(err, "failed to fetch signing CA certificate for %s", org.Name)
 		}
 
 		// Fetch TLS CA certificate
 		tlsCACert, err := s.fetchAndValidateX509Certificate(ctx, org.TLSCACertRef)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "failed to fetch TLS CA certificate for %s", org.Name)
+			return nil, errors.Wrapf(err, "failed to fetch TLS CA certificate for %s", org.Name)
 		}
 
 		// Provision MSP directory
-		tempMSPDir, metaCAPath, err := s.provisionMSPDirectory(org.MSPID, signCACert, tlsCACert, metaNamespaceCA)
+		tempMSPDir, err := s.provisionMSPDirectory(org.MSPID, signCACert, tlsCACert)
 		if err != nil {
-			return nil, "", errors.Wrapf(err, "failed to provision MSP directory for %s", org.MSPID)
-		}
-
-		// Capture metaNamespaceCA path from first organization that has it
-		if metaNamespaceCAPath == "" && metaCAPath != "" {
-			metaNamespaceCAPath = metaCAPath
-			s.logger.Info("Using meta namespace CA path from organization", "org", org.MSPID, "path", metaNamespaceCAPath)
+			return nil, errors.Wrapf(err, "failed to provision MSP directory for %s", org.MSPID)
 		}
 
 		// Create organization configuration
-		orgConfig := &genesisconfig.Organization{
+		orgConfig := &configtxgen.Organization{
 			Name:    org.MSPID,
 			ID:      org.MSPID,
 			MSPDir:  tempMSPDir,
 			MSPType: "bccsp",
-			Policies: map[string]*genesisconfig.Policy{
+			Policies: map[string]*configtxgen.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
 					Rule: "ANY Readers",
@@ -251,7 +230,7 @@ func (s *GenesisService) processOrganizations(ctx context.Context, organizations
 		orgConfigs = append(orgConfigs, orgConfig)
 	}
 
-	return orgConfigs, metaNamespaceCAPath, nil
+	return orgConfigs, nil
 }
 
 // fetchAndValidateX509Certificate fetches and validates an X509 certificate from a Kubernetes Secret
@@ -286,8 +265,8 @@ func (s *GenesisService) fetchAndValidateX509Certificate(ctx context.Context, se
 }
 
 // createOrdererOrganizations creates orderer organizations from orderer organizations
-func (s *GenesisService) createOrdererOrganizations(ctx context.Context, ordererOrgs []v1alpha1.OrdererOrganization, allOrgs []*genesisconfig.Organization, metaNamespaceCA []byte) ([]*genesisconfig.Organization, error) {
-	var resultOrgs []*genesisconfig.Organization
+func (s *GenesisService) createOrdererOrganizations(ctx context.Context, ordererOrgs []v1alpha1.OrdererOrganization, allOrgs []*configtxgen.Organization) ([]*configtxgen.Organization, error) {
+	var resultOrgs []*configtxgen.Organization
 
 	// Group orderer organizations by MSP ID
 	mspToOrgs := make(map[string]v1alpha1.OrdererOrganization)
@@ -301,7 +280,7 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 	// Create orderer organizations
 	for mspID, genesisOrg := range mspToOrgs {
 		// Find the corresponding organization by ID to get certificates
-		var sourceOrg *genesisconfig.Organization
+		var sourceOrg *configtxgen.Organization
 		for _, o := range allOrgs {
 			if o.ID == mspID {
 				sourceOrg = o
@@ -314,44 +293,56 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 		}
 
 		// Build orderer endpoints from direct endpoints field or router/assembler configuration
-		var ordererEndpoints []string
+		var ordererEndpoints []*types.OrdererEndpoint
 
 		// Prefer direct endpoints if provided
 		if len(genesisOrg.Endpoints) > 0 {
-			ordererEndpoints = append(ordererEndpoints, genesisOrg.Endpoints...)
-			s.logger.Info("Using direct endpoints", "mspID", mspID, "count", len(genesisOrg.Endpoints))
-			for _, endpoint := range genesisOrg.Endpoints {
-				s.logger.Info("  Endpoint", "mspID", mspID, "endpoint", endpoint)
+			for _, epStr := range genesisOrg.Endpoints {
+				ep, err := types.ParseOrdererEndpoint(epStr)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to parse endpoint %q for %s", epStr, mspID)
+				}
+				ordererEndpoints = append(ordererEndpoints, ep)
 			}
+			s.logger.Info("Using direct endpoints", "mspID", mspID, "count", len(genesisOrg.Endpoints))
 		} else {
 			// Fall back to building from router and assembler configuration
 			// Add router endpoint (broadcast)
 			if genesisOrg.Router != nil {
-				endpoint := fmt.Sprintf("id=%d,broadcast,%s:%d", genesisOrg.Router.PartyID, genesisOrg.Router.Host, genesisOrg.Router.Port)
-				ordererEndpoints = append(ordererEndpoints, endpoint)
-				s.logger.Info("Adding router endpoint", "mspID", mspID, "endpoint", endpoint)
+				ep := &types.OrdererEndpoint{
+					ID:   uint32(genesisOrg.Router.PartyID),
+					Host: genesisOrg.Router.Host,
+					Port: int(genesisOrg.Router.Port),
+					API:  []string{types.Broadcast},
+				}
+				ordererEndpoints = append(ordererEndpoints, ep)
+				s.logger.Info("Adding router endpoint", "mspID", mspID, "endpoint", ep.String())
 			}
 
 			// Add assembler endpoint (deliver)
 			if genesisOrg.Assembler != nil {
-				// Extract partyID from router config since assembler doesn't have it
-				partyID := int32(0)
+				partyID := uint32(0)
 				if genesisOrg.Router != nil {
-					partyID = genesisOrg.Router.PartyID
+					partyID = uint32(genesisOrg.Router.PartyID)
 				}
-				endpoint := fmt.Sprintf("id=%d,deliver,%s:%d", partyID, genesisOrg.Assembler.Host, genesisOrg.Assembler.Port)
-				ordererEndpoints = append(ordererEndpoints, endpoint)
-				s.logger.Info("Adding assembler endpoint", "mspID", mspID, "endpoint", endpoint)
+				ep := &types.OrdererEndpoint{
+					ID:   partyID,
+					Host: genesisOrg.Assembler.Host,
+					Port: int(genesisOrg.Assembler.Port),
+					API:  []string{types.Deliver},
+				}
+				ordererEndpoints = append(ordererEndpoints, ep)
+				s.logger.Info("Adding assembler endpoint", "mspID", mspID, "endpoint", ep.String())
 			}
 		}
 
 		// Create a new orderer organization with proper MSP structure
-		ordererOrg := &genesisconfig.Organization{
+		ordererOrg := &configtxgen.Organization{
 			Name:             sourceOrg.Name,
 			ID:               sourceOrg.ID,
 			MSPType:          sourceOrg.MSPType,
 			OrdererEndpoints: ordererEndpoints,
-			Policies: map[string]*genesisconfig.Policy{
+			Policies: map[string]*configtxgen.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
 					Rule: "ANY Readers",
@@ -379,7 +370,7 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 			return nil, errors.Wrapf(err, "failed to fetch TLS CA certificate for %s", genesisOrg.Name)
 		}
 		// Provision MSP directory for the orderer organization
-		tempMSPDir, _, err := s.provisionMSPDirectory(mspID, signCACert, tlsCACert, metaNamespaceCA)
+		tempMSPDir, err := s.provisionMSPDirectory(mspID, signCACert, tlsCACert)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to provision MSP directory for orderer org %s", mspID)
 		}
@@ -392,16 +383,16 @@ func (s *GenesisService) createOrdererOrganizations(ctx context.Context, orderer
 }
 
 // processApplicationOrganizations processes application organizations
-func (s *GenesisService) processApplicationOrganizations(ctx context.Context, appOrgs []v1alpha1.ApplicationOrganization, tempDir string, metaNamespaceCA []byte) ([]*genesisconfig.Organization, error) {
-	var organizations []*genesisconfig.Organization
+func (s *GenesisService) processApplicationOrganizations(ctx context.Context, appOrgs []v1alpha1.ApplicationOrganization, tempDir string) ([]*configtxgen.Organization, error) {
+	var organizations []*configtxgen.Organization
 
 	for _, org := range appOrgs {
 		s.logger.Info("Processing application organization", "name", org.Name)
 
-		var orgConfig *genesisconfig.Organization
+		var orgConfig *configtxgen.Organization
 		var err error
 
-		orgConfig, err = s.processExternalApplicationOrg(ctx, org, tempDir, metaNamespaceCA)
+		orgConfig, err = s.processExternalApplicationOrg(ctx, org, tempDir)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to process application organization %s", org.Name)
 		}
@@ -413,7 +404,7 @@ func (s *GenesisService) processApplicationOrganizations(ctx context.Context, ap
 }
 
 // processExternalApplicationOrg processes an external application organization
-func (s *GenesisService) processExternalApplicationOrg(ctx context.Context, org v1alpha1.ApplicationOrganization, tempDir string, metaNamespaceCA []byte) (*genesisconfig.Organization, error) {
+func (s *GenesisService) processExternalApplicationOrg(ctx context.Context, org v1alpha1.ApplicationOrganization, tempDir string) (*configtxgen.Organization, error) {
 	// Fetch certificates from secrets
 	signCACert, err := s.fetchAndValidateX509Certificate(ctx, org.SignCACertRef)
 	if err != nil {
@@ -426,18 +417,18 @@ func (s *GenesisService) processExternalApplicationOrg(ctx context.Context, org 
 	}
 
 	// Provision MSP directory with the certificates
-	tempMSPDir, _, err := s.provisionMSPDirectory(org.MSPID, signCACert, tlsCACert, metaNamespaceCA)
+	tempMSPDir, err := s.provisionMSPDirectory(org.MSPID, signCACert, tlsCACert)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to provision MSP directory for %s", org.MSPID)
 	}
 
 	// Create organization configuration
-	orgConfig := &genesisconfig.Organization{
+	orgConfig := &configtxgen.Organization{
 		Name:    org.MSPID,
 		ID:      org.MSPID,
 		MSPDir:  tempMSPDir,
 		MSPType: "bccsp",
-		Policies: map[string]*genesisconfig.Policy{
+		Policies: map[string]*configtxgen.Policy{
 			"Readers": {
 				Type: "ImplicitMeta",
 				Rule: "ANY Readers",
@@ -457,12 +448,11 @@ func (s *GenesisService) processExternalApplicationOrg(ctx context.Context, org 
 }
 
 // provisionMSPDirectory creates a temporal MSP directory with the specified structure
-// Returns: (tempMSPDir, metaNamespaceCAPath, error)
-func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACert []byte, metaNamespaceCA []byte) (string, string, error) {
+func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACert []byte) (string, error) {
 	// Create temporal directory for this MSP
 	tempMSPDir, err := os.MkdirTemp("", fmt.Sprintf("msp-%s-", mspID))
 	if err != nil {
-		return "", "", errors.Wrapf(err, "failed to create temp MSP directory for %s", mspID)
+		return "", errors.Wrapf(err, "failed to create temp MSP directory for %s", mspID)
 	}
 
 	// Create all required directories
@@ -479,7 +469,7 @@ func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACe
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			os.RemoveAll(tempMSPDir)
-			return "", "", errors.Wrapf(err, "failed to create directory %s", dir)
+			return "", errors.Wrapf(err, "failed to create directory %s", dir)
 		}
 	}
 
@@ -488,7 +478,7 @@ func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACe
 		signCACertPath := filepath.Join(tempMSPDir, "cacerts", "ca.crt")
 		if err := os.WriteFile(signCACertPath, signCACert, 0644); err != nil {
 			os.RemoveAll(tempMSPDir)
-			return "", "", errors.Wrap(err, "failed to write signing CA certificate")
+			return "", errors.Wrap(err, "failed to write signing CA certificate")
 		}
 	}
 
@@ -497,26 +487,8 @@ func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACe
 		tlsCACertPath := filepath.Join(tempMSPDir, "tlscacerts", "ca.crt")
 		if err := os.WriteFile(tlsCACertPath, tlsCACert, 0644); err != nil {
 			os.RemoveAll(tempMSPDir)
-			return "", "", errors.Wrap(err, "failed to write TLS CA certificate")
+			return "", errors.Wrap(err, "failed to write TLS CA certificate")
 		}
-	}
-
-	// Write meta namespace verification CA certificate if provided
-	// This will be used for MetaNamespaceVerificationKeyPath in the genesis block
-	var metaNamespaceCAPath string
-	if len(metaNamespaceCA) > 0 {
-		metaNamespaceCAPath = filepath.Join(tempMSPDir, "msp", "tlscacerts", "ca.crt")
-		// Create msp/tlscacerts directory
-		mspTlsCaCertsDir := filepath.Join(tempMSPDir, "msp", "tlscacerts")
-		if err := os.MkdirAll(mspTlsCaCertsDir, 0755); err != nil {
-			os.RemoveAll(tempMSPDir)
-			return "", "", errors.Wrapf(err, "failed to create directory %s", mspTlsCaCertsDir)
-		}
-		if err := os.WriteFile(metaNamespaceCAPath, metaNamespaceCA, 0644); err != nil {
-			os.RemoveAll(tempMSPDir)
-			return "", "", errors.Wrap(err, "failed to write meta namespace CA certificate")
-		}
-		s.logger.Info("Wrote meta namespace CA certificate", "path", metaNamespaceCAPath, "mspID", mspID)
 	}
 
 	// Create config.yaml for NodeOUs
@@ -538,14 +510,14 @@ func (s *GenesisService) provisionMSPDirectory(mspID string, signCACert, tlsCACe
 	configPath := filepath.Join(tempMSPDir, "config.yaml")
 	if err := os.WriteFile(configPath, []byte(configYaml), 0644); err != nil {
 		os.RemoveAll(tempMSPDir)
-		return "", "", errors.Wrap(err, "failed to write config.yaml")
+		return "", errors.Wrap(err, "failed to write config.yaml")
 	}
 
-	return tempMSPDir, metaNamespaceCAPath, nil
+	return tempMSPDir, nil
 }
 
 // createGenesisBlock creates the genesis block programmatically
-func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organization, ordererOrgs []*genesisconfig.Organization, sharedConfigPath string, metaNamespaceCAPath string) ([]byte, error) {
+func (s *GenesisService) createGenesisBlock(allOrgs []*configtxgen.Organization, ordererOrgs []*configtxgen.Organization, sharedConfigPath string) ([]byte, error) {
 	// Validate that we have at least one orderer organization
 	if len(ordererOrgs) == 0 {
 		return nil, errors.New("at least one orderer organization is required")
@@ -565,21 +537,21 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 	s.logger.Info("Shared config file exists and is readable", "size", len(sharedConfigBytes))
 
 	// Create a genesis profile programmatically
-	profile := &genesisconfig.Profile{
-		Orderer: &genesisconfig.Orderer{
+	profile := &configtxgen.Profile{
+		Orderer: &configtxgen.Orderer{
 			OrdererType: "arma",
-			Arma: &genesisconfig.ConsensusMetadata{
+			Arma: &configtxgen.ConsensusMetadata{
 				Path: sharedConfigPath,
 			},
 			Addresses:    []string{},
 			BatchTimeout: 2 * time.Second,
-			BatchSize: genesisconfig.BatchSize{
+			BatchSize: configtxgen.BatchSize{
 				MaxMessageCount:   500,
 				AbsoluteMaxBytes:  10 * 1024 * 1024,
 				PreferredMaxBytes: 2 * 1024 * 1024,
 			},
 			Organizations: ordererOrgs,
-			Policies: map[string]*genesisconfig.Policy{
+			Policies: map[string]*configtxgen.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
 					Rule: "ANY Readers",
@@ -601,13 +573,12 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 				"V2_0": true,
 			},
 		},
-		Application: &genesisconfig.Application{
+		Application: &configtxgen.Application{
 			Organizations: allOrgs,
 			Capabilities: map[string]bool{
 				"V2_5": true,
 			},
-			MetaNamespaceVerificationKeyPath: metaNamespaceCAPath,
-			Policies: map[string]*genesisconfig.Policy{
+			Policies: map[string]*configtxgen.Policy{
 				"Readers": {
 					Type: "ImplicitMeta",
 					Rule: "ANY Readers",
@@ -625,7 +596,7 @@ func (s *GenesisService) createGenesisBlock(allOrgs []*genesisconfig.Organizatio
 		Capabilities: map[string]bool{
 			"V3_0": true,
 		},
-		Policies: map[string]*genesisconfig.Policy{
+		Policies: map[string]*configtxgen.Policy{
 			"Readers": {
 				Type: "ImplicitMeta",
 				Rule: "ANY Readers",

@@ -732,7 +732,7 @@ func (r *CommitterQueryServiceReconciler) reconcileDeployment(ctx context.Contex
 									if committerCoordinator.Spec.ImageTag != "" {
 										return committerCoordinator.Spec.ImageTag
 									}
-									return "0.1.5"
+									return "0.1.9"
 								}()),
 							Command: []string{
 								"committer",

@@ -486,10 +486,20 @@ func (r *CommitterSidecarReconciler) reconcileSecret(ctx context.Context, commit
 	// Prepare template data
 	// Try to derive endpoints from the parent Committer CRD if provided
 	// For now, use component endpoints if present; otherwise leave empty
+	// Determine channel ID from env vars or default
+	channelID := "arma"
+	for _, env := range committerSidecar.Spec.Env {
+		if env.Name == "SC_SIDECAR_ORDERER_CHANNEL_ID" {
+			channelID = env.Value
+			break
+		}
+	}
+
 	templateData := utils.CommitterSidecarTemplateData{
 		Name:             committerSidecar.Name,
 		PartyID:          committerSidecar.Spec.PartyID,
 		MSPID:            committerSidecar.Spec.MSPID,
+		ChannelID:        channelID,
 		Port:             5050,
 		OrdererEndpoints: committerSidecar.Spec.OrdererEndpoints,
 		CommitterHost:    committerSidecar.Spec.CommitterHost,
@@ -711,6 +721,50 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 					}(),
 				},
 				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:  "setup-msp",
+							Image: "busybox:1.35",
+							Command: []string{
+								"/bin/sh",
+								"-c",
+								fmt.Sprintf(
+									"mkdir -p /var/hyperledger/fabricx/msp/signcerts && "+
+										"mkdir -p /var/hyperledger/fabricx/msp/keystore && "+
+										"mkdir -p /var/hyperledger/fabricx/msp/cacerts && "+
+										"cp /sign-certs/cert.pem /var/hyperledger/fabricx/msp/signcerts/ && "+
+										"cp /sign-certs/key.pem /var/hyperledger/fabricx/msp/keystore/priv_sk && "+
+										"cp /sign-certs/ca.pem /var/hyperledger/fabricx/msp/cacerts/ && "+
+										`cat > /var/hyperledger/fabricx/msp/config.yaml <<'EOF'
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+EOF`),
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "sign-certs",
+									ReadOnly:  true,
+									MountPath: "/sign-certs",
+								},
+								{
+									Name:      "shared-msp",
+									MountPath: "/var/hyperledger/fabricx/msp",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name: "sidecar",
@@ -725,7 +779,7 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 									if committerSidecar.Spec.ImageTag != "" {
 										return committerSidecar.Spec.ImageTag
 									}
-									return "0.1.5"
+									return "0.1.9"
 								}()),
 							Command: []string{
 								"committer",
@@ -757,6 +811,11 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 									ReadOnly:  true,
 									MountPath: "/etc/hyperledger/fabricx/genesis",
 								},
+								{
+									Name:      "shared-msp",
+									ReadOnly:  true,
+									MountPath: "/var/hyperledger/fabricx/msp",
+								},
 							},
 							Resources: func() corev1.ResourceRequirements {
 								if committerSidecar.Spec.Resources != nil {
@@ -787,6 +846,20 @@ func (r *CommitterSidecarReconciler) reconcileDeployment(ctx context.Context, co
 						},
 						{
 							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "sign-certs",
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
+									SecretName: fmt.Sprintf("%s-sign-cert", committerSidecar.Name),
+								},
+							},
+						},
+						{
+							Name: "shared-msp",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},

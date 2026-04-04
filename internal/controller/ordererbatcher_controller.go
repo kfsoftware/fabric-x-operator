@@ -1331,7 +1331,7 @@ func (r *OrdererBatcherReconciler) getDeploymentTemplate(ctx context.Context, or
 									if ordererBatcher.Spec.ImageTag != "" {
 										return ordererBatcher.Spec.ImageTag
 									}
-									return "0.0.19"
+									return "0.0.24"
 								}()),
 							Args: []string{
 								"batcher",

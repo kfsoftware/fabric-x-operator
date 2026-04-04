@@ -18,24 +18,27 @@ package controller
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/hyperledger/fabric-lib-go/bccsp/sw"
 	cb "github.com/hyperledger/fabric-protos-go-apiv2/common"
+	fabricmsp "github.com/hyperledger/fabric-protos-go-apiv2/msp"
 	ab "github.com/hyperledger/fabric-protos-go-apiv2/orderer"
-	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
-	committertypes "github.com/hyperledger/fabric-x-committer/api/types"
-	"github.com/hyperledger/fabric-x-committer/utils/signature"
-	"github.com/hyperledger/fabric-x-common/cmd/common/comm"
-	"github.com/hyperledger/fabric-x-common/internaltools/configtxgen/encoder"
-	"github.com/hyperledger/fabric-x-common/internaltools/pkg/identity"
+	"github.com/hyperledger/fabric-x-common/api/applicationpb"
+	"github.com/hyperledger/fabric-x-common/api/committerpb"
+	"github.com/hyperledger/fabric-x-common/api/msppb"
 	"github.com/hyperledger/fabric-x-common/msp"
 	"github.com/hyperledger/fabric-x-common/protoutil"
+	"github.com/hyperledger/fabric-x-common/protoutil/identity"
+	"github.com/hyperledger/fabric-x-common/tools/pkg/comm"
+	"google.golang.org/protobuf/proto"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -190,8 +193,8 @@ func (r *ChainNamespaceReconciler) deployNamespace(ctx context.Context, ns *fabr
 		return "", fmt.Errorf("failed to create signed envelope: %w", err)
 	}
 
-	// Broadcast to orderer (without TLS)
-	if err := r.broadcast(ctx, ns.Spec.Orderer, env); err != nil {
+	// Broadcast to orderer
+	if err := r.broadcast(ctx, ns, env); err != nil {
 		return "", fmt.Errorf("failed to broadcast: %w", err)
 	}
 
@@ -232,8 +235,8 @@ func (r *ChainNamespaceReconciler) extractPublicPem(sid msp.SigningIdentity) ([]
 		return nil, err
 	}
 
-	mspSI, err := protoutil.UnmarshalSerializedIdentity(sidBytes)
-	if err != nil {
+	mspSI := &fabricmsp.SerializedIdentity{}
+	if err := proto.Unmarshal(sidBytes, mspSI); err != nil {
 		return nil, err
 	}
 
@@ -251,48 +254,71 @@ func (r *ChainNamespaceReconciler) getPubKeyFromPemData(ctx context.Context, pem
 		}
 		pemContent = rest
 
-		key, err := encoder.ParseCertificateOrPublicKey(block.Bytes)
-		if err != nil {
-			continue
+		// Try parsing as certificate first
+		if block.Type == "CERTIFICATE" {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				continue
+			}
+			pubKeyBytes, err := x509.MarshalPKIXPublicKey(cert.PublicKey)
+			if err != nil {
+				continue
+			}
+			return pem.EncodeToMemory(&pem.Block{
+				Type:  "PUBLIC KEY",
+				Bytes: pubKeyBytes,
+			}), nil
 		}
 
-		return pem.EncodeToMemory(&pem.Block{
-			Type:  "PUBLIC KEY",
-			Bytes: key,
-		}), nil
+		// Try parsing as public key
+		if block.Type == "PUBLIC KEY" {
+			_, err := x509.ParsePKIXPublicKey(block.Bytes)
+			if err != nil {
+				continue
+			}
+			return pem.EncodeToMemory(&pem.Block{
+				Type:  "PUBLIC KEY",
+				Bytes: block.Bytes,
+			}), nil
+		}
 	}
 
 	return nil, errors.New("no ECDSA public key in pem file")
 }
 
 // createNamespacesTx creates a namespace transaction
-func (r *ChainNamespaceReconciler) createNamespacesTx(policyScheme string, policy []byte, nsID string, nsVersion int) *protoblocktx.Tx {
-	writeToMetaNs := &protoblocktx.TxNamespace{
-		NsId:       committertypes.MetaNamespaceID,
+func (r *ChainNamespaceReconciler) createNamespacesTx(policyScheme string, policy []byte, nsID string, nsVersion int) *applicationpb.Tx {
+	writeToMetaNs := &applicationpb.TxNamespace{
+		NsId:       committerpb.MetaNamespaceID,
 		NsVersion:  uint64(0),
-		ReadWrites: make([]*protoblocktx.ReadWrite, 0, 1),
+		ReadWrites: make([]*applicationpb.ReadWrite, 0, 1),
 	}
 
-	nsPolicy := &protoblocktx.NamespacePolicy{
-		Scheme:    policyScheme,
-		PublicKey: policy,
+	nsPolicy := &applicationpb.NamespacePolicy{
+		Rule: &applicationpb.NamespacePolicy_ThresholdRule{
+			ThresholdRule: &applicationpb.ThresholdRule{
+				Scheme:    policyScheme,
+				PublicKey: policy,
+			},
+		},
 	}
 
 	policyBytes := protoutil.MarshalOrPanic(nsPolicy)
-	rw := &protoblocktx.ReadWrite{
+	rw := &applicationpb.ReadWrite{
 		Key:   []byte(nsID),
 		Value: policyBytes,
 	}
 
 	// Only set the version if we update a namespace policy
 	if nsVersion >= 0 {
-		rw.Version = committertypes.Version(uint64(nsVersion))
+		v := uint64(nsVersion)
+		rw.Version = &v
 	}
 
 	writeToMetaNs.ReadWrites = append(writeToMetaNs.ReadWrites, rw)
 
-	tx := &protoblocktx.Tx{
-		Namespaces: []*protoblocktx.TxNamespace{
+	tx := &applicationpb.Tx{
+		Namespaces: []*applicationpb.TxNamespace{
 			writeToMetaNs,
 		},
 	}
@@ -301,18 +327,30 @@ func (r *ChainNamespaceReconciler) createNamespacesTx(policyScheme string, polic
 }
 
 // createSignedEnvelope creates a signed envelope from the transaction
-func (r *ChainNamespaceReconciler) createSignedEnvelope(signer identity.SignerSerializer, channel string, tx *protoblocktx.Tx) (*cb.Envelope, string, error) {
+func (r *ChainNamespaceReconciler) createSignedEnvelope(signer identity.SignerSerializer, channel string, tx *applicationpb.Tx) (*cb.Envelope, string, error) {
 	signatureHdr := protoutil.NewSignatureHeaderOrPanic(signer)
 
 	// Compute transaction ID
 	txID := protoutil.ComputeTxID(signatureHdr.Nonce, signatureHdr.Creator)
 
-	// Sign each namespace
-	tx.Signatures = make([][]byte, len(tx.GetNamespaces()))
+	// Sign each namespace using the ASN1Marshal method on TxNamespace
+	// The new API uses Endorsements instead of Signatures
+	creatorBytes, err := signer.Serialize()
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to serialize signer identity: %w", err)
+	}
+
+	// Parse the serialized identity to get MSPID
+	mspSI := &fabricmsp.SerializedIdentity{}
+	if err := proto.Unmarshal(creatorBytes, mspSI); err != nil {
+		return nil, "", fmt.Errorf("failed to unmarshal serialized identity: %w", err)
+	}
+
+	tx.Endorsements = make([]*applicationpb.Endorsements, len(tx.GetNamespaces()))
 	for idx, ns := range tx.GetNamespaces() {
 		// Note that a default msp signer hashes the msg before signing.
 		// For that reason we use the TxNamespace message as ASN1 encoded msg
-		msg, err := signature.ASN1MarshalTxNamespace(txID, ns)
+		msg, err := ns.ASN1Marshal(txID)
 		if err != nil {
 			return nil, "", fmt.Errorf("failed asn1 marshal tx: %w", err)
 		}
@@ -321,7 +359,15 @@ func (r *ChainNamespaceReconciler) createSignedEnvelope(signer identity.SignerSe
 		if err != nil {
 			return nil, "", fmt.Errorf("failed signing tx: %w", err)
 		}
-		tx.Signatures[idx] = sig
+
+		tx.Endorsements[idx] = &applicationpb.Endorsements{
+			EndorsementsWithIdentity: []*applicationpb.EndorsementWithIdentity{
+				{
+					Endorsement: sig,
+					Identity:    msppb.NewIdentity(mspSI.Mspid, mspSI.IdBytes),
+				},
+			},
+		}
 	}
 
 	channelHdr := protoutil.MakeChannelHeader(cb.HeaderType_MESSAGE, 0, channel, 0)
@@ -362,18 +408,33 @@ func (r *ChainNamespaceReconciler) createEnvelope(signer identity.SignerSerializ
 	return env, nil
 }
 
-// broadcast sends the envelope to the orderer (without TLS for now)
-func (r *ChainNamespaceReconciler) broadcast(ctx context.Context, ordererEndpoint string, env *cb.Envelope) error {
-	// Create comm client config without TLS
-	config := comm.Config{}
+// broadcast sends the envelope to the orderer with optional TLS support
+func (r *ChainNamespaceReconciler) broadcast(ctx context.Context, ns *fabricxv1alpha1.ChainNamespace, env *cb.Envelope) error {
 	log := logf.FromContext(ctx)
 
-	cl, err := comm.NewClient(config)
-	if err != nil {
-		return fmt.Errorf("cannot create grpc client: %w", err)
+	// Build gRPC client config with TLS if enabled
+	clientConfig := comm.ClientConfig{
+		DialTimeout: 5 * time.Second,
 	}
 
-	conn, err := cl.NewDialer(ordererEndpoint)()
+	if ns.Spec.TLS != nil && ns.Spec.TLS.Enabled {
+		log.Info("TLS enabled for orderer connection", "orderer", ns.Spec.Orderer)
+
+		// Fetch CA certificate from secret
+		caCertData, err := r.getSecretData(ctx, ns.Spec.TLS.CACert.Name, ns.Spec.TLS.CACert.Namespace, ns.Spec.TLS.CACert.Key)
+		if err != nil {
+			return fmt.Errorf("failed to get TLS CA certificate: %w", err)
+		}
+
+		clientConfig.SecOpts = comm.SecureOptions{
+			UseTLS:        true,
+			ServerRootCAs: [][]byte{caCertData},
+		}
+	} else {
+		log.Info("TLS disabled for orderer connection", "orderer", ns.Spec.Orderer)
+	}
+
+	conn, err := clientConfig.Dial(ns.Spec.Orderer)
 	if err != nil {
 		return fmt.Errorf("cannot dial orderer: %w", err)
 	}

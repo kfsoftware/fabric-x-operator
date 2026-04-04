@@ -264,6 +264,11 @@ func (r *CommitterReconciler) buildCoordinatorSpec(committer *fabricxv1alpha1.Co
 		spec.ValidatorCommitterEndpoints = committer.Spec.Components.CoordinatorValidatorCommitterEndpoints
 	}
 
+	// Fallback: use top-level enrollment if component-specific enrollment is not set
+	if spec.Enrollment == nil && committer.Spec.Enrollment != nil {
+		spec.Enrollment = committer.Spec.Enrollment
+	}
+
 	return spec
 }
 
@@ -367,6 +372,11 @@ func (r *CommitterReconciler) buildSidecarSpec(committer *fabricxv1alpha1.Commit
 		spec.CommitterPort = committer.Spec.Components.CommitterPort
 	}
 
+	// Fallback: use top-level enrollment if component-specific enrollment is not set
+	if spec.Enrollment == nil && committer.Spec.Enrollment != nil {
+		spec.Enrollment = committer.Spec.Enrollment
+	}
+
 	return spec
 }
 
@@ -453,6 +463,11 @@ func (r *CommitterReconciler) buildValidatorSpec(committer *fabricxv1alpha1.Comm
 		spec.Command = committer.Spec.Components.Validator.Command
 		spec.Args = committer.Spec.Components.Validator.Args
 		spec.PostgreSQL = committer.Spec.Components.Validator.PostgreSQL
+	}
+
+	// Fallback: use top-level enrollment if component-specific enrollment is not set
+	if spec.Enrollment == nil && committer.Spec.Enrollment != nil {
+		spec.Enrollment = committer.Spec.Enrollment
 	}
 
 	return spec
@@ -542,6 +557,11 @@ func (r *CommitterReconciler) buildVerifierSpec(committer *fabricxv1alpha1.Commi
 		spec.Args = committer.Spec.Components.VerifierService.Args
 	}
 
+	// Fallback: use top-level enrollment if component-specific enrollment is not set
+	if spec.Enrollment == nil && committer.Spec.Enrollment != nil {
+		spec.Enrollment = committer.Spec.Enrollment
+	}
+
 	return spec
 }
 
@@ -628,6 +648,11 @@ func (r *CommitterReconciler) buildQueryServiceSpec(committer *fabricxv1alpha1.C
 		spec.Command = committer.Spec.Components.QueryService.Command
 		spec.Args = committer.Spec.Components.QueryService.Args
 		spec.PostgreSQL = committer.Spec.Components.QueryService.PostgreSQL
+	}
+
+	// Fallback: use top-level enrollment if component-specific enrollment is not set
+	if spec.Enrollment == nil && committer.Spec.Enrollment != nil {
+		spec.Enrollment = committer.Spec.Enrollment
 	}
 
 	return spec

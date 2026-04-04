@@ -1044,10 +1044,27 @@ func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, 
 										"cp /sign-certs/ca.pem %s/cacerts/ && "+
 										"cp /tls-certs/cert.pem %s/server.crt && "+
 										"cp /tls-certs/key.pem %s/server.key && "+
-										"cp /tls-certs/ca.pem %s/ca.crt",
+										"cp /tls-certs/ca.pem %s/ca.crt && "+
+										`cat > %s/config.yaml <<'EOF'
+NodeOUs:
+  Enable: true
+  ClientOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: client
+  PeerOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: peer
+  AdminOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: admin
+  OrdererOUIdentifier:
+    Certificate: cacerts/ca.pem
+    OrganizationalUnitIdentifier: orderer
+EOF`,
 									"/var/hyperledger/msp", "/var/hyperledger/msp", "/var/hyperledger/msp", "/etc/hyperledger/fabricx/assembler/tls",
 									"/var/hyperledger/msp", "/var/hyperledger/msp", "/var/hyperledger/msp",
 									"/etc/hyperledger/fabricx/assembler/tls", "/etc/hyperledger/fabricx/assembler/tls", "/etc/hyperledger/fabricx/assembler/tls",
+									"/var/hyperledger/msp",
 								),
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -1106,7 +1123,7 @@ func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, 
 									if ordererAssembler.Spec.ImageTag != "" {
 										return ordererAssembler.Spec.ImageTag
 									}
-									return "0.0.19"
+									return "0.0.24"
 								}()),
 							Args: []string{
 								"assembler",
@@ -1154,6 +1171,10 @@ func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, 
 								{
 									Name:      "shared-genesis",
 									MountPath: "/etc/hyperledger/fabricx/assembler/genesis",
+								},
+								{
+									Name:      "assembler-data",
+									MountPath: "/etc/hyperledger/fabricx/assembler/store",
 								},
 							},
 							Resources: corev1.ResourceRequirements{
@@ -1211,6 +1232,14 @@ func (r *OrdererAssemblerReconciler) getDeploymentTemplate(ctx context.Context, 
 							Name: "shared-genesis",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "assembler-data",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: fmt.Sprintf("%s-data-pvc", ordererAssembler.Name),
+								},
 							},
 						},
 						{
@@ -1290,7 +1319,12 @@ func (r *OrdererAssemblerReconciler) reconcilePVC(ctx context.Context, ordererAs
 					corev1.ResourceStorage: resource.MustParse(ordererAssembler.Spec.Storage.Size),
 				},
 			},
-			StorageClassName: &ordererAssembler.Spec.Storage.StorageClass,
+			StorageClassName: func() *string {
+				if ordererAssembler.Spec.Storage.StorageClass != "" {
+					return &ordererAssembler.Spec.Storage.StorageClass
+				}
+				return nil
+			}(),
 		},
 	}
 

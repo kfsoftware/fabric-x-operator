@@ -34,8 +34,8 @@ func TestCAReconciler_Reconcile(t *testing.T) {
 					Namespace: "default",
 				},
 				Spec: fabricxv1alpha1.CASpec{
-					Image:   "hyperledger/fabric-ca:1.4.3",
-					Version: "1.4.3",
+					Image:   "hyperledger/fabric-ca:1.5.15",
+					Version: "1.5.15",
 					Replicas: func() *int32 {
 						replicas := int32(1)
 						return &replicas
@@ -267,8 +267,8 @@ func TestCAReconciler_setDefaults(t *testing.T) {
 			},
 			expected: &fabricxv1alpha1.CA{
 				Spec: fabricxv1alpha1.CASpec{
-					Image:   "hyperledger/fabric-ca:1.4.3",
-					Version: "1.4.3",
+					Image:   "hyperledger/fabric-ca:1.5.15",
+					Version: "1.5.15",
 					Replicas: func() *int32 {
 						replicas := int32(1)
 						return &replicas
@@ -473,8 +473,8 @@ func TestCAReconciler_GetDeploymentTemplate(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: fabricxv1alpha1.CASpec{
-			Image:   "hyperledger/fabric-ca:1.4.3",
-			Version: "1.4.3",
+			Image:   "hyperledger/fabric-ca:1.5.15",
+			Version: "1.5.15",
 			Replicas: func() *int32 {
 				replicas := int32(1)
 				return &replicas
@@ -548,7 +548,7 @@ func TestCAReconciler_GetDeploymentTemplate(t *testing.T) {
 	}
 
 	container := deployment.Spec.Template.Spec.Containers[0]
-	expectedImage := "hyperledger/fabric-ca:1.4.3:1.4.3" // Image:Version format
+	expectedImage := "hyperledger/fabric-ca:1.5.15:1.5.15" // Image:Version format
 	if container.Image != expectedImage {
 		t.Errorf("Expected container image %s, got %s", expectedImage, container.Image)
 	}
@@ -582,8 +582,8 @@ func TestCAReconciler_handleDeletion(t *testing.T) {
 			Finalizers:        []string{caFinalizer},
 		},
 		Spec: fabricxv1alpha1.CASpec{
-			Image:   "hyperledger/fabric-ca:1.4.3",
-			Version: "1.4.3",
+			Image:   "hyperledger/fabric-ca:1.5.15",
+			Version: "1.5.15",
 		},
 	}
 

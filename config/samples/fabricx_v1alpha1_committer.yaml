@@ -7,7 +7,7 @@ spec:
   bootstrapMode: deploy
   mspid: Org1MSP
   image: hyperledger/fabric-x-committer
-  imageTag: 0.1.5
+  imageTag: 0.1.9
   common:
     replicas: 1
     resources:

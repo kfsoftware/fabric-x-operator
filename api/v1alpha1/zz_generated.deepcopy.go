@@ -3585,7 +3585,11 @@ func (in *GenesisSpec) DeepCopyInto(out *GenesisSpec) {
 		*out = new(BatchingConfig)
 		(*in).DeepCopyInto(*out)
 	}
-	out.MetaNamespaceCA = in.MetaNamespaceCA
+	if in.MetaNamespaceCA != nil {
+		in, out := &in.MetaNamespaceCA, &out.MetaNamespaceCA
+		*out = new(SecretKeyNSSelector)
+		**out = **in
+	}
 	out.Output = in.Output
 }
 

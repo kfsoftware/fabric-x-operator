@@ -776,7 +776,7 @@ func (r *CommitterValidatorReconciler) reconcileDeployment(ctx context.Context, 
 									if committerValidator.Spec.ImageTag != "" {
 										return committerValidator.Spec.ImageTag
 									}
-									return "0.1.5"
+									return "0.1.9"
 								}()),
 							Command: []string{
 								"committer",

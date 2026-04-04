@@ -417,10 +417,9 @@ type GenesisSpec struct {
 	// Batching configuration
 	BatchingConfig *BatchingConfig `json:"batchingConfig,omitempty"`
 
-	// Meta namespace verification CA certificate reference (required)
-	// This CA certificate will be used for MetaNamespaceVerificationKeyPath
-	// +kubebuilder:validation:Required
-	MetaNamespaceCA SecretKeyNSSelector `json:"metaNamespaceCA"`
+	// Meta namespace verification CA certificate reference (deprecated, no longer used)
+	// +optional
+	MetaNamespaceCA *SecretKeyNSSelector `json:"metaNamespaceCA,omitempty"`
 
 	// Output configuration
 	Output GenesisOutput `json:"output"`

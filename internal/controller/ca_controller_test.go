@@ -53,8 +53,8 @@ var _ = Describe("CA Controller", func() {
 						Namespace: "default",
 					},
 					Spec: fabricxv1alpha1.CASpec{
-						Image:   "hyperledger/fabric-ca:1.4.3",
-						Version: "1.4.3",
+						Image:   "hyperledger/fabric-ca:1.5.15",
+						Version: "1.5.15",
 						Hosts:   []string{"localhost"},
 						Database: fabricxv1alpha1.FabricCADatabase{
 							Type:       "sqlite3",
