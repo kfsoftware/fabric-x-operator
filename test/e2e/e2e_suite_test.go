@@ -58,11 +58,33 @@ var _ = BeforeSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
 
-	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
-	// built and available before running the tests. Also, remove the following block.
-	By("loading the manager(Operator) image on Kind")
+	By("loading the manager(Operator) image into cluster")
 	err = utils.LoadImageToKindClusterWithName(projectImage)
-	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into Kind")
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to load the manager(Operator) image into cluster")
+
+	By("installing Gateway API CRDs")
+	cmd = exec.Command("kubectl", "apply", "-f",
+		"https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install Gateway API CRDs")
+
+	By("installing operator CRDs")
+	cmd = exec.Command("make", "install")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to install CRDs")
+
+	By("deploying the controller-manager")
+	cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
+	By("waiting for controller-manager to be ready")
+	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready",
+		"pod", "-l", "control-plane=controller-manager",
+		"-n", "fabric-x-operator-system",
+		"--timeout=120s")
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Controller manager pod not ready")
 
 	// The tests-e2e are intended to run on a temporary cluster that is created and destroyed for testing.
 	// To prevent errors when tests run in environments with CertManager already installed,
@@ -81,6 +103,14 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	By("undeploying the controller-manager")
+	cmd := exec.Command("make", "undeploy")
+	_, _ = utils.Run(cmd)
+
+	By("uninstalling CRDs")
+	cmd = exec.Command("make", "uninstall")
+	_, _ = utils.Run(cmd)
+
 	// Teardown CertManager after the suite if not skipped and if it was not already installed
 	if !skipCertManagerInstall && !isCertManagerAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling CertManager...\n")
