@@ -70,9 +70,15 @@ spec:
           attrs:
             hf.Registrar.Roles: "*"
             hf.Revoker: true
+  tls:
+    domains:
+      - %s
+      - %s.%s
+      - %s.%s.svc.cluster.local
+      - localhost
   service:
     type: ClusterIP
-`, caName, testNamespace)
+`, caName, testNamespace, caName, caName, testNamespace, caName, testNamespace)
 
 		cmd := exec.Command("kubectl", "apply", "-f", "-")
 		cmd.Stdin = bytes.NewReader([]byte(caYAML))
@@ -82,7 +88,7 @@ spec:
 		By("waiting for CA pod to be ready")
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "wait", "--for=condition=ready",
-				"pod", "-l", fmt.Sprintf("app.kubernetes.io/name=%s", caName),
+				"pod", "-l", "app=ca",
 				"-n", testNamespace,
 				"--timeout=120s")
 			_, err := utils.Run(cmd)
@@ -91,7 +97,7 @@ spec:
 
 		By("verifying CA service exists")
 		cmd = exec.Command("kubectl", "get", "service",
-			fmt.Sprintf("%s-service", caName),
+			caName,
 			"-n", testNamespace)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "CA service should exist")
@@ -110,7 +116,7 @@ spec:
 
 		By("waiting for CA pod to be deleted")
 		cmd = exec.Command("kubectl", "wait", "--for=delete",
-			"pod", "-l", fmt.Sprintf("app.kubernetes.io/name=%s", caName),
+			"pod", "-l", "app=ca",
 			"-n", testNamespace,
 			"--timeout=60s")
 		_, _ = utils.Run(cmd)
@@ -154,11 +160,9 @@ spec:
       name: %s-enroll-secret
       key: password
       namespace: %s
-    enrollTLS: false
   output:
-    secretPrefix: %s
-    namespace: %s
-`, identityName, testNamespace, caName, testNamespace, identityName, testNamespace, identityName, testNamespace)
+    secretName: %s-cert
+`, identityName, testNamespace, caName, testNamespace, identityName, testNamespace, identityName)
 
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewReader([]byte(identityYAML))
@@ -175,37 +179,16 @@ spec:
 				g.Expect(output).To(Equal("READY"), "Identity should reach READY status")
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
-			By("verifying sign certificate secret was created")
-			cmd = exec.Command("kubectl", "get", "secret",
-				fmt.Sprintf("%s-sign-cert", identityName),
-				"-n", testNamespace)
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Sign certificate secret should exist")
-
-			By("verifying sign key secret was created")
-			cmd = exec.Command("kubectl", "get", "secret",
-				fmt.Sprintf("%s-sign-key", identityName),
-				"-n", testNamespace)
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Sign key secret should exist")
-
-			By("verifying sign CA cert secret was created")
-			cmd = exec.Command("kubectl", "get", "secret",
-				fmt.Sprintf("%s-sign-cacert", identityName),
-				"-n", testNamespace)
-			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Sign CA cert secret should exist")
-
-			By("verifying combined cert secret was created")
+			By("verifying cert secret was created")
 			cmd = exec.Command("kubectl", "get", "secret",
 				fmt.Sprintf("%s-cert", identityName),
 				"-n", testNamespace)
 			_, err = utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred(), "Combined cert secret should exist")
+			Expect(err).NotTo(HaveOccurred(), "Cert secret should exist")
 
 			By("verifying certificate content is valid PEM")
 			cmd = exec.Command("kubectl", "get", "secret",
-				fmt.Sprintf("%s-sign-cert", identityName),
+				fmt.Sprintf("%s-cert", identityName),
 				"-n", testNamespace,
 				"-o", "jsonpath={.data.cert\\.pem}")
 			certBase64, err := utils.Run(cmd)
@@ -219,14 +202,6 @@ spec:
 			Expect(err).NotTo(HaveOccurred())
 			Expect(certPEM).To(ContainSubstring("-----BEGIN CERTIFICATE-----"))
 			Expect(certPEM).To(ContainSubstring("-----END CERTIFICATE-----"))
-
-			By("verifying Identity status has output secrets")
-			cmd = exec.Command("kubectl", "get", "identity", identityName,
-				"-n", testNamespace,
-				"-o", "jsonpath={.status.outputSecrets}")
-			statusJSON, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(statusJSON).To(ContainSubstring(fmt.Sprintf("%s-sign-cert", identityName)))
 		})
 
 		It("should successfully enroll with dual certificates (sign + TLS)", func() {
@@ -249,7 +224,7 @@ stringData:
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("creating Identity with enrollTLS=true")
+			By("creating Identity with dual enrollment")
 			identityYAML := fmt.Sprintf(`
 apiVersion: fabricx.kfsoft.tech/v1alpha1
 kind: Identity
@@ -268,11 +243,9 @@ spec:
       name: %s-enroll-secret
       key: password
       namespace: %s
-    enrollTLS: true
   output:
-    secretPrefix: %s
-    namespace: %s
-`, dualIdentityName, testNamespace, caName, testNamespace, dualIdentityName, testNamespace, dualIdentityName, testNamespace)
+    secretName: %s-cert
+`, dualIdentityName, testNamespace, caName, testNamespace, dualIdentityName, testNamespace, dualIdentityName)
 
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewReader([]byte(identityYAML))
@@ -289,30 +262,11 @@ spec:
 				g.Expect(output).To(Equal("READY"))
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
-			By("verifying both sign and TLS secrets exist")
-			signSecrets := []string{
-				fmt.Sprintf("%s-sign-cert", dualIdentityName),
-				fmt.Sprintf("%s-sign-key", dualIdentityName),
-				fmt.Sprintf("%s-sign-cacert", dualIdentityName),
-			}
-
-			for _, secretName := range signSecrets {
-				cmd := exec.Command("kubectl", "get", "secret", secretName, "-n", testNamespace)
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Secret %s should exist", secretName))
-			}
-
-			tlsSecrets := []string{
-				fmt.Sprintf("%s-tls-cert", dualIdentityName),
-				fmt.Sprintf("%s-tls-key", dualIdentityName),
-				fmt.Sprintf("%s-tls-cacert", dualIdentityName),
-			}
-
-			for _, secretName := range tlsSecrets {
-				cmd := exec.Command("kubectl", "get", "secret", secretName, "-n", testNamespace)
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Secret %s should exist", secretName))
-			}
+			By("verifying cert secret exists")
+			certSecretName := fmt.Sprintf("%s-cert", dualIdentityName)
+			cmd = exec.Command("kubectl", "get", "secret", certSecretName, "-n", testNamespace)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Secret %s should exist", certSecretName))
 
 			By("cleaning up dual identity")
 			cmd = exec.Command("kubectl", "delete", "identity", dualIdentityName, "-n", testNamespace)
@@ -344,9 +298,15 @@ spec:
           type: client
   idemix:
     curve: gurvy.Bn254
+  tls:
+    domains:
+      - %s
+      - %s.%s
+      - %s.%s.svc.cluster.local
+      - localhost
   service:
     type: ClusterIP
-`, idemixCAName, testNamespace)
+`, idemixCAName, testNamespace, idemixCAName, idemixCAName, testNamespace, idemixCAName, testNamespace)
 
 			cmd := exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewReader([]byte(caYAML))
@@ -399,12 +359,10 @@ spec:
       name: %s-enroll-secret
       key: password
       namespace: %s
-    enrollTLS: false
     idemix: {}
   output:
-    secretPrefix: %s
-    namespace: %s
-`, idemixIdentityName, testNamespace, idemixCAName, testNamespace, idemixIdentityName, testNamespace, idemixIdentityName, testNamespace)
+    secretName: %s-cert
+`, idemixIdentityName, testNamespace, idemixCAName, testNamespace, idemixIdentityName, testNamespace, idemixIdentityName)
 
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewReader([]byte(identityYAML))
@@ -489,11 +447,9 @@ spec:
       name: %s-enroll-secret
       key: password
       namespace: %s
-    enrollTLS: false
   output:
-    secretPrefix: %s
-    namespace: %s
-`, failIdentityName, testNamespace, caName, testNamespace, failIdentityName, testNamespace, failIdentityName, testNamespace)
+    secretName: %s-cert
+`, failIdentityName, testNamespace, caName, testNamespace, failIdentityName, testNamespace, failIdentityName)
 
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewReader([]byte(identityYAML))
