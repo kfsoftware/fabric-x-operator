@@ -58,7 +58,7 @@ spec:
           affiliation: ""
           attrs:
             hf.Registrar.Roles: "*"
-            hf.Revoker: "true"
+            hf.Revoker: true
   tlsca:
     name: tlsca
     registry:
@@ -69,7 +69,7 @@ spec:
           affiliation: ""
           attrs:
             hf.Registrar.Roles: "*"
-            hf.Revoker: "true"
+            hf.Revoker: true
   service:
     type: ClusterIP
 `, caName, testNamespace)
