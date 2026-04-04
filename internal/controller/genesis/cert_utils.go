@@ -209,6 +209,10 @@ func GenerateOrdererOrganization(name, mspID string) (*v1alpha1.OrdererOrganizat
 			Namespace: "default",
 			Key:       "admin.crt",
 		},
+		Endpoints: []string{
+			fmt.Sprintf("id=1,broadcast,%s-router.default.svc.cluster.local:7150", name),
+			fmt.Sprintf("id=1,deliver,%s-assembler.default.svc.cluster.local:7050", name),
+		},
 	}
 
 	return ordererOrg, certBundle, nil
@@ -239,6 +243,10 @@ func GenerateExternalOrganization(name, mspID string) (*v1alpha1.OrdererOrganiza
 			Name:      name + "-admin-secret",
 			Namespace: "default",
 			Key:       "admin.crt",
+		},
+		Endpoints: []string{
+			fmt.Sprintf("id=1,broadcast,%s-router.default.svc.cluster.local:7150", name),
+			fmt.Sprintf("id=1,deliver,%s-assembler.default.svc.cluster.local:7050", name),
 		},
 	}
 

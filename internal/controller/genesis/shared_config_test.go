@@ -171,10 +171,22 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 		},
 	}
 
+	// Create party cert secrets
+	partyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "party1-certs",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"cert.pem": tls1Cert,
+			"sign.pem": ca1Cert,
+		},
+	}
+
 	// Create fake client with secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
-		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
+		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret, partyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -267,10 +279,36 @@ func TestSharedConfigService_GenerateSharedConfig(t *testing.T) {
 					},
 				},
 			},
-			// Add party configurations (at least 1 required for consensus)
 			Parties: []v1alpha1.PartyConfig{
 				{
 					PartyID: 1,
+					CACerts: []v1alpha1.SecretKeyNSSelector{{Name: "ca1", Namespace: "default", Key: "ca.crt"}},
+					TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "ca1", Namespace: "default", Key: "tls.crt"}},
+					RouterConfig: &v1alpha1.PartyRouterConfig{
+						Host: "party1-router.default.svc.cluster.local",
+						Port: 7150,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					BatchersConfig: []v1alpha1.PartyBatcherConfig{
+						{
+							ShardID:  1,
+							Host:     "party1-batcher.default.svc.cluster.local",
+							Port:     7151,
+							SignCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "sign.pem"},
+							TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+						},
+					},
+					ConsenterConfig: &v1alpha1.PartyConsenterConfig{
+						Host:     "party1-consenter.default.svc.cluster.local",
+						Port:     7052,
+						SignCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "sign.pem"},
+						TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					AssemblerConfig: &v1alpha1.PartyAssemblerConfig{
+						Host:    "party1-assembler.default.svc.cluster.local",
+						Port:    7050,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
 				},
 			},
 		},
@@ -466,10 +504,22 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 		},
 	}
 
+	// Create party cert secrets
+	simplPartyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "simple-party1-certs",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"cert.pem": tls1Cert,
+			"sign.pem": ca1Cert,
+		},
+	}
+
 	// Create fake client with secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
-		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret).
+		WithObjects(ca1Secret, ca2Secret, ca3Secret, ca4Secret, simplPartyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -544,10 +594,36 @@ func TestSharedConfigService_GenerateSharedConfig_Simple(t *testing.T) {
 					},
 				},
 			},
-			// Add party configurations (at least 1 required for consensus)
 			Parties: []v1alpha1.PartyConfig{
 				{
-					PartyID: 1,
+					PartyID:    1,
+					CACerts:    []v1alpha1.SecretKeyNSSelector{{Name: "ca1", Namespace: "default", Key: "ca.crt"}},
+					TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "ca1", Namespace: "default", Key: "tls.crt"}},
+					RouterConfig: &v1alpha1.PartyRouterConfig{
+						Host:    "party1-router.default.svc.cluster.local",
+						Port:    7150,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					BatchersConfig: []v1alpha1.PartyBatcherConfig{
+						{
+							ShardID:  1,
+							Host:     "party1-batcher.default.svc.cluster.local",
+							Port:     7151,
+							SignCert: v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "sign.pem"},
+							TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "cert.pem"},
+						},
+					},
+					ConsenterConfig: &v1alpha1.PartyConsenterConfig{
+						Host:     "party1-consenter.default.svc.cluster.local",
+						Port:     7052,
+						SignCert: v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "sign.pem"},
+						TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					AssemblerConfig: &v1alpha1.PartyAssemblerConfig{
+						Host:    "party1-assembler.default.svc.cluster.local",
+						Port:    7050,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "simple-party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
 				},
 			},
 		},

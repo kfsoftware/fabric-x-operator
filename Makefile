@@ -114,7 +114,7 @@ test: manifests generate fmt vet setup-envtest ## Run all tests (unit + integrat
 
 .PHONY: test-unit
 test-unit: manifests generate fmt vet setup-envtest ## Run unit tests only (excludes integration tests).
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /internal/enrollment | grep -v /internal/idemix) -coverprofile cover-unit.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e | grep -v /internal/enrollment | grep -v /internal/idemix) -short -coverprofile cover-unit.out
 
 .PHONY: test-integration
 test-integration: setup-envtest ## Run integration tests (enrollment and idemix packages with testcontainers).

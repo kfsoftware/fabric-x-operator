@@ -250,6 +250,18 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		},
 	}
 
+	// Create party cert secrets for SharedConfig requirements
+	partyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "party1-certs",
+			Namespace: "default",
+		},
+		Data: map[string][]byte{
+			"cert.pem": certBundle1.TLS,
+			"sign.pem": certBundle1.CA,
+		},
+	}
+
 	// Create fake client with CA resources and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
@@ -258,7 +270,7 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 		WithObjects(externalSignSecret, externalTLSSecret, externalAdminSecret).
 		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
-		WithObjects(metaNamespaceCASecret).
+		WithObjects(metaNamespaceCASecret, partyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -282,6 +294,31 @@ func TestGenesisService_CreateGenesisBlock(t *testing.T) {
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
+			},
+			Parties: []v1alpha1.PartyConfig{
+				{
+					PartyID:    1,
+					CACerts:    []v1alpha1.SecretKeyNSSelector{{Name: "party1-certs", Namespace: "default", Key: "sign.pem"}},
+					TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "party1-certs", Namespace: "default", Key: "cert.pem"}},
+					RouterConfig: &v1alpha1.PartyRouterConfig{
+						Host: "party1-router.default.svc.cluster.local", Port: 7150,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					BatchersConfig: []v1alpha1.PartyBatcherConfig{{
+						ShardID: 1, Host: "party1-batcher.default.svc.cluster.local", Port: 7151,
+						SignCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "sign.pem"},
+						TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					}},
+					ConsenterConfig: &v1alpha1.PartyConsenterConfig{
+						Host: "party1-consenter.default.svc.cluster.local", Port: 7052,
+						SignCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "sign.pem"},
+						TLSCert:  v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+					AssemblerConfig: &v1alpha1.PartyAssemblerConfig{
+						Host: "party1-assembler.default.svc.cluster.local", Port: 7050,
+						TLSCert: v1alpha1.SecretKeyNSSelector{Name: "party1-certs", Namespace: "default", Key: "cert.pem"},
+					},
+				},
 			},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
@@ -494,6 +531,12 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		},
 	}
 
+	// Create party cert secrets
+	extPartyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "ext-party1-certs", Namespace: "default"},
+		Data: map[string][]byte{"cert.pem": certBundle.TLS, "sign.pem": certBundle.CA},
+	}
+
 	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
@@ -501,7 +544,7 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		WithObjects(external1SignSecret, external1TLSSecret, external1AdminSecret).
 		WithObjects(external2SignSecret, external2TLSSecret, external2AdminSecret).
-		WithObjects(metaNamespaceCASecret).
+		WithObjects(metaNamespaceCASecret, extPartyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -525,6 +568,15 @@ func TestGenesisService_CreateGenesisBlock_ExternalOrgsOnly(t *testing.T) {
 				Namespace: "default",
 				Key:       "ca.pem",
 			},
+			Parties: []v1alpha1.PartyConfig{{
+				PartyID: 1,
+				CACerts: []v1alpha1.SecretKeyNSSelector{{Name: "ext-party1-certs", Namespace: "default", Key: "sign.pem"}},
+				TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "ext-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				RouterConfig: &v1alpha1.PartyRouterConfig{Host: "p1-router.local", Port: 7150, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				BatchersConfig: []v1alpha1.PartyBatcherConfig{{ShardID: 1, Host: "p1-batcher.local", Port: 7151, SignCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "cert.pem"}}},
+				ConsenterConfig: &v1alpha1.PartyConsenterConfig{Host: "p1-consenter.local", Port: 7052, SignCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				AssemblerConfig: &v1alpha1.PartyAssemblerConfig{Host: "p1-assembler.local", Port: 7050, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "ext-party1-certs", Namespace: "default", Key: "cert.pem"}},
+			}},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -685,13 +737,17 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 			"ca.pem": certBundle.CA,
 		},
 	}
+	appPartyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "app-party1-certs", Namespace: "default"},
+		Data: map[string][]byte{"cert.pem": certBundle.TLS, "sign.pem": certBundle.CA},
+	}
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ordererCA).
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
 		WithObjects(appOrg1SignSecret, appOrg1TLSSecret, appOrg1AdminSecret).
 		WithObjects(appOrg2SignSecret, appOrg2TLSSecret, appOrg2AdminSecret).
-		WithObjects(metaNamespaceCASecret).
+		WithObjects(metaNamespaceCASecret, appPartyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -708,14 +764,23 @@ func TestGenesisService_CreateGenesisBlock_ApplicationOrgsOnly(t *testing.T) {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.GenesisSpec{
-			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg}, // Add orderer org
+			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
 			ApplicationOrgs:      []v1alpha1.ApplicationOrganization{*appOrg1, *appOrg2},
-			Consenters:           consenters, // Add consenters
+			Consenters:           consenters,
 			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
 			},
+			Parties: []v1alpha1.PartyConfig{{
+				PartyID: 1,
+				CACerts: []v1alpha1.SecretKeyNSSelector{{Name: "app-party1-certs", Namespace: "default", Key: "sign.pem"}},
+				TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "app-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				RouterConfig: &v1alpha1.PartyRouterConfig{Host: "p1-router.local", Port: 7150, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				BatchersConfig: []v1alpha1.PartyBatcherConfig{{ShardID: 1, Host: "p1-batcher.local", Port: 7151, SignCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "cert.pem"}}},
+				ConsenterConfig: &v1alpha1.PartyConsenterConfig{Host: "p1-consenter.local", Port: 7052, SignCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				AssemblerConfig: &v1alpha1.PartyAssemblerConfig{Host: "p1-assembler.local", Port: 7050, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "app-party1-certs", Namespace: "default", Key: "cert.pem"}},
+			}},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
@@ -856,12 +921,17 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		},
 	}
 
+	intPartyCertSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "int-party1-certs", Namespace: "default"},
+		Data: map[string][]byte{"cert.pem": certBundle.TLS, "sign.pem": certBundle.CA},
+	}
+
 	// Create fake client with CA resource and secrets
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
 		WithObjects(ca).
 		WithObjects(ordererSignSecret, ordererTLSSecret, ordererAdminSecret).
-		WithObjects(metaNamespaceCASecret).
+		WithObjects(metaNamespaceCASecret, intPartyCertSecret).
 		Build()
 
 	opts := zap.Options{
@@ -879,12 +949,21 @@ func TestGenesisService_CreateGenesisBlock_WithInternalOrgs(t *testing.T) {
 		},
 		Spec: v1alpha1.GenesisSpec{
 			OrdererOrganizations: []v1alpha1.OrdererOrganization{*ordererOrg},
-			Consenters:           consenters, // Add consenters
+			Consenters:           consenters,
 			MetaNamespaceCA: &v1alpha1.SecretKeyNSSelector{
 				Name:      "test-meta-ca-secret",
 				Namespace: "default",
 				Key:       "ca.pem",
 			},
+			Parties: []v1alpha1.PartyConfig{{
+				PartyID: 1,
+				CACerts: []v1alpha1.SecretKeyNSSelector{{Name: "int-party1-certs", Namespace: "default", Key: "sign.pem"}},
+				TLSCACerts: []v1alpha1.SecretKeyNSSelector{{Name: "int-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				RouterConfig: &v1alpha1.PartyRouterConfig{Host: "p1-router.local", Port: 7150, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				BatchersConfig: []v1alpha1.PartyBatcherConfig{{ShardID: 1, Host: "p1-batcher.local", Port: 7151, SignCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "cert.pem"}}},
+				ConsenterConfig: &v1alpha1.PartyConsenterConfig{Host: "p1-consenter.local", Port: 7052, SignCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "sign.pem"}, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "cert.pem"}},
+				AssemblerConfig: &v1alpha1.PartyAssemblerConfig{Host: "p1-assembler.local", Port: 7050, TLSCert: v1alpha1.SecretKeyNSSelector{Name: "int-party1-certs", Namespace: "default", Key: "cert.pem"}},
+			}},
 			Output: v1alpha1.GenesisOutput{
 				SecretName: "genesis-block-secret",
 				BlockKey:   "genesis.block",
