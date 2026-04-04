@@ -31,6 +31,21 @@ jobs:
           kubectl cluster-info
           kubectl get nodes
 
+      - name: Pre-pull and import Fabric images into K3D
+        run: |
+          # Pull images in parallel
+          docker pull hyperledger/fabric-ca:1.5.15 &
+          docker pull hyperledger/fabric-x-orderer:0.0.24 &
+          docker pull hyperledger/fabric-x-committer:0.1.9 &
+          wait
+
+          # Import into K3D cluster
+          k3d image import \
+            hyperledger/fabric-ca:1.5.15 \
+            hyperledger/fabric-x-orderer:0.0.24 \
+            hyperledger/fabric-x-committer:0.1.9 \
+            -c test-cluster
+
       - name: Running E2E tests
         env:
           CLUSTER_TYPE: k3d
