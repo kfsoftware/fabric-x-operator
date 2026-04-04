@@ -55,8 +55,21 @@ spec:
         - name: admin
           pass: adminpw
           type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Revoker: "true"
   tlsca:
     name: tlsca
+    registry:
+      identities:
+        - name: admin
+          pass: adminpw
+          type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Revoker: "true"
   service:
     type: ClusterIP
 `, caName, testNamespace)
