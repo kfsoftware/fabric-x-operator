@@ -5,7 +5,8 @@ linters:
     - govet
     - unused
     - gocritic
+  exclusions:
+    paths:
+      - kubectl-fabricx
 run:
   go: "1.25"
-  exclude-dirs:
-    - kubectl-fabricx
