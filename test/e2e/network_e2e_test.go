@@ -56,8 +56,8 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 		kubectl("delete", "orderergroup", "--all", "--ignore-not-found=true", "-n", ns)
 		kubectl("delete", "identity", "--all", "--ignore-not-found=true", "-n", ns)
 		kubectl("delete", "ca", caName, "--ignore-not-found=true", "-n", ns)
-		// Clean PVCs to avoid stale CA data on next run
-		kubectl("delete", "pvc", "--all", "--force", "-n", ns)
+		// Clean CA PVC to avoid stale data on next run (but not postgres)
+		kubectl("delete", "pvc", caName, "--force", "--ignore-not-found=true", "-n", ns)
 	})
 
 	Context("OrdererGroup Lifecycle", Ordered, func() {
@@ -103,20 +103,17 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 					"--type=merge", "-p", `{"spec":{"bootstrapMode":"deploy"}}`)
 			}
 
-			By("waiting for orderer pods to be running")
-			waitForPod("app.kubernetes.io/component=fabric-x", ns, 3*time.Minute)
+			By("waiting for router pods to be running (party 1)")
+			waitForPod("ordererrouter=orderergroup-party1-router", ns, 5*time.Minute)
 
-			By("verifying router pods are running")
-			for i := 1; i <= 4; i++ {
-				label := fmt.Sprintf("ordererrouter=orderergroup-party%d-router", i)
-				waitForPod(label, ns, 2*time.Minute)
-			}
+			By("waiting for consenter pods to be running (party 1)")
+			waitForPod("ordererconsenter=orderergroup-party1-consenter", ns, 5*time.Minute)
 
-			By("verifying consenter pods are running")
-			for i := 1; i <= 4; i++ {
-				label := fmt.Sprintf("ordererconsenter=orderergroup-party%d-consenter", i)
-				waitForPod(label, ns, 2*time.Minute)
-			}
+			By("waiting for batcher pods to be running (party 1)")
+			waitForPod("ordererbatcher=orderergroup-party1-batcher-0", ns, 5*time.Minute)
+
+			By("waiting for assembler pods to be running (party 1)")
+			waitForPod("ordererassembler=orderergroup-party1-assembler", ns, 5*time.Minute)
 		})
 	})
 
@@ -484,6 +481,9 @@ metadata:
   namespace: %[1]s
 spec:
   channelID: %[2]s
+  configTemplate:
+    configMapName: e2e-configtx
+    key: configtx.yaml
   ordererOrganizations:
     - name: Org1MSP
       mspId: Org1MSP
