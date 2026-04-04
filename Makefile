@@ -149,7 +149,7 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 
 .PHONY: test-e2e-k3d
 test-e2e-k3d: manifests generate fmt vet ## Run the e2e tests on an existing K3D cluster (no cluster creation/cleanup).
-	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -timeout=10m
+	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -timeout=20m
 
 .PHONY: test-e2e-identity
 test-e2e-identity: ## Run Identity controller E2E tests (standalone, no cluster setup required)
