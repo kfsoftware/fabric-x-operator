@@ -296,6 +296,21 @@ spec:
         - name: admin
           pass: adminpw
           type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Revoker: true
+  tlsca:
+    name: tlsca
+    registry:
+      identities:
+        - name: admin
+          pass: adminpw
+          type: client
+          affiliation: ""
+          attrs:
+            hf.Registrar.Roles: "*"
+            hf.Revoker: true
   idemix:
     curve: gurvy.Bn254
   tls:
@@ -316,7 +331,7 @@ spec:
 			By("waiting for idemix CA pod to be ready")
 			Eventually(func(g Gomega) {
 				cmd := exec.Command("kubectl", "wait", "--for=condition=ready",
-					"pod", "-l", fmt.Sprintf("app.kubernetes.io/name=%s", idemixCAName),
+					"pod", "-l", "app=ca",
 					"-n", testNamespace,
 					"--timeout=120s")
 				_, err := utils.Run(cmd)
