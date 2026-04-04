@@ -148,8 +148,12 @@ test-e2e: setup-test-e2e manifests generate fmt vet ## Run the e2e tests. Expect
 	$(MAKE) cleanup-test-e2e
 
 .PHONY: test-e2e-k3d
-test-e2e-k3d: manifests generate fmt vet ## Run the e2e tests on an existing K3D cluster (no cluster creation/cleanup).
-	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -timeout=20m
+test-e2e-k3d: manifests generate fmt vet ## Run the e2e tests on an existing K3D cluster (excludes network tests).
+	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter='!network' -timeout=20m
+
+.PHONY: test-e2e-network
+test-e2e-network: manifests generate fmt vet ## Run the full network e2e test (requires pre-pulled images).
+	CLUSTER_TYPE=k3d K3D_CLUSTER=$(or $(K3D_CLUSTER),k8s-hlf) go test ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter='network' -timeout=20m
 
 .PHONY: test-e2e-identity
 test-e2e-identity: ## Run Identity controller E2E tests (standalone, no cluster setup required)

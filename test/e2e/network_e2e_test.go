@@ -28,7 +28,11 @@ import (
 	"github.com/kfsoftware/fabric-x-operator/test/utils"
 )
 
-var _ = Describe("Full Network E2E", Ordered, func() {
+// Full Network E2E is labeled "network" and only runs when NETWORK_E2E=true
+// because it requires pulling large orderer/committer images from Docker Hub
+// which can hit CI rate limits and timeouts.
+// Run locally: NETWORK_E2E=true CLUSTER_TYPE=k3d K3D_CLUSTER=k8s-hlf make test-e2e-k3d
+var _ = Describe("Full Network E2E", Label("network"), Ordered, func() {
 	const (
 		caName    = "net-ca"
 		channelID = "e2echannel"
