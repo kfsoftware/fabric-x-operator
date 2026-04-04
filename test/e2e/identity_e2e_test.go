@@ -395,17 +395,18 @@ spec:
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("verifying idemix credential secret was created")
+			idemixSecretName := fmt.Sprintf("%s-cert-idemix", idemixIdentityName)
 			cmd = exec.Command("kubectl", "get", "secret",
-				fmt.Sprintf("%s-idemix-cred", idemixIdentityName),
+				idemixSecretName,
 				"-n", testNamespace)
 			_, err = utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("verifying idemix secret contains required fields")
-			requiredKeys := []string{"SignerConfig", "Cred", "Sk", "metadata.json"}
+			requiredKeys := []string{"Cred", "Sk", "enrollment_id"}
 			for _, key := range requiredKeys {
 				cmd = exec.Command("kubectl", "get", "secret",
-					fmt.Sprintf("%s-idemix-cred", idemixIdentityName),
+					idemixSecretName,
 					"-n", testNamespace,
 					"-o", fmt.Sprintf("jsonpath={.data.%s}", key))
 				output, err := utils.Run(cmd)

@@ -145,10 +145,9 @@ var _ = Describe("Manager", Ordered, func() {
 
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
-			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=fabric-x-operator-metrics-reader",
-				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
-			)
+			cmd := exec.Command("bash", "-c",
+				fmt.Sprintf("kubectl create clusterrolebinding %s --clusterrole=fabric-x-operator-metrics-reader --serviceaccount=%s:%s --dry-run=client -o yaml | kubectl apply -f -",
+					metricsRoleBindingName, namespace, serviceAccountName))
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred(), "Failed to create ClusterRoleBinding")
 
