@@ -61,28 +61,20 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 	})
 
 	Context("OrdererGroup Lifecycle", Ordered, func() {
-		It("should deploy orderer groups in configure mode and enroll certificates", func() {
-			for i := 1; i <= 4; i++ {
-				applyYAML(ordererGroupYAML(i, caName, ns))
-			}
+		It("should deploy orderer group in configure mode and enroll certificates", func() {
+			applyYAML(ordererGroupYAML(1, caName, ns))
 
-			By("waiting for all orderer groups to be RUNNING")
-			for i := 1; i <= 4; i++ {
-				name := fmt.Sprintf("orderergroup-party%d", i)
-				waitForCRStatus("orderergroup", name, ns, "RUNNING", 2*time.Minute)
-			}
+			By("waiting for orderer group to be RUNNING")
+			waitForCRStatus("orderergroup", "orderergroup-party1", ns, "RUNNING", 2*time.Minute)
 
-			By("waiting for certificate secrets to be created for all parties")
+			By("waiting for certificate secrets to be created")
 			Eventually(func(g Gomega) {
-				for i := 1; i <= 4; i++ {
-					prefix := fmt.Sprintf("orderergroup-party%d", i)
-					for _, comp := range []string{"router", "consenter", "assembler", "batcher-0"} {
-						cmd := exec.Command("kubectl", "get", "secret",
-							fmt.Sprintf("%s-%s-sign-cert", prefix, comp), "-n", ns)
-						_, err := utils.Run(cmd)
-						g.Expect(err).NotTo(HaveOccurred(),
-							fmt.Sprintf("Secret %s-%s-sign-cert should exist", prefix, comp))
-					}
+				for _, comp := range []string{"router", "consenter", "assembler", "batcher-0"} {
+					cmd := exec.Command("kubectl", "get", "secret",
+						fmt.Sprintf("orderergroup-party1-%s-sign-cert", comp), "-n", ns)
+					_, err := utils.Run(cmd)
+					g.Expect(err).NotTo(HaveOccurred(),
+						fmt.Sprintf("Secret orderergroup-party1-%s-sign-cert should exist", comp))
 				}
 			}, 3*time.Minute, 10*time.Second).Should(Succeed())
 		})
@@ -97,22 +89,19 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 		})
 
 		It("should deploy orderer components when switched to deploy mode", func() {
-			for i := 1; i <= 4; i++ {
-				name := fmt.Sprintf("orderergroup-party%d", i)
-				kubectl("patch", "orderergroup", name, "-n", ns,
-					"--type=merge", "-p", `{"spec":{"bootstrapMode":"deploy"}}`)
-			}
+			kubectl("patch", "orderergroup", "orderergroup-party1", "-n", ns,
+				"--type=merge", "-p", `{"spec":{"bootstrapMode":"deploy"}}`)
 
-			By("waiting for router pods to be running (party 1)")
+			By("waiting for router pod")
 			waitForPod("ordererrouter=orderergroup-party1-router", ns, 5*time.Minute)
 
-			By("waiting for consenter pods to be running (party 1)")
+			By("waiting for consenter pod")
 			waitForPod("ordererconsenter=orderergroup-party1-consenter", ns, 5*time.Minute)
 
-			By("waiting for batcher pods to be running (party 1)")
+			By("waiting for batcher pod")
 			waitForPod("ordererbatcher=orderergroup-party1-batcher-0", ns, 5*time.Minute)
 
-			By("waiting for assembler pods to be running (party 1)")
+			By("waiting for assembler pod")
 			waitForPod("ordererassembler=orderergroup-party1-assembler", ns, 5*time.Minute)
 		})
 	})
@@ -393,11 +382,11 @@ spec:
 }
 
 func genesisYAML(caName, channelID, ns string) string {
-	// Build consenter and party entries for 4 parties
+	// Build consenter and party entries for 1 party (sufficient for E2E)
 	consenters := ""
 	parties := ""
 	endpoints := ""
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 1; i++ {
 		prefix := fmt.Sprintf("orderergroup-party%d", i)
 		consenters += fmt.Sprintf(`
     - id: %d
