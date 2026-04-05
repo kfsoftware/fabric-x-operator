@@ -328,12 +328,20 @@ spec:
 			_, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("waiting for idemix CA pod to be ready")
+			By("waiting for idemix CA to be RUNNING")
 			Eventually(func(g Gomega) {
-				cmd := exec.Command("kubectl", "wait", "--for=condition=ready",
-					"pod", "-l", "app=ca",
-					"-n", testNamespace,
-					"--timeout=120s")
+				cmd := exec.Command("kubectl", "get", "ca", idemixCAName,
+					"-n", testNamespace, "-o", "jsonpath={.status.status}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("RUNNING"))
+			}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("waiting for idemix key extraction to complete")
+			Eventually(func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "secret",
+					fmt.Sprintf("%s-idemix-issuer-keys", idemixCAName),
+					"-n", testNamespace)
 				_, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 			}, 3*time.Minute, 5*time.Second).Should(Succeed())
