@@ -336,6 +336,9 @@ spec:
     replicas: 1
     podLabels:
       app.kubernetes.io/component: fabric-x
+    storage:
+      accessMode: ReadWriteOnce
+      size: 1Gi
   components:
     assembler:
       replicas: 1
