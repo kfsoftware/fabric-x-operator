@@ -36,11 +36,19 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 	)
 
 	BeforeAll(func() {
+		By("cleaning up any leftover resources from previous runs")
+		kubectl("delete", "chainnamespace", "--all", "--ignore-not-found=true")
+		kubectl("delete", "committer", "--all", "--ignore-not-found=true", "-n", ns)
+		kubectl("delete", "genesis", "--all", "--ignore-not-found=true", "-n", ns)
+		kubectl("delete", "orderergroup", "--all", "--ignore-not-found=true", "-n", ns)
+		kubectl("delete", "identity", "--all", "--ignore-not-found=true", "-n", ns)
+		kubectl("delete", "ca", "--all", "--ignore-not-found=true", "-n", ns)
+
 		By("deploying a CA for the network")
 		applyYAML(caYAML(caName, ns))
 
-		By("waiting for CA to be ready")
-		waitForPod("app=ca", ns, 2*time.Minute)
+		By("waiting for CA to be running")
+		waitForCRStatus("ca", caName, ns, "RUNNING", 2*time.Minute)
 
 		By("verifying CA crypto secrets exist")
 		expectSecretExists(caName+"-tls-crypto", ns)
@@ -93,16 +101,16 @@ var _ = Describe("Full Network E2E", Ordered, func() {
 				"--type=merge", "-p", `{"spec":{"bootstrapMode":"deploy"}}`)
 
 			By("waiting for router pod")
-			waitForPod("ordererrouter=orderergroup-party1-router", ns, 5*time.Minute)
+			waitForPod("ordererrouter=orderergroup-party1-router", ns, 2*time.Minute)
 
 			By("waiting for consenter pod")
-			waitForPod("ordererconsenter=orderergroup-party1-consenter", ns, 5*time.Minute)
+			waitForPod("release=orderergroup-party1-consenter", ns, 2*time.Minute)
 
 			By("waiting for batcher pod")
-			waitForPod("ordererbatcher=orderergroup-party1-batcher-0", ns, 5*time.Minute)
+			waitForPod("release=orderergroup-party1-batcher-0", ns, 2*time.Minute)
 
 			By("waiting for assembler pod")
-			waitForPod("ordererassembler=orderergroup-party1-assembler", ns, 5*time.Minute)
+			waitForPod("ordererassembler=orderergroup-party1-assembler", ns, 2*time.Minute)
 		})
 	})
 
@@ -196,6 +204,7 @@ spec:
   identity:
     name: "e2e-admin"
     namespace: "%s"
+    key: "key.pem"
   channel: "%s"
   version: -1
 `, ns, ns, channelID))
@@ -204,9 +213,16 @@ spec:
 			Eventually(func(g Gomega) {
 				cmd := exec.Command("kubectl", "get", "chainnamespace", "e2e-namespace",
 					"-o", "jsonpath={.status.status}")
-				output, err := utils.Run(cmd)
+				status, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Deployed"))
+				if status != "Deployed" {
+					// Print debug info on each retry
+					msgCmd := exec.Command("kubectl", "get", "chainnamespace", "e2e-namespace",
+						"-o", "jsonpath={.status.message}")
+					msg, _ := utils.Run(msgCmd)
+					_, _ = fmt.Fprintf(GinkgoWriter, "Namespace status=%q message=%q\n", status, msg)
+				}
+				g.Expect(status).To(Equal("Deployed"))
 			}, 2*time.Minute, 5*time.Second).Should(Succeed())
 
 			By("verifying transaction ID is set")
