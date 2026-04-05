@@ -1,0 +1,99 @@
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-endorser1
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: endorser1
+    enrollSecretRef:
+      key: password
+      name: endorser1-enrollment-secret
+      namespace: default
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: endorser1
+      identity-type: x509
+    secretName: org1-endorser1-cert
+  type: client
+
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-endorser2
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: endorser2
+    enrollSecretRef:
+      key: password
+      name: endorser2-enrollment-secret
+      namespace: default
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: endorser2
+      identity-type: x509
+    secretName: org1-endorser2-cert
+  type: client
+
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-owner1
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: owner1
+    enrollSecretRef:
+      key: password
+      name: owner1-enrollment-secret
+      namespace: default
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: owner1
+      identity-type: x509
+    secretName: org1-owner1-cert
+  type: client
+
+---
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-owner2
+  namespace: default
+spec:
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: owner2
+    enrollSecretRef:
+      key: password
+      name: owner2-enrollment-secret
+      namespace: default
+  mspID: Org1MSP
+  output:
+    labels:
+      app: fabric-x
+      endorser: owner2
+      identity-type: x509
+    secretName: org1-owner2-cert
+  type: client

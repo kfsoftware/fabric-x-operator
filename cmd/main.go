@@ -37,8 +37,10 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	fabricxkfsofttechv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	fabricxv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
 	"github.com/kfsoftware/fabric-x-operator/internal/controller"
+	ca "github.com/kfsoftware/fabric-x-operator/internal/controller/ca"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -51,6 +53,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(fabricxv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(fabricxkfsofttechv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -221,6 +224,105 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Endorser")
+		os.Exit(1)
+	}
+	if err := (&ca.CAReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CA")
+		os.Exit(1)
+	}
+	if err := (&controller.GenesisReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Genesis")
+		os.Exit(1)
+	}
+	if err := (&controller.OrdererBatcherReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OrdererBatcher")
+		os.Exit(1)
+	}
+	if err := (&controller.OrdererConsenterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OrdererConsenter")
+		os.Exit(1)
+	}
+	if err := (&controller.OrdererRouterReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OrdererRouter")
+		os.Exit(1)
+	}
+	if err := (&controller.OrdererAssemblerReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OrdererAssembler")
+		os.Exit(1)
+	}
+
+	if err := (&controller.CommitterCoordinatorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterCoordinator")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterSidecarReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterSidecar")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterValidatorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterValidator")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterVerifierReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterVerifier")
+		os.Exit(1)
+	}
+	if err := (&controller.CommitterQueryServiceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CommitterQueryService")
+		os.Exit(1)
+	}
+	if err := (&controller.CAEnrollmentReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "CAEnrollment")
+		os.Exit(1)
+	}
+	if err := (&controller.IdentityReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Identity")
+		os.Exit(1)
+	}
+	if err := (&controller.ChainNamespaceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ChainNamespace")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

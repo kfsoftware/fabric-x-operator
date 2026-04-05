@@ -1,0 +1,37 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: fabric-x-postgres
+  namespace: default
+spec:
+  instances: 1
+
+  # PostgreSQL configuration
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: "256MB"
+
+  # Bootstrap
+  bootstrap:
+    initdb:
+      database: fabricx
+      owner: fabricx
+
+  # Storage configuration
+  storage:
+    size: 5Gi
+    storageClass: local-path
+
+  # Monitoring
+  monitoring:
+    enablePodMonitor: false
+
+  # Resources
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"

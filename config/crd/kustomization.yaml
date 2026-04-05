@@ -5,6 +5,20 @@ resources:
 - bases/fabricx.kfsoft.tech_committers.yaml
 - bases/fabricx.kfsoft.tech_orderergroups.yaml
 - bases/fabricx.kfsoft.tech_endorsers.yaml
+- bases/fabricx.kfsoft.tech_cas.yaml
+- bases/fabricx.kfsoft.tech_geneses.yaml
+- bases/fabricx.kfsoft.tech_ordererbatchers.yaml
+- bases/fabricx.kfsoft.tech_ordererconsenters.yaml
+- bases/fabricx.kfsoft.tech_ordererrouters.yaml
+- bases/fabricx.kfsoft.tech_ordererassemblers.yaml
+- bases/fabricx.kfsoft.tech_committercoordinators.yaml
+- bases/fabricx.kfsoft.tech_committersidecars.yaml
+- bases/fabricx.kfsoft.tech_committervalidators.yaml
+- bases/fabricx.kfsoft.tech_committerverifiers.yaml
+- bases/fabricx.kfsoft.tech_committerqueryservices.yaml
+- bases/fabricx.kfsoft.tech_caenrollments.yaml
+- bases/fabricx.kfsoft.tech_identities.yaml
+- bases/fabricx.kfsoft.tech_chainnamespaces.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

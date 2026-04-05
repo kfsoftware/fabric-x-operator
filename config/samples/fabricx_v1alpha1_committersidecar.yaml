@@ -1,0 +1,9 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CommitterSidecar
+metadata:
+  labels:
+    app.kubernetes.io/name: fabric-x-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: committersidecar-sample
+spec:
+  # TODO(user): Add fields here

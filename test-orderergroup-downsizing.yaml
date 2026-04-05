@@ -1,0 +1,62 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererGroup
+metadata:
+  name: test-orderergroup-downsizing
+  namespace: default
+spec:
+  bootstrapMode: deploy
+  partyID: 1
+  mspID: Org1MSP
+  genesis:
+    secretName: genesis-block-secret
+    secretKey: genesis.block
+  components:
+    batchers:
+      - name: batcher-0
+        replicas: 1
+        shardID: 0
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        ingress:
+          enabled: true
+          host: batcher-0.example.com
+          tls:
+            enabled: true
+            secretName: batcher-0-tls
+      - name: batcher-1
+        replicas: 1
+        shardID: 1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        ingress:
+          enabled: true
+          host: batcher-1.example.com
+          tls:
+            enabled: true
+            secretName: batcher-1-tls
+      - name: batcher-2
+        replicas: 1
+        shardID: 2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        ingress:
+          enabled: true
+          host: batcher-2.example.com
+          tls:
+            enabled: true
+            secretName: batcher-2-tls 

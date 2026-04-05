@@ -1,0 +1,149 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	fabricxkfsofttechv1alpha1 "github.com/kfsoftware/fabric-x-operator/api/v1alpha1"
+)
+
+var _ = Describe("CAEnrollment Controller", func() {
+	Context("When reconciling a resource", func() {
+		const resourceName = "test-caenrollment"
+
+		ctx := context.Background()
+
+		typeNamespacedName := types.NamespacedName{
+			Name:      resourceName,
+			Namespace: "default", // TODO(user):Modify as needed
+		}
+		caenrollment := &fabricxkfsofttechv1alpha1.CAEnrollment{}
+
+		BeforeEach(func() {
+			By("creating the output secret so enrollment appears already done")
+			// Generate a valid certificate that won't expire for 1 year
+			priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			Expect(err).NotTo(HaveOccurred())
+
+			template := x509.Certificate{
+				SerialNumber: big.NewInt(1),
+				Subject: pkix.Name{
+					CommonName: "test-user",
+				},
+				NotBefore:             time.Now(),
+				NotAfter:              time.Now().Add(365 * 24 * time.Hour), // Valid for 1 year
+				KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+				ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+				BasicConstraintsValid: true,
+			}
+
+			certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+			Expect(err).NotTo(HaveOccurred())
+
+			certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+			Expect(certPEM).NotTo(BeNil())
+
+			outputSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-caenrollment-cert",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"cert.pem": certPEM,
+					"key.pem":  []byte("fake-key"),
+					"ca.pem":   []byte("fake-ca"),
+				},
+			}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: outputSecret.Name, Namespace: outputSecret.Namespace}, &corev1.Secret{})
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, outputSecret)).To(Succeed())
+			}
+
+			By("creating the custom resource for the Kind CAEnrollment")
+			err = k8sClient.Get(ctx, typeNamespacedName, caenrollment)
+			if err != nil && errors.IsNotFound(err) {
+				resource := &fabricxkfsofttechv1alpha1.CAEnrollment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      resourceName,
+						Namespace: "default",
+					},
+					Spec: fabricxkfsofttechv1alpha1.CAEnrollmentSpec{
+						Type:             "client",
+						CAName:           "test-ca",
+						CANamespace:      "default",
+						EnrollID:         "user1",
+						OutputSecretName: "test-caenrollment-cert",
+						EnrollSecretRef: fabricxkfsofttechv1alpha1.CAEnrollmentSecretRef{
+							Name: "user1-password",
+							Key:  "password",
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+			}
+		})
+
+		AfterEach(func() {
+			// TODO(user): Cleanup logic after each test, like removing the resource instance.
+			resource := &fabricxkfsofttechv1alpha1.CAEnrollment{}
+			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleanup the specific resource instance CAEnrollment")
+			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("Cleanup the output secret")
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-caenrollment-cert", Namespace: "default"}, secret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+			}
+		})
+		It("should successfully reconcile the resource", func() {
+			By("Reconciling the created resource")
+			controllerReconciler := &CAEnrollmentReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+			// Example: If you expect a certain status condition after reconciliation, verify it here.
+		})
+	})
+})

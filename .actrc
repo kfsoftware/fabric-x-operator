@@ -1,0 +1,11 @@
+# Act configuration file
+# This configures how act runs GitHub Actions locally
+
+# Use medium-sized Docker images for better compatibility
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Set artifact server path
+--artifact-server-path /tmp/artifacts
+
+# Use host network mode for better cluster access
+--use-gitignore=false

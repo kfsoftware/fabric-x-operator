@@ -1,0 +1,25 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-owner1-idemix
+  namespace: default
+spec:
+  type: client
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: admin
+    enrollSecretRef:
+      name: admin-enroll-secret
+      key: password
+      namespace: default
+    enrollTLS: false
+    idemix: {}
+  output:
+    secretName: org1-owner1-idemix
+    labels:
+      app: fabric-x
+      endorser: org1-owner1
+      identity-type: idemix

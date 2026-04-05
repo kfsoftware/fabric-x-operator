@@ -1,0 +1,40 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-idemix-user
+  namespace: default
+spec:
+  type: user
+  mspID: Org1MSP
+  enrollment:
+    caRef:
+      name: endorser-idemix-ca
+      namespace: default
+    enrollID: admin
+    enrollSecretRef:
+      name: idemix-enrollment-secret
+      namespace: default
+      key: password
+    enrollTLS: false
+    # Enable idemix enrollment
+    idemix:
+      enabled: true
+      # Uses the same CA as the main enrollment by default
+      # Can optionally specify a different CA:
+      # caRef:
+      #   name: endorser-idemix-ca
+      #   namespace: default
+  output:
+    secretName: org1-idemix-user
+    labels:
+      app: fabric-x
+      identity-type: idemix
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: idemix-enrollment-secret
+  namespace: default
+type: Opaque
+stringData:
+  password: adminpw

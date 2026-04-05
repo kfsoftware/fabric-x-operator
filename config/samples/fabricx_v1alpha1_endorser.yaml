@@ -4,6 +4,276 @@ metadata:
   labels:
     app.kubernetes.io/name: fabric-x-operator
     app.kubernetes.io/managed-by: kustomize
-  name: endorser-sample
+  name: endorser1
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  # Bootstrap Mode Options:
+  # - "configure": Only enroll certificates and create secrets (no deployment)
+  # - "deploy": Full deployment (certificates + application deployment)
+  # Default: "configure"
+  bootstrapMode: deploy
+
+  mspid: Org1MSP
+  image: hyperledger/fabric-smart-client
+  version: latest
+  command:
+    - "app"
+  args:
+    - "--conf=/var/hyperledger/fabric/config"
+    - "--port=9000"
+
+  common:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    podAnnotations:
+      prometheus.io/port: "9090"
+      prometheus.io/scrape: "true"
+    podLabels:
+      app.kubernetes.io/component: endorser
+      app.kubernetes.io/part-of: fabric-x
+
+    # Custom volumes - users specify volumes directly instead of automatic PVC creation
+    # Example: SQLite database with PVC
+    volumes:
+      - name: data
+        volumeSource:
+          persistentVolumeClaim:
+            claimName: endorser1-data
+            readOnly: false
+
+    volumeMounts:
+      - name: data
+        mountPath: /var/hyperledger/fabric/data
+        readOnly: false
+
+  # Core configuration - typed structure for core.yaml
+  core:
+    logging:
+      spec: info
+      format: "%{color}%{time:15:04:05.000} [%{module}] %{shortfunc} %{level:.4s}%{color:reset} %{message}"
+
+    fsc:
+      id: endorser1
+      # Identity cert/key paths are automatically set to enrollment certificate paths:
+      # - cert.file: /var/hyperledger/fabric/msp/signcerts/cert.pem
+      # - key.file: /var/hyperledger/fabric/msp/keystore/key.pem
+      # These are mounted from enrollment secrets automatically
+      identity:
+        cert:
+          file: "" # Automatically set by controller
+        key:
+          file: "" # Automatically set by controller
+      p2p:
+        listenAddress: /ip4/0.0.0.0/tcp/9301
+        type: websocket
+        opts:
+          routing:
+            # Use inline routing configuration instead of file path
+            inline:
+              {
+                "issuer": { "parties": ["issuer"], "aliases": [] },
+                "auditor": { "parties": ["auditor"], "aliases": [] },
+                "endorser1": { "parties": ["endorser1"], "aliases": [] },
+                "endorser2": { "parties": ["endorser2"], "aliases": [] },
+                "owner1": { "parties": ["owner1"], "aliases": [] },
+                "owner2": { "parties": ["owner2"], "aliases": [] },
+              }
+      persistences:
+        default:
+          type: sqlite
+          opts:
+            dataSource: file:/var/hyperledger/fabric/data/fts.sqlite
+      endpoint:
+        resolvers:
+          # Use secretRef for resolver identities (certificate only, no key needed)
+          # The controller will:
+          # 1. Check if the secret exists - REQUIRED (reconciliation fails if missing)
+          # 2. Mount the secret at: /var/hyperledger/fabric/resolvers/{name}/cert.pem
+          # 3. Generate core.yaml with path: /var/hyperledger/fabric/resolvers/{name}/cert.pem
+          #
+          # IMPORTANT: You MUST create secrets before deploying the endorser
+          # The reconciliation will fail with an error if any resolver secret is missing
+          #
+          # How to create resolver certificate secrets:
+          #   kubectl create secret generic endorser1-resolver-issuer \
+          #     --from-file=cert.pem=/path/to/issuer/cert.pem
+          #
+          # Naming convention: {endorser-name}-resolver-{resolver-name}
+          # This avoids conflicts between different endorsers
+          - name: issuer
+            identity:
+              id: issuer
+              secretRef:
+                name: endorser1-resolver-issuer
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: issuer.example.com:9101
+          - name: auditor
+            identity:
+              id: auditor
+              secretRef:
+                name: endorser1-resolver-auditor
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: auditor.example.com:9201
+          - name: endorser2
+            identity:
+              id: endorser2
+              secretRef:
+                name: endorser1-resolver-endorser2
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: endorser2.example.com:9401
+          - name: owner1
+            identity:
+              id: owner1
+              secretRef:
+                name: endorser1-resolver-owner1
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: owner1.example.com:9501
+          - name: owner2
+            identity:
+              id: owner2
+              secretRef:
+                name: endorser1-resolver-owner2
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: owner2.example.com:9601
+
+    # Fabric 3.0 configuration removed (not in scope)
+
+    token:
+      enabled: true
+      tms:
+        mytms:
+          network: default
+          channel: arma
+          namespace: token_namespace
+          driver: zkatdlog
+          services:
+            network:
+              fabric:
+                fsc_endorsement:
+                  endorser: true
+                  id: endorser
+                  policy:
+                    type: all
+                  endorsers:
+                    - endorser1
+                    - endorser2
+
+  # Enrollment configuration for automatic certificate generation
+  # Certificates are enrolled via Fabric CA and stored in secrets
+  # Sign cert: endorser1-sign-cert (cert.pem, key.pem, ca.pem)
+  # TLS cert: endorser1-tls-cert (cert.pem, key.pem, ca.pem)
+  enrollment:
+    sign:
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+    tls:
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+      sans:
+        dnsNames:
+          - endorser1
+          - endorser1.default
+          - endorser1.default.svc.cluster.local
+          - endorser1.example.com
+          - endorser1.localho.st
+
+  # Ingress configuration for external access
+  ingress:
+    istio:
+      hosts:
+        - endorser1.localho.st
+      ingressGateway: istio-ingressgateway
+      port: 443
+      tls:
+        enabled: true
+
+---
+# Example: PVC for SQLite database (if using persistentVolumeClaim above)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: endorser1-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path
+
+---
+# Example: Create resolver certificate secrets manually
+# These are certificates from OTHER nodes that this endorser needs to communicate with
+# You need to obtain these certificates from the other nodes' enrollment secrets
+
+# Option 1: Copy from another endorser's enrollment secret
+# kubectl get secret issuer-sign-cert -o jsonpath='{.data.cert\.pem}' | base64 -d > issuer-cert.pem
+# kubectl create secret generic endorser1-resolver-issuer --from-file=cert.pem=issuer-cert.pem
+
+# Option 2: Create from a file you already have
+# kubectl create secret generic endorser1-resolver-auditor --from-file=cert.pem=/path/to/auditor/cert.pem
+
+# Option 3: Create inline (example)
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: endorser1-resolver-issuer
+#   namespace: default
+# type: Opaque
+# data:
+#   cert.pem: <base64-encoded-certificate>
+
+---
+# Example: Alternative volume configuration for PostgreSQL (no PVC needed)
+# In this case, you would NOT create a PVC and would configure like:
+#
+# common:
+#   volumes: []  # No volumes needed for postgres
+#   volumeMounts: []
+#
+# core:
+#   fsc:
+#     persistences:
+#       default:
+#         type: postgres
+#         opts:
+#           host: postgres.default.svc.cluster.local
+#           port: "5432"
+#           database: endorser1
+#           username: postgres
+#           password: postgres

@@ -22,6 +22,45 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the fabric-x-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- namespace_admin_role.yaml
+- namespace_editor_role.yaml
+- namespace_viewer_role.yaml
+- caenrollment_admin_role.yaml
+- caenrollment_editor_role.yaml
+- caenrollment_viewer_role.yaml
+- committerqueryservice_admin_role.yaml
+- committerqueryservice_editor_role.yaml
+- committerqueryservice_viewer_role.yaml
+- committerverifier_admin_role.yaml
+- committerverifier_editor_role.yaml
+- committerverifier_viewer_role.yaml
+- committervalidator_admin_role.yaml
+- committervalidator_editor_role.yaml
+- committervalidator_viewer_role.yaml
+- committersidecar_admin_role.yaml
+- committersidecar_editor_role.yaml
+- committersidecar_viewer_role.yaml
+- committercoordinator_admin_role.yaml
+- committercoordinator_editor_role.yaml
+- committercoordinator_viewer_role.yaml
+- ordererassembler_admin_role.yaml
+- ordererassembler_editor_role.yaml
+- ordererassembler_viewer_role.yaml
+- ordererrouter_admin_role.yaml
+- ordererrouter_editor_role.yaml
+- ordererrouter_viewer_role.yaml
+- ordererconsenter_admin_role.yaml
+- ordererconsenter_editor_role.yaml
+- ordererconsenter_viewer_role.yaml
+- ordererbatcher_admin_role.yaml
+- ordererbatcher_editor_role.yaml
+- ordererbatcher_viewer_role.yaml
+- genesis_admin_role.yaml
+- genesis_editor_role.yaml
+- genesis_viewer_role.yaml
+- ca_admin_role.yaml
+- ca_editor_role.yaml
+- ca_viewer_role.yaml
 - endorser_admin_role.yaml
 - endorser_editor_role.yaml
 - endorser_viewer_role.yaml

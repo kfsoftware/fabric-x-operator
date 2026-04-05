@@ -1,0 +1,137 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CA
+metadata:
+  name: test-ca-ingress
+  namespace: default
+spec:
+  # Ingress configuration for external access
+  ingress:
+    istio:
+      hosts:
+        - 'ca-test.localho.st'
+        - 'ca-test.example.com'
+      port: 443
+      ingressGateway: 'istio-ingressgateway'
+      tls:
+        enabled: true
+        secretName: 'ca-test-tls-secret'
+  
+  # TLS configuration with domain names
+  tls:
+    subject:
+      C: US
+      L: Raleigh
+      O: Hyperledger
+      OU: Fabric
+      ST: North Carolina
+    # Domain names for TLS certificate generation
+    domains:
+      - 'ca-test.localho.st'
+      - 'ca-test.example.com'
+      - 'localhost'
+      - 'test-ca2.default'
+      - 'test-ca2'
+  
+  ca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: ca
+      hosts:
+      - localhost
+      - ca-test.localho.st
+      - ca-test.example.com
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: ca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  cors: {}
+  credentialStore: kubernetes
+  db:
+    datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
+    type: sqlite3
+  image: hyperledger/fabric-ca
+  metrics:
+    statsd: {}
+  resources: {}
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  tlsca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: tlsca
+      hosts:
+      - localhost
+      - ca-test.localho.st
+      - ca-test.example.com
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: tlsca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  vault:
+    vault: {}
+  version: 1.5.15 

@@ -38,4 +38,131 @@ resources:
   kind: Endorser
   path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CA
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: Genesis
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: OrdererBatcher
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: OrdererConsenter
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: OrdererRouter
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: OrdererAssembler
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterCoordinator
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterSidecar
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterValidator
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterVerifier
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: CommitterQueryService
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- controller: true
+  domain: kfsoft.tech
+  group: fabricx.kfsoft.tech
+  kind: FabricCAIdentity
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx.kfsoft.tech
+  kind: CAEnrollment
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
+- controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: Identity
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kfsoft.tech
+  group: fabricx
+  kind: Namespace
+  path: github.com/kfsoftware/fabric-x-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

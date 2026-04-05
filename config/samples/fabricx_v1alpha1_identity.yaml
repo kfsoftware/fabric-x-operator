@@ -1,0 +1,26 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Identity
+metadata:
+  name: org1-admin
+  namespace: default
+spec:
+  # Type of identity
+  type: admin
+
+  # MSPID for this identity
+  mspID: Org1MSP
+
+  # Enroll with CA
+  enrollment:
+    caRef:
+      name: test-ca2
+      namespace: default
+    enrollID: admin
+    enrollSecretRef:
+      name: admin-enroll-secret
+      key: password
+      namespace: default
+
+  # Output configuration
+  output:
+    secretName: org1-admin

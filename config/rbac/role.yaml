@@ -5,11 +5,50 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - fabricx.kfsoft.tech
+  - ""
   resources:
-  - committers
-  - endorsers
-  - orderergroups
+  - configmaps
+  - persistentvolumeclaims
+  - secrets
+  - serviceaccounts
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
   verbs:
   - create
   - delete
@@ -21,18 +60,134 @@ rules:
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - caenrollments
+  - cas
+  - chainnamespaces
+  - committercoordinators
+  - committerqueryservices
+  - committers
+  - committersidecars
+  - committervalidators
+  - committerverifiers
+  - endorsers
+  - geneses
+  - identities
+  - ordererassemblers
+  - ordererbatchers
+  - ordererconsenters
+  - orderergroups
+  - ordererrouters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - fabricx.kfsoft.tech
+  resources:
+  - caenrollments/finalizers
+  - cas/finalizers
+  - chainnamespaces/finalizers
+  - committercoordinators/finalizers
+  - committerqueryservices/finalizers
   - committers/finalizers
+  - committersidecars/finalizers
+  - committervalidators/finalizers
+  - committerverifiers/finalizers
   - endorsers/finalizers
-  - orderergroups/finalizers
+  - geneses/finalizers
+  - identities/finalizers
+  - ordererassemblers/finalizers
+  - ordererbatchers/finalizers
+  - ordererconsenters/finalizers
+  - ordererrouters/finalizers
   verbs:
   - update
 - apiGroups:
   - fabricx.kfsoft.tech
   resources:
+  - caenrollments/status
+  - cas/status
+  - chainnamespaces/status
+  - committercoordinators/status
+  - committerqueryservices/status
   - committers/status
+  - committersidecars/status
+  - committervalidators/status
+  - committerverifiers/status
   - endorsers/status
+  - geneses/status
+  - identities/status
+  - ordererassemblers/status
+  - ordererbatchers/status
+  - ordererconsenters/status
   - orderergroups/status
+  - ordererrouters/status
   verbs:
   - get
   - patch
   - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - httproutes
+  - tcproutes
+  - tlsroutes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.istio.io
+  resources:
+  - destinationrules
+  - virtualservices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  - roles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

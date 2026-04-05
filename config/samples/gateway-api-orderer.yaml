@@ -1,0 +1,160 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: istio-ingressgateway
+  namespace: istio-system
+spec:
+  gatewayClassName: istio
+  listeners:
+  - name: https-passthrough
+    port: 443
+    protocol: TLS
+    tls:
+      mode: Passthrough
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-router-party1-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party1-router.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party1-router-service
+      port: 7150
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-router-party2-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party2-router.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party2-router-service
+      port: 7150
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-router-party3-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party3-router.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party3-router-service
+      port: 7150
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-router-party4-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party4-router.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party4-router-service
+      port: 7150
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-assembler-party1-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party1-assembler.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party1-assembler
+      port: 7050
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-assembler-party2-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party2-assembler.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party2-assembler
+      port: 7050
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-assembler-party3-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party3-assembler.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party3-assembler
+      port: 7050
+---
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TLSRoute
+metadata:
+  name: orderer-assembler-party4-tlsroute
+  namespace: default
+spec:
+  parentRefs:
+  - name: istio-ingressgateway
+    namespace: istio-system
+    group: gateway.networking.k8s.io
+    kind: Gateway
+  hostnames:
+  - orderergroup-party4-assembler.localho.st
+  rules:
+  - backendRefs:
+    - name: orderergroup-party4-assembler
+      port: 7050

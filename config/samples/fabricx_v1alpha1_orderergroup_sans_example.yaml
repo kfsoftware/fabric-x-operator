@@ -1,0 +1,207 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererGroup
+metadata:
+  name: orderergroup-sans-example
+  namespace: default
+spec:
+  bootstrapMode: "deploy"
+  mspid: "Org1MSP"
+  partyID: 1
+  common:
+    replicas: 1
+    storage:
+      size: "1Gi"
+      storageClass: "standard"
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  genesis:
+    secretName: "genesis-block"
+    secretKey: "genesis.block"
+  enrollment:
+    sign:
+      cahost: "ca.example.com"
+      # CA configuration for signing certificates
+      ca:
+        caname: "ca-org1"
+        caport: 7054
+        enrollid: "admin"
+        enrollsecret: "adminpw"
+        catls:
+          cacert: "LS0tLS1CRUdJTi..."
+          secretRef:
+            name: "ca-tls-secret"
+            key: "ca.crt"
+            namespace: "default"
+      # SANS configuration for signing certificates
+      sans:
+        dnsNames:
+          - "orderer1.example.com"
+          - "orderer1.org1.example.com"
+          - "*.orderer1.org1.example.com"
+        ipAddresses:
+          - "192.168.1.10"
+          - "10.0.0.10"
+    tls:
+      cahost: "ca.example.com"
+      # CA configuration for TLS certificates
+      ca:
+        caname: "tls-ca-org1"
+        caport: 7054
+        enrollid: "tls-admin"
+        enrollsecret: "tls-adminpw"
+        catls:
+          cacert: "LS0tLS1CRUdJTi..."
+          secretRef:
+            name: "tls-ca-secret"
+            key: "tls-ca.crt"
+            namespace: "default"
+      # SANS configuration for TLS certificates
+      sans:
+        dnsNames:
+          - "orderer1-tls.example.com"
+          - "orderer1-tls.org1.example.com"
+          - "*.orderer1-tls.org1.example.com"
+        ipAddresses:
+          - "192.168.1.11"
+          - "10.0.0.11"
+  components:
+    consenter:
+      consenterID: 1
+      ingress:
+        istio:
+          hosts:
+            - "consenter1.example.com"
+          port: 7050
+          ingressGateway: "istio-system/ingressgateway"
+          tls:
+            enabled: true
+            secretName: "consenter-tls-secret"
+      # Component-specific SANS configuration
+      certificates:
+        cahost: "ca.example.com"
+        # CA configuration for component certificates
+        ca:
+          caname: "ca-org1"
+          caport: 7054
+          enrollid: "consenter1"
+          enrollsecret: "consenter1pw"
+          catls:
+            cacert: "LS0tLS1CRUdJTi..."
+            secretRef:
+              name: "ca-tls-secret"
+              key: "ca.crt"
+              namespace: "default"
+        # Component-specific SANS configuration
+        sans:
+          dnsNames:
+            - "consenter1.example.com"
+            - "consenter1.org1.example.com"
+            - "*.consenter1.org1.example.com"
+          ipAddresses:
+            - "192.168.1.20"
+            - "10.0.0.20"
+    batchers:
+      - shardID: 1
+        ingress:
+          istio:
+            hosts:
+              - "batcher1.example.com"
+            port: 7051
+            ingressGateway: "istio-system/ingressgateway"
+            tls:
+              enabled: true
+              secretName: "batcher1-tls-secret"
+        # Component-specific SANS configuration
+        certificates:
+          cahost: "ca.example.com"
+          caport: 7054
+          caname: "ca-org1"
+          enrollid: "batcher1"
+          enrollsecret: "batcher1pw"
+          catls:
+            cacert: "LS0tLS1CRUdJTi..."
+            secretRef:
+              name: "ca-tls-secret"
+              key: "ca.crt"
+              namespace: "default"
+          # Component-specific SANS configuration
+          ca:
+            sans:
+              dnsNames:
+                - "batcher1.example.com"
+                - "batcher1.org1.example.com"
+                - "*.batcher1.org1.example.com"
+              ipAddresses:
+                - "192.168.1.30"
+                - "10.0.0.30"
+    assembler:
+      ingress:
+        istio:
+          hosts:
+            - "assembler1.example.com"
+          port: 7052
+          ingressGateway: "istio-system/ingressgateway"
+          tls:
+            enabled: true
+            secretName: "assembler-tls-secret"
+      # Component-specific SANS configuration
+      certificates:
+        cahost: "ca.example.com"
+        caport: 7054
+        caname: "ca-org1"
+        enrollid: "assembler1"
+        enrollsecret: "assembler1pw"
+        catls:
+          cacert: "LS0tLS1CRUdJTi..."
+          secretRef:
+            name: "ca-tls-secret"
+            key: "ca.crt"
+            namespace: "default"
+        # Component-specific SANS configuration
+        ca:
+          sans:
+            dnsNames:
+              - "assembler1.example.com"
+              - "assembler1.org1.example.com"
+              - "*.assembler1.org1.example.com"
+            ipAddresses:
+              - "192.168.1.40"
+              - "10.0.0.40"
+    router:
+      ingress:
+        istio:
+          hosts:
+            - "router1.example.com"
+          port: 7053
+          ingressGateway: "istio-system/ingressgateway"
+          tls:
+            enabled: true
+            secretName: "router-tls-secret"
+      # Component-specific SANS configuration
+      certificates:
+        cahost: "ca.example.com"
+        caport: 7054
+        caname: "ca-org1"
+        enrollid: "router1"
+        enrollsecret: "router1pw"
+        catls:
+          cacert: "LS0tLS1CRUdJTi..."
+          secretRef:
+            name: "ca-tls-secret"
+            key: "ca.crt"
+            namespace: "default"
+        # Component-specific SANS configuration
+        ca:
+          sans:
+            dnsNames:
+              - "router1.example.com"
+              - "router1.org1.example.com"
+              - "*.router1.org1.example.com"
+            ipAddresses:
+              - "192.168.1.50"
+              - "10.0.0.50"

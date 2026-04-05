@@ -1,0 +1,162 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererGroup
+metadata:
+  name: orderergroup-party4
+  namespace: default
+spec:
+  partyID: 4
+  bootstrapMode: configure
+  mspid: Org1MSP
+  image: hyperledger/fabric-x-orderer
+  imageTag: 0.0.24
+  common:
+    imagePullSecrets: []
+    podAnnotations:
+      prometheus.io/port: '8080'
+      prometheus.io/scrape: 'true'
+    podLabels:
+      app.kubernetes.io/component: fabric-x
+      app.kubernetes.io/part-of: admingroup
+    replicas: 1
+    storage:
+      accessMode: ReadWriteOnce
+      size: 10Gi
+      storageClass: ""
+    volumeMounts:
+    - mountPath: /etc/fabric-x/config
+      name: shared-config
+      readOnly: true
+    - mountPath: /etc/fabric-x/certs
+      name: shared-certs
+      readOnly: true
+    volumes:
+    - name: shared-config
+      volumeSource:
+        configMap:
+          name: fabric-x-config
+    - name: shared-certs
+      volumeSource:
+        secret:
+          secretName: fabric-x-certs
+  components:
+    assembler:
+      sans:
+        dnsNames:
+        - orderergroup-party4-assembler.default.svc.cluster.local
+        - orderergroup-party4-assembler.localho.st
+      env:
+      - name: ASSEMBLER_MAX_MESSAGE_COUNT
+        value: '500'
+      replicas: 1
+      ingress:
+        gateway:
+          hosts:
+          - orderergroup-party4-assembler.localho.st
+          port: 7050
+          ingressGateway: istio-system/istio-ingressgateway
+    batchers:
+    - shardID: 1
+      sans:
+        dnsNames:
+        - orderergroup-party4-batcher-0.default.svc.cluster.local
+      env:
+      - name: BATCHER_TIMEOUT
+        value: 2s
+      - name: BATCHER_PREFERRED_MAX_BYTES
+        value: '2097152'
+      podLabels:
+        fabric-x/batcher-type: high-throughput
+        fabric-x/shard-id: '1'
+      replicas: 1
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: batcher
+    - shardID: 2
+      sans:
+        dnsNames:
+        - orderergroup-party4-batcher-1.default.svc.cluster.local
+      env:
+      - name: BATCHER_TIMEOUT
+        value: 2s
+      - name: BATCHER_PREFERRED_MAX_BYTES
+        value: '2097152'
+      podLabels:
+        fabric-x/batcher-type: high-throughput
+        fabric-x/shard-id: '2'
+      replicas: 1
+      tolerations:
+      - effect: NoSchedule
+        key: dedicated
+        operator: Equal
+        value: batcher
+    consenter:
+      consenterID: 1
+      sans:
+        dnsNames:
+        - orderergroup-party4-consenter.default.svc.cluster.local
+      endpoints:
+      - orderergroup-party4-consenter.default.svc.cluster.local:7050
+      env:
+      - name: CONSENTER_TYPE
+        value: raft
+      - name: CONSENTER_BATCH_SIZE
+        value: '500'
+      podAnnotations:
+        fabric-x/consenter-batch-size: '500'
+        fabric-x/consenter-type: raft
+      replicas: 1
+      volumeMounts: []
+      volumes: []
+    router:
+      sans:
+        dnsNames:
+        - orderergroup-party4-router-service.default.svc.cluster.local
+        - orderergroup-party4-router.localho.st
+      env:
+      - name: ROUTER_CHANNEL_BUFFER_SIZE
+        value: '1000'
+      imagePullSecrets: []
+      replicas: 1
+      ingress:
+        gateway:
+          hosts:
+          - orderergroup-party4-router.localho.st
+          port: 7150
+          ingressGateway: istio-system/istio-ingressgateway
+      volumes:
+      - name: router-cache
+        volumeSource:
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+  enrollment:
+    sign:
+      ca:
+        caname: ca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+    tls:
+      ca:
+        caname: tlsca
+        cahost: test-ca2.default
+        caport: 7054
+        catls:
+          secretRef:
+            key: tls.crt
+            name: test-ca2-tls-crypto
+            namespace: default
+        enrollid: admin
+        enrollsecret: adminpw
+  genesis:
+    secretKey: genesis.block
+    secretName: fabricx-shared-genesis
+    secretNamespace: default

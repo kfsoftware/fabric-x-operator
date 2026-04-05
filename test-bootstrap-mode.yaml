@@ -1,0 +1,194 @@
+# Test file to demonstrate bootstrap mode functionality
+# This file shows how to use bootstrapMode and deploymentMode for all four components
+
+---
+# Test 1: Configure mode - only creates secrets/certificates
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererConsenter
+metadata:
+  name: test-consenter-configure
+  namespace: default
+spec:
+  bootstrapMode: "configure"  # Only create secrets, don't deploy
+  deploymentMode: "configure" # Only create configuration resources
+  mspid: "OrdererMSP"
+  partyID: 1
+  consenterID: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 2: Deploy mode - creates secrets and deploys
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererConsenter
+metadata:
+  name: test-consenter-deploy
+  namespace: default
+spec:
+  bootstrapMode: "deploy"     # Create secrets and deploy
+  deploymentMode: "deploy"    # Create full deployment
+  mspid: "OrdererMSP"
+  partyID: 1
+  consenterID: 1
+  replicas: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 3: Assembler in configure mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererAssembler
+metadata:
+  name: test-assembler-configure
+  namespace: default
+spec:
+  bootstrapMode: "configure"  # Only create secrets, don't deploy
+  deploymentMode: "configure" # Only create configuration resources
+  mspid: "OrdererMSP"
+  partyID: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 4: Assembler in deploy mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererAssembler
+metadata:
+  name: test-assembler-deploy
+  namespace: default
+spec:
+  bootstrapMode: "deploy"     # Create secrets and deploy
+  deploymentMode: "deploy"    # Create full deployment
+  mspid: "OrdererMSP"
+  partyID: 1
+  replicas: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 5: Batcher in configure mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererBatcher
+metadata:
+  name: test-batcher-configure
+  namespace: default
+spec:
+  bootstrapMode: "configure"  # Only create secrets, don't deploy
+  deploymentMode: "configure" # Only create configuration resources
+  mspid: "OrdererMSP"
+  partyID: 1
+  shardID: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 6: Batcher in deploy mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererBatcher
+metadata:
+  name: test-batcher-deploy
+  namespace: default
+spec:
+  bootstrapMode: "deploy"     # Create secrets and deploy
+  deploymentMode: "deploy"    # Create full deployment
+  mspid: "OrdererMSP"
+  partyID: 1
+  shardID: 1
+  replicas: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 7: Router in configure mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererRouter
+metadata:
+  name: test-router-configure
+  namespace: default
+spec:
+  bootstrapMode: "configure"  # Only create secrets, don't deploy
+  deploymentMode: "configure" # Only create configuration resources
+  mspid: "OrdererMSP"
+  partyID: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"
+
+---
+# Test 8: Router in deploy mode
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: OrdererRouter
+metadata:
+  name: test-router-deploy
+  namespace: default
+spec:
+  bootstrapMode: "deploy"     # Create secrets and deploy
+  deploymentMode: "deploy"    # Create full deployment
+  mspid: "OrdererMSP"
+  partyID: 1
+  replicas: 1
+  certificates:
+    cahost: "test-ca2.default"
+    caport: 7054
+    catls:
+      secretRef:
+        key: "tls.crt"
+        name: "test-ca2-tls-crypto"
+        namespace: "default"
+    enrollid: "admin"
+    enrollsecret: "adminpw"

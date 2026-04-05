@@ -6,8 +6,9 @@ on:
 
 jobs:
   test-e2e:
-    name: Run on Ubuntu
+    name: Run E2E on K3D
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -17,16 +18,42 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install the latest version of kind
+      - name: Install K3D
         run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
+          curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
-      - name: Verify kind installation
-        run: kind version
+      - name: Create K3D cluster
+        run: |
+          k3d cluster create test-cluster \
+            --agents 2 \
+            --wait \
+            --timeout 5m
+          kubectl cluster-info
+          kubectl get nodes
 
-      - name: Running Test e2e
+      - name: Pre-pull and import Fabric images into K3D
+        run: |
+          # Pull images in parallel
+          docker pull hyperledger/fabric-ca:1.5.15 &
+          docker pull hyperledger/fabric-x-orderer:0.0.24 &
+          docker pull hyperledger/fabric-x-committer:0.1.9 &
+          wait
+
+          # Import into K3D cluster
+          k3d image import \
+            hyperledger/fabric-ca:1.5.15 \
+            hyperledger/fabric-x-orderer:0.0.24 \
+            hyperledger/fabric-x-committer:0.1.9 \
+            -c test-cluster
+
+      - name: Running E2E tests
+        env:
+          CLUSTER_TYPE: k3d
+          K3D_CLUSTER: test-cluster
         run: |
           go mod tidy
-          make test-e2e
+          make test-e2e-k3d
+
+      - name: Cleanup K3D cluster
+        if: always()
+        run: k3d cluster delete test-cluster

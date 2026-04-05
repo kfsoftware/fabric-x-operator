@@ -1,0 +1,145 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CA
+metadata:
+  name: test-ca-tls-only
+  namespace: default
+spec:
+  # Ingress configuration (disabled for TLS-only setup)
+  ingress:
+    enabled: false  # Disable ingress for internal-only access
+    istio:
+      hosts:
+        - 'ca.org1.localho.st'
+        - 'ca.org1.example.com'
+      port: 443
+      ingressGateway: 'istio-ingressgateway'
+      tls:
+        enabled: true
+        secretName: 'ca-tls-secret'
+  
+  # TLS configuration with domain names (without ingress)
+  tls:
+    subject:
+      C: US
+      L: Raleigh
+      O: Hyperledger
+      OU: Fabric
+      ST: North Carolina
+    # Domain names for TLS certificate generation
+    domains:
+      - 'ca.org1.localho.st'
+      - 'ca.org1.example.com'
+      - 'localhost'
+      - 'test-ca-tls-only.default.svc.cluster.local'  # Kubernetes service DNS
+      - 'test-ca-tls-only.default.svc'                # Short service DNS
+      - 'test-ca-tls-only'                            # Service name
+  
+  ca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: ca
+      hosts:
+      - localhost
+      - ca.org1.localho.st
+      - ca.org1.example.com
+      - test-ca-tls-only.default.svc.cluster.local
+      - test-ca-tls-only.default.svc
+      - test-ca-tls-only
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: ca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  cors: {}
+  credentialStore: kubernetes
+  db:
+    datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
+    type: sqlite3
+  image: hyperledger/fabric-ca
+  metrics:
+    statsd: {}
+  resources: {}
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  tlsca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: tlsca
+      hosts:
+      - localhost
+      - ca.org1.localho.st
+      - ca.org1.example.com
+      - test-ca-tls-only.default.svc.cluster.local
+      - test-ca-tls-only.default.svc
+      - test-ca-tls-only
+      names:
+      - C: US
+        L: Raleigh
+        O: Hyperledger
+        OU: Fabric
+        ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: tlsca
+    registry:
+      identities:
+      - affiliation: ""
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: true
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      maxenrollments: -1
+  vault:
+    vault: {}
+  version: 1.5.15 

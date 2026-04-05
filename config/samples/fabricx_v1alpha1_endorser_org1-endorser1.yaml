@@ -1,0 +1,260 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Endorser
+metadata:
+  labels:
+    app.kubernetes.io/name: fabric-x-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: org1-endorser1
+  namespace: default
+spec:
+  bootstrapMode: deploy
+  mspid: Org1MSP
+  image: token-sdk-endorser
+  version: fabricx-latest
+  command:
+    - "app"
+  args:
+    - "--conf=/var/hyperledger/fabric/config"
+    - "--port=9000"
+
+  # Service ports to expose
+  ports:
+    - name: http
+      port: 9000
+      protocol: TCP
+    - name: p2p
+      port: 9301
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      protocol: TCP
+
+  common:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    podAnnotations:
+      prometheus.io/port: "9090"
+      prometheus.io/scrape: "true"
+    podLabels:
+      app.kubernetes.io/component: endorser
+      app.kubernetes.io/part-of: fabric-x
+
+    volumes:
+      - name: data
+        volumeSource:
+          persistentVolumeClaim:
+            claimName: org1-endorser1-data
+            readOnly: false
+      - name: sign-identity
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: key.pem
+                path: priv_sk
+              - key: key.pem
+                path: key.pem
+      - name: sign-cert
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: cert.pem
+                path: cert.pem
+      - name: sign-cacert
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: cacert.pem
+                path: ca.pem
+      - name: x509-msp
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: cert.pem
+                path: cert.pem
+      - name: x509-msp-key
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: key.pem
+                path: key.pem
+      - name: x509-msp-cacert
+        volumeSource:
+          secret:
+            secretName: org1-endorser1-cert
+            items:
+              - key: cacert.pem
+                path: ca.pem
+      - name: namespace-params
+        volumeSource:
+          secret:
+            secretName: token-namespace
+            items:
+              - key: zkatdlognoghv1_pp.json
+                path: zkatdlognoghv1_pp.json
+
+    volumeMounts:
+      - name: data
+        mountPath: /var/hyperledger/fabric/data
+        readOnly: false
+      - name: data
+        mountPath: /var/hyperledger/fabric/config/data
+        readOnly: false
+      - name: sign-identity
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/keystore
+        readOnly: true
+      - name: sign-cert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/signcerts
+        readOnly: true
+      - name: sign-cacert
+        mountPath: /var/hyperledger/fabric/config/keys/fabric/user/msp/cacerts
+        readOnly: true
+      - name: x509-msp
+        mountPath: /var/hyperledger/fabric/msp/signcerts
+        readOnly: true
+      - name: x509-msp-key
+        mountPath: /var/hyperledger/fabric/msp/keystore
+        readOnly: true
+      - name: x509-msp-cacert
+        mountPath: /var/hyperledger/fabric/msp/cacerts
+        readOnly: true
+      - name: namespace-params
+        mountPath: /var/hyperledger/fabric/config/namespace
+        readOnly: true
+
+  core:
+    logging:
+      spec: debug
+      format: "%{color}%{time:15:04:05.000} [%{module}] %{shortfunc} %{level:.4s}%{color:reset} %{message}"
+
+    fsc:
+      id: endorser1
+      identity:
+        cert:
+          file: "/var/hyperledger/fabric/config/keys/fabric/user/msp/signcerts/cert.pem"
+        key:
+          file: "/var/hyperledger/fabric/config/keys/fabric/user/msp/keystore/key.pem"
+      p2p:
+        listenAddress: /ip4/0.0.0.0/tcp/9301
+        type: websocket
+        opts:
+          routing:
+            inline:
+              {
+                "issuer": { "parties": ["issuer"], "aliases": [] },
+                "auditor": { "parties": ["auditor"], "aliases": [] },
+                "endorser1": { "parties": ["endorser1"], "aliases": [] },
+                "endorser2": { "parties": ["endorser2"], "aliases": [] },
+                "owner1": { "parties": ["owner1"], "aliases": [] },
+                "owner2": { "parties": ["owner2"], "aliases": [] },
+              }
+      persistences:
+        default:
+          type: sqlite
+          opts:
+            dataSource: file:/var/hyperledger/fabric/data/fts.sqlite
+      endpoint:
+        resolvers:
+          - name: issuer
+            identity:
+              id: issuer
+              secretRef:
+                name: org1-issuer-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: org1-issuer-service.default.svc.cluster.local:9301
+          - name: endorser2
+            identity:
+              id: endorser2
+              secretRef:
+                name: org1-endorser2-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: org1-endorser2-service.default.svc.cluster.local:9301
+          - name: owner1
+            identity:
+              id: owner1
+              secretRef:
+                name: org1-owner1-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: org1-owner1-service.default.svc.cluster.local:9301
+          - name: owner2
+            identity:
+              id: owner2
+              secretRef:
+                name: org1-owner2-cert
+                namespace: default
+                key: cert.pem
+            addresses:
+              P2P: org1-owner2-service.default.svc.cluster.local:9301
+
+    fabric:
+      enabled: true
+      default:
+        driver: fabricx
+        defaultMSP: user
+        msps:
+          - id: user
+            mspType: bccsp
+            mspID: Org1MSP
+            path: /var/hyperledger/fabric/config/keys/fabric/user/msp
+        tls:
+          enabled: false
+        peers:
+          - address: fabric-x-committer-sidecar-service.default:5050
+            usage: delivery
+        queryService:
+          - address: fabric-x-committer-query-service-service.default:9001
+        channels:
+          - name: arma
+            default: true
+
+    token:
+      enabled: true
+      tms:
+        mytms:
+          network: default
+          channel: arma
+          namespace: token_namespace
+          driver: zkatdlog
+          publicParameters:
+            path: /var/hyperledger/fabric/config/namespace/zkatdlognoghv1_pp.json
+          services:
+            network:
+              fabric:
+                fsc_endorsement:
+                  endorser: true
+                  id: endorser1
+                  policy:
+                    type: all
+                  endorsers:
+                    - endorser1
+                    - endorser2
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: org1-endorser1-data
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: local-path

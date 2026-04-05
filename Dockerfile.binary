@@ -1,0 +1,19 @@
+# Dockerfile for using pre-built binary
+# Build binary first with: make build
+# Then build image with: docker build -f Dockerfile.binary -t <image> .
+
+FROM alpine:3.19
+WORKDIR /
+
+# Copy pre-built binary from bin/ directory
+COPY bin/manager /manager
+
+# Install useful debugging tools
+RUN apk add --no-cache bash ca-certificates curl vim tree
+
+# Create debug directory for MSP inspection
+RUN mkdir -p /debug/msp && chmod 777 /debug/msp
+
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]

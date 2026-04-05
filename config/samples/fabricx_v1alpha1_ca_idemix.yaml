@@ -1,0 +1,186 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CA
+metadata:
+  name: endorser-idemix-ca
+  namespace: default
+spec:
+  ca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: idemix-ca
+      hosts:
+      - localhost
+      - idemix-ca.org1.localho.st
+      - idemix-ca.org1.example.com
+      names:
+      - C: US
+        L: Raleigh
+        O: Org1
+        OU: Idemix
+        ST: North Carolina
+    name: idemix-ca
+    registry:
+      identities:
+      - affiliation: ''
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: false
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: issuer
+        pass: issuerpw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: owner1
+        pass: owner1pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: owner2
+        pass: owner2pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: endorser1
+        pass: endorser1pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: endorser2
+        pass: endorser2pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: auditor
+        pass: auditorpw
+        type: client
+      maxenrollments: -1
+  cors: {}
+  credentialStore: kubernetes
+  db:
+    datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
+    type: sqlite3
+  image: hyperledger/fabric-ca
+  metrics:
+    statsd: {}
+  resources: {}
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  tls:
+    domains:
+    - idemix-ca.org1.localho.st
+    - idemix-ca.org1.example.com
+    - localhost
+    - endorser-idemix-ca.default
+    - endorser-idemix-ca
+    subject:
+      C: US
+      L: Raleigh
+      O: Org1
+      OU: Idemix
+      ST: North Carolina
+  tlsca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: tlsca
+      hosts:
+      - localhost
+      - idemix-ca.org1.localho.st
+      - idemix-ca.org1.example.com
+      names:
+      - C: US
+        L: Raleigh
+        O: Org1
+        OU: Idemix
+        ST: North Carolina
+    name: tlsca
+    registry:
+      identities:
+      - affiliation: ''
+        attrs:
+          hf.AffiliationMgr: true
+          hf.GenCRL: true
+          hf.IntermediateCA: false
+          hf.Registrar.Attributes: '*'
+          hf.Registrar.DelegateRoles: '*'
+          hf.Registrar.Roles: '*'
+          hf.Revoker: true
+        name: admin
+        pass: adminpw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: issuer
+        pass: issuerpw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: owner1
+        pass: owner1pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: owner2
+        pass: owner2pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: endorser1
+        pass: endorser1pw
+        type: client
+      - affiliation: ''
+        attrs:
+          hf.IntermediateCA: false
+        name: endorser2
+        pass: endorser2pw
+        type: client
+      maxenrollments: -1
+  vault:
+    vault: {}
+  version: 1.5.15
+  idemix:
+    curve: gurvy.Bn254

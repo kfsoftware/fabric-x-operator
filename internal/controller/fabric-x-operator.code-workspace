@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../bevel-operator-fabric"
+		},
+		{
+			"path": "../../../../../../github-libs/fabric-x-common"
+		},
+		{
+			"path": "../../../../../../github-libs/fabric-x-orderer"
+		}
+	],
+	"settings": {}
+}

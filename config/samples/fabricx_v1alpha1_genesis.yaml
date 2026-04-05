@@ -1,0 +1,398 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: Genesis
+metadata:
+  name: shared-genesis
+  namespace: default
+
+spec:
+  applicationOrgs:
+    - mspId: Org1MSP
+      name: Org1MSP
+      signCaCertRef:
+        key: certfile
+        name: test-ca2-msp-crypto
+        namespace: default
+      tlsCaCertRef:
+        key: certfile
+        name: test-ca2-tlsca-crypto
+        namespace: default
+  channelID: arma
+  configTemplate:
+    configMapName: fabricx-config-template
+    key: configtx.yaml
+  consenters:
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party1-consenter-tls-cert
+        namespace: default
+      host: orderergroup-party1-consenter.default.svc.cluster.local
+      id: 1
+      identityRef:
+        key: cert.pem
+        name: orderergroup-party1-consenter-sign-cert
+        namespace: default
+      mspId: Org1MSP
+      port: 7052
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party1-consenter-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party2-consenter-tls-cert
+        namespace: default
+      host: orderergroup-party2-consenter.default.svc.cluster.local
+      id: 2
+      identityRef:
+        key: cert.pem
+        name: orderergroup-party2-consenter-sign-cert
+        namespace: default
+      mspId: Org1MSP
+      port: 7052
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party2-consenter-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party3-consenter-tls-cert
+        namespace: default
+      host: orderergroup-party3-consenter.default.svc.cluster.local
+      id: 3
+      identityRef:
+        key: cert.pem
+        name: orderergroup-party3-consenter-sign-cert
+        namespace: default
+      mspId: Org1MSP
+      port: 7052
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party3-consenter-tls-cert
+        namespace: default
+    - clientTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party4-consenter-tls-cert
+        namespace: default
+      host: orderergroup-party4-consenter.default.svc.cluster.local
+      id: 4
+      identityRef:
+        key: cert.pem
+        name: orderergroup-party4-consenter-sign-cert
+        namespace: default
+      mspId: Org1MSP
+      port: 7052
+      serverTlsCertRef:
+        key: cert.pem
+        name: orderergroup-party4-consenter-tls-cert
+        namespace: default
+  ordererOrganizations:
+    - mspId: Org1MSP
+      name: Org1MSP
+      signCaCertRef:
+        key: certfile
+        name: test-ca2-msp-crypto
+        namespace: default
+      tlsCaCertRef:
+        key: certfile
+        name: test-ca2-tlsca-crypto
+        namespace: default
+      # Orderer endpoints for all 4 parties (internal cluster service names)
+      endpoints:
+        # Party 1 endpoints
+        - "id=1,broadcast,orderergroup-party1-router-service.default.svc.cluster.local:7150"
+        - "id=1,deliver,orderergroup-party1-assembler.default.svc.cluster.local:7050"
+        # Party 2 endpoints
+        - "id=2,broadcast,orderergroup-party2-router-service.default.svc.cluster.local:7150"
+        - "id=2,deliver,orderergroup-party2-assembler.default.svc.cluster.local:7050"
+        # Party 3 endpoints
+        - "id=3,broadcast,orderergroup-party3-router-service.default.svc.cluster.local:7150"
+        - "id=3,deliver,orderergroup-party3-assembler.default.svc.cluster.local:7050"
+        # Party 4 endpoints
+        - "id=4,broadcast,orderergroup-party4-router-service.default.svc.cluster.local:7150"
+        - "id=4,deliver,orderergroup-party4-assembler.default.svc.cluster.local:7050"
+      router:
+        host: orderergroup-party1-router-service.default.svc.cluster.local
+        port: 7150
+        partyID: 1
+        signCertRef:
+          key: cert.pem
+          name: orderergroup-party1-router-sign-cert
+          namespace: default
+        tlsCertRef:
+          key: cert.pem
+          name: orderergroup-party1-router-tls-cert
+          namespace: default
+      assembler:
+        host: orderergroup-party1-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCertRef:
+          key: cert.pem
+          name: orderergroup-party1-assembler-tls-cert
+          namespace: default
+  parties:
+    - partyID: 1
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: orderergroup-party1-router-service.default.svc.cluster.local
+        port: 7150
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: orderergroup-party1-batcher-0.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: orderergroup-party1-batcher-1.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party1-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: orderergroup-party1-consenter.default.svc.cluster.local
+        port: 7052
+        signCert:
+          key: cert.pem
+          name: orderergroup-party1-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: orderergroup-party1-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party1-assembler-tls-cert
+          namespace: default
+    - partyID: 2
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: orderergroup-party2-router-service.default.svc.cluster.local
+        port: 7150
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: orderergroup-party2-batcher-0.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: orderergroup-party2-batcher-1.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party2-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: orderergroup-party2-consenter.default.svc.cluster.local
+        port: 7052
+        signCert:
+          key: cert.pem
+          name: orderergroup-party2-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: orderergroup-party2-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party2-assembler-tls-cert
+          namespace: default
+    - partyID: 3
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: orderergroup-party3-router-service.default.svc.cluster.local
+        port: 7150
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: orderergroup-party3-batcher-0.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: orderergroup-party3-batcher-1.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party3-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: orderergroup-party3-consenter.default.svc.cluster.local
+        port: 7052
+        signCert:
+          key: cert.pem
+          name: orderergroup-party3-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: orderergroup-party3-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party3-assembler-tls-cert
+          namespace: default
+    - partyID: 4
+      caCerts:
+        - key: certfile
+          name: test-ca2-msp-crypto
+          namespace: default
+      tlsCaCerts:
+        - key: certfile
+          name: test-ca2-tlsca-crypto
+          namespace: default
+      routerConfig:
+        host: orderergroup-party4-router-service.default.svc.cluster.local
+        port: 7150
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-router-tls-cert
+          namespace: default
+      batchersConfig:
+        - shardID: 1
+          host: orderergroup-party4-batcher-0.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-0-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-0-tls-cert
+            namespace: default
+        - shardID: 2
+          host: orderergroup-party4-batcher-1.default.svc.cluster.local
+          port: 7151
+          signCert:
+            key: cert.pem
+            name: orderergroup-party4-batcher-1-sign-cert
+            namespace: default
+          tlsCert:
+            key: cert.pem
+
+            name: orderergroup-party4-batcher-1-tls-cert
+            namespace: default
+      consenterConfig:
+        host: orderergroup-party4-consenter.default.svc.cluster.local
+        port: 7052
+        signCert:
+          key: cert.pem
+          name: orderergroup-party4-consenter-sign-cert
+          namespace: default
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-consenter-tls-cert
+          namespace: default
+      assemblerConfig:
+        host: orderergroup-party4-assembler.default.svc.cluster.local
+        port: 7050
+        tlsCert:
+          key: cert.pem
+          name: orderergroup-party4-assembler-tls-cert
+          namespace: default
+  consensusConfig:
+    smartBFT:
+      selfID: 0
+      requestBatchMaxCount: 100
+      requestBatchMaxBytes: 10485760
+      requestBatchMaxInterval: "500ms"
+      incomingMessageBufferSize: 200
+      requestPoolSize: 400
+      requestForwardTimeout: "10s"
+      requestComplainTimeout: "20s"
+      requestAutoRemoveTimeout: "3m0s"
+      viewChangeResendInterval: "5s"
+      viewChangeTimeout: "20s"
+      leaderHeartbeatTimeout: "1m0s"
+      leaderHeartbeatCount: 10
+      numOfTicksBehindBeforeSyncing: 10
+      collectTimeout: "1s"
+      syncOnStart: false
+      speedUpViewChange: false
+      leaderRotation: false
+      decisionsPerLeader: 0
+      requestMaxBytes: 10240
+      requestPoolSubmitTimeout: "5s"
+  batchingConfig:
+    batchTimeouts:
+      batchCreationTimeout: "500ms"
+      firstStrikeThreshold: "10s"
+      secondStrikeThreshold: "10s"
+      autoRemoveTimeout: "10s"
+    batchSize:
+      maxMessageCount: 10000
+      absoluteMaxBytes: 10485760
+      preferredMaxBytes: 2097152
+    requestMaxBytes: 1048576
+  output:
+    blockKey: genesis.block
+    secretName: fabricx-shared-genesis

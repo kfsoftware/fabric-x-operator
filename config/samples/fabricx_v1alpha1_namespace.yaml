@@ -1,0 +1,34 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: ChainNamespace
+metadata:
+  labels:
+    app.kubernetes.io/name: fabric-x-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: namespace-sample
+spec:
+  # Namespace ID
+  name: "my-namespace"
+
+  # Orderer endpoint to broadcast the namespace transaction
+  orderer: "orderer.example.com:7050"
+
+  # CA certificate reference
+  caCert:
+    name: "orderer-ca-cert"
+    namespace: "default"
+    key: "ca.crt"
+
+  # MSP ID
+  mspID: "Org1MSP"
+
+  # Identity (cert + key) reference
+  identity:
+    name: "org1-admin-identity"
+    namespace: "default"
+    key: "identity.pem"
+
+  # Channel name (optional, defaults to "default")
+  channel: "mychannel"
+
+  # Version (-1 for new namespace, >= 0 for updates)
+  version: -1

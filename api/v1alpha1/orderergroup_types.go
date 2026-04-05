@@ -17,29 +17,786 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// CommonComponentConfig provides shared configuration for all components
+type CommonComponentConfig struct {
+	// Replicas for this component
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// Storage configuration
+	Storage *StorageConfig `json:"storage,omitempty"`
+
+	// Resources configuration
+	// +kubebuilder:validation:Optional
+	// +nullable
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Security context
+	SecurityContext *SecurityContext `json:"securityContext,omitempty"`
+
+	// Pod annotations
+	PodAnnotations map[string]string `json:"podAnnotations,omitempty"`
+
+	// Pod labels
+	PodLabels map[string]string `json:"podLabels,omitempty"`
+
+	// Volumes
+	Volumes []Volume `json:"volumes,omitempty"`
+
+	// Affinity
+	Affinity *Affinity `json:"affinity,omitempty"`
+
+	// Volume mounts
+	VolumeMounts []VolumeMount `json:"volumeMounts,omitempty"`
+
+	// Image pull secrets
+	ImagePullSecrets []ImagePullSecret `json:"imagePullSecrets,omitempty"`
+
+	// Tolerations
+	Tolerations []Toleration `json:"tolerations,omitempty"`
+}
+
+// Volume defines a Kubernetes volume
+type Volume struct {
+	// Volume name
+	Name string `json:"name"`
+
+	// Volume source
+	VolumeSource VolumeSource `json:"volumeSource"`
+}
+
+// VolumeSource defines the source of a volume
+type VolumeSource struct {
+	// Empty directory
+	EmptyDir *EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+
+	// Config map
+	ConfigMap *ConfigMapVolumeSource `json:"configMap,omitempty"`
+
+	// Secret
+	Secret *SecretVolumeSource `json:"secret,omitempty"`
+
+	// Persistent volume claim
+	PersistentVolumeClaim *PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
+
+	// Host path
+	HostPath *HostPathVolumeSource `json:"hostPath,omitempty"`
+}
+
+// EmptyDirVolumeSource represents an empty directory
+type EmptyDirVolumeSource struct {
+	// Medium
+	Medium string `json:"medium,omitempty"`
+
+	// Size limit
+	SizeLimit string `json:"sizeLimit,omitempty"`
+}
+
+// ConfigMapVolumeSource represents a ConfigMap
+type ConfigMapVolumeSource struct {
+	// ConfigMap name
+	Name string `json:"name"`
+
+	// Items to include
+	Items []KeyToPath `json:"items,omitempty"`
+
+	// Default mode
+	DefaultMode *int32 `json:"defaultMode,omitempty"`
+}
+
+// SecretVolumeSource represents a Secret
+type SecretVolumeSource struct {
+	// Secret name
+	SecretName string `json:"secretName"`
+
+	// Items to include
+	Items []KeyToPath `json:"items,omitempty"`
+
+	// Default mode
+	DefaultMode *int32 `json:"defaultMode,omitempty"`
+}
+
+// PersistentVolumeClaimVolumeSource represents a PVC
+type PersistentVolumeClaimVolumeSource struct {
+	// Claim name
+	ClaimName string `json:"claimName"`
+
+	// Read only
+	ReadOnly bool `json:"readOnly,omitempty"`
+}
+
+// HostPathVolumeSource represents a host path
+type HostPathVolumeSource struct {
+	// Path
+	Path string `json:"path"`
+
+	// Type
+	Type string `json:"type,omitempty"`
+}
+
+// KeyToPath defines a key to path mapping
+type KeyToPath struct {
+	// Key
+	Key string `json:"key"`
+
+	// Path
+	Path string `json:"path"`
+
+	// Mode
+	Mode *int32 `json:"mode,omitempty"`
+}
+
+// VolumeMount defines a volume mount
+type VolumeMount struct {
+	// Mount path
+	MountPath string `json:"mountPath"`
+
+	// Volume name
+	Name string `json:"name"`
+
+	// Read only
+	ReadOnly bool `json:"readOnly,omitempty"`
+
+	// Sub path
+	SubPath string `json:"subPath,omitempty"`
+}
+
+// Affinity defines pod affinity
+type Affinity struct {
+	// Node affinity
+	NodeAffinity *NodeAffinity `json:"nodeAffinity,omitempty"`
+
+	// Pod affinity
+	PodAffinity *PodAffinity `json:"podAffinity,omitempty"`
+
+	// Pod anti-affinity
+	PodAntiAffinity *PodAntiAffinity `json:"podAntiAffinity,omitempty"`
+}
+
+// NodeAffinity defines node affinity
+type NodeAffinity struct {
+	// Required during scheduling ignored during execution
+	RequiredDuringSchedulingIgnoredDuringExecution *NodeSelector `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+
+	// Preferred during scheduling ignored during execution
+	PreferredDuringSchedulingIgnoredDuringExecution []PreferredSchedulingTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// NodeSelector defines a node selector
+type NodeSelector struct {
+	// Node selector terms
+	NodeSelectorTerms []NodeSelectorTerm `json:"nodeSelectorTerms"`
+}
+
+// NodeSelectorTerm defines a node selector term
+type NodeSelectorTerm struct {
+	// Match expressions
+	MatchExpressions []NodeSelectorRequirement `json:"matchExpressions,omitempty"`
+
+	// Match fields
+	MatchFields []NodeSelectorRequirement `json:"matchFields,omitempty"`
+}
+
+// NodeSelectorRequirement defines a node selector requirement
+type NodeSelectorRequirement struct {
+	// Key
+	Key string `json:"key"`
+
+	// Operator
+	Operator string `json:"operator"`
+
+	// Values
+	Values []string `json:"values,omitempty"`
+}
+
+// PreferredSchedulingTerm defines a preferred scheduling term
+type PreferredSchedulingTerm struct {
+	// Weight
+	Weight int32 `json:"weight"`
+
+	// Preference
+	Preference NodeSelectorTerm `json:"preference"`
+}
+
+// PodAffinity defines pod affinity
+type PodAffinity struct {
+	// Required during scheduling ignored during execution
+	RequiredDuringSchedulingIgnoredDuringExecution []PodAffinityTerm `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+
+	// Preferred during scheduling ignored during execution
+	PreferredDuringSchedulingIgnoredDuringExecution []WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// PodAntiAffinity defines pod anti-affinity
+type PodAntiAffinity struct {
+	// Required during scheduling ignored during execution
+	RequiredDuringSchedulingIgnoredDuringExecution []PodAffinityTerm `json:"requiredDuringSchedulingIgnoredDuringExecution,omitempty"`
+
+	// Preferred during scheduling ignored during execution
+	PreferredDuringSchedulingIgnoredDuringExecution []WeightedPodAffinityTerm `json:"preferredDuringSchedulingIgnoredDuringExecution,omitempty"`
+}
+
+// PodAffinityTerm defines a pod affinity term
+type PodAffinityTerm struct {
+	// Label selector
+	LabelSelector *LabelSelector `json:"labelSelector,omitempty"`
+
+	// Namespaces
+	Namespaces []string `json:"namespaces,omitempty"`
+
+	// Topology key
+	TopologyKey string `json:"topologyKey"`
+}
+
+// WeightedPodAffinityTerm defines a weighted pod affinity term
+type WeightedPodAffinityTerm struct {
+	// Weight
+	Weight int32 `json:"weight"`
+
+	// Pod affinity term
+	PodAffinityTerm PodAffinityTerm `json:"podAffinityTerm"`
+}
+
+// LabelSelector defines a label selector
+type LabelSelector struct {
+	// Match labels
+	MatchLabels map[string]string `json:"matchLabels,omitempty"`
+
+	// Match expressions
+	MatchExpressions []LabelSelectorRequirement `json:"matchExpressions,omitempty"`
+}
+
+// LabelSelectorRequirement defines a label selector requirement
+type LabelSelectorRequirement struct {
+	// Key
+	Key string `json:"key"`
+
+	// Operator
+	Operator string `json:"operator"`
+
+	// Values
+	Values []string `json:"values,omitempty"`
+}
+
+// ImagePullSecret defines an image pull secret
+type ImagePullSecret struct {
+	// Secret name
+	Name string `json:"name"`
+}
+
+// Toleration defines a toleration
+type Toleration struct {
+	// Key
+	Key string `json:"key,omitempty"`
+
+	// Operator
+	Operator string `json:"operator,omitempty"`
+
+	// Value
+	Value string `json:"value,omitempty"`
+
+	// Effect
+	Effect string `json:"effect,omitempty"`
+
+	// Toleration seconds
+	TolerationSeconds *int64 `json:"tolerationSeconds,omitempty"`
+}
+
+// StorageConfig defines storage requirements
+type StorageConfig struct {
+	// PVC name to use (if empty, will be auto-generated)
+	PVCName string `json:"pvcName,omitempty"`
+
+	// Storage class to use
+	StorageClass string `json:"storageClass,omitempty"`
+
+	// Storage size
+	Size string `json:"size"`
+
+	// Access mode
+	AccessMode string `json:"accessMode,omitempty"`
+}
+
+// ResourceConfig defines resource requirements
+type ResourceConfig struct {
+	// CPU requests
+	CPURequests string `json:"cpuRequests,omitempty"`
+
+	// CPU limits
+	CPULimits string `json:"cpuLimits,omitempty"`
+
+	// Memory requests
+	MemoryRequests string `json:"memoryRequests,omitempty"`
+
+	// Memory limits
+	MemoryLimits string `json:"memoryLimits,omitempty"`
+}
+
+// SecurityContext defines security settings
+type SecurityContext struct {
+	// Run as user ID
+	RunAsUser *int64 `json:"runAsUser,omitempty"`
+
+	// Run as group ID
+	RunAsGroup *int64 `json:"runAsGroup,omitempty"`
+
+	// Read-only root filesystem
+	ReadOnlyRootFilesystem *bool `json:"readOnlyRootFilesystem,omitempty"`
+}
+
+// IngressConfig defines ingress configuration
+type IngressConfig struct {
+	// Gateway-specific configuration (optional - for Istio or other gateway implementations)
+	Gateway *GatewayConfig `json:"gateway,omitempty"`
+
+	// Istio-specific configuration (optional - for native Istio VirtualService and DestinationRule)
+	Istio *IstioConfig `json:"istio,omitempty"`
+}
+
+// GatewayConfig defines Gateway ingress configuration
+type GatewayConfig struct {
+	// Hosts for this component
+	Hosts []string `json:"hosts"`
+
+	// Port number
+	Port int32 `json:"port"`
+
+	// Ingress gateway name
+	IngressGateway string `json:"ingressGateway"`
+
+	// TLS configuration
+	TLS *TLSConfig `json:"tls,omitempty"`
+}
+
+// IstioConfig defines native Istio ingress configuration
+type IstioConfig struct {
+	// Hosts for this component (used in VirtualService)
+	Hosts []string `json:"hosts"`
+
+	// Gateway name to attach VirtualService to (e.g., "istio-system/istio-ingressgateway")
+	Gateway string `json:"gateway"`
+
+	// Enable HTTP/2 (h2c) for backend connections
+	// +kubebuilder:default=true
+	EnableHTTP2 bool `json:"enableHTTP2,omitempty"`
+}
+
+// TLSConfig defines TLS settings
+type TLSConfig struct {
+	// Secret name containing TLS certificate
+	SecretName string `json:"secretName,omitempty"`
+
+	// TLS enabled
+	Enabled bool `json:"enabled,omitempty"`
+}
+
+// CertificateConfig defines full certificate configuration including CA
+type CertificateConfig struct {
+	// Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+	// If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+	// If not specified and CA is nil, defaults to "manual"
+	ProviderType string `json:"providerType,omitempty"`
+
+	// CA configuration (for Fabric CA provider)
+	// Deprecated: Use Provider field with type "fabric-ca" for new deployments
+	CA *CACertificateConfig `json:"ca,omitempty"`
+
+	// Provider configuration (new multi-provider support)
+	Provider *CertificateProviderConfig `json:"provider,omitempty"`
+
+	// Subject Alternative Names (SANS) for TLS certificates
+	// This includes hostnames and IP addresses to be included in the certificate
+	SANS *SANSConfig `json:"sans,omitempty"`
+}
+
+// CACertificateConfig defines CA certificate generation configuration
+type CACertificateConfig struct {
+	// CA name
+	CAName string `json:"caname,omitempty"`
+
+	// CA host
+	CAHost string `json:"cahost,omitempty"`
+
+	// CA port
+	CAPort int32 `json:"caport,omitempty"`
+
+	// CA TLS configuration
+	CATLS *CATLSConfig `json:"catls,omitempty"`
+
+	// Enrollment ID
+	EnrollID string `json:"enrollid,omitempty"`
+
+	// Enrollment secret
+	EnrollSecret string `json:"enrollsecret,omitempty"`
+
+	// Use idemix enrollment instead of X.509
+	Idemix bool `json:"idemix,omitempty"`
+}
+
+// IdemixEnrollmentConfig defines Idemix credential enrollment configuration
+type IdemixEnrollmentConfig struct {
+	// CA configuration for Idemix enrollment
+	CA *CACertificateConfig `json:"ca,omitempty"`
+}
+
+// SANSConfig defines Subject Alternative Names configuration
+type SANSConfig struct {
+	// DNS names (hostnames) to include in the certificate
+	DNSNames []string `json:"dnsNames,omitempty"`
+
+	// IP addresses to include in the certificate
+	IPAddresses []string `json:"ipAddresses,omitempty"`
+}
+
+// CATLSConfig defines CA TLS configuration
+type CATLSConfig struct {
+	// CA certificate (base64 encoded)
+	CACert string `json:"cacert,omitempty"`
+
+	// Secret reference for CA certificate
+	SecretRef *SecretRef `json:"secretRef,omitempty"`
+}
+
+// SecretRef defines a reference to a Kubernetes secret
+type SecretRef struct {
+	// Secret name
+	Name string `json:"name"`
+
+	// Secret key
+	Key string `json:"key"`
+
+	// Secret namespace
+	Namespace string `json:"namespace,omitempty"`
+}
+
+// ComponentConfig provides component-specific configuration with inheritance
+type ComponentConfig struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+
+	// PostgreSQL configuration (used by query service and validator)
+	PostgreSQL *PostgreSQLConfig `json:"postgresql,omitempty"`
+}
+
+// ComponentCertificateConfig defines certificate configuration for components
+// Components inherit CA configuration from enrollment, so only SANS are needed
+type ComponentCertificateConfig struct {
+	// Subject Alternative Names (SANS) for TLS certificates
+	// This includes hostnames and IP addresses to be included in the certificate
+	SANS *SANSConfig `json:"sans,omitempty"`
+}
+
+// GenesisConfig defines genesis block configuration
+type GenesisConfig struct {
+	// Secret name containing genesis block
+	SecretName string `json:"secretName"`
+
+	// Secret key containing genesis block
+	SecretKey string `json:"secretKey"`
+
+	// Secret namespace
+	SecretNamespace string `json:"secretNamespace,omitempty"`
+}
 
 // OrdererGroupSpec defines the desired state of OrdererGroup.
 type OrdererGroupSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Bootstrap mode: "configure" or "deploy"
+	BootstrapMode string `json:"bootstrapMode,omitempty"`
 
-	// Foo is an example field of OrdererGroup. Edit orderergroup_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// MSP ID
+	MSPID string `json:"mspid,omitempty"`
+
+	// Party ID for this orderer group
+	PartyID int32 `json:"partyID,omitempty"`
+
+	// Image for orderer components
+	// +kubebuilder:default="hyperledger/fabric-x-orderer"
+	Image string `json:"image,omitempty"`
+
+	// ImageTag for orderer components
+	// +kubebuilder:default="0.0.19"
+	ImageTag string `json:"imageTag,omitempty"`
+
+	// Common configuration applied to all components
+	Common *CommonComponentConfig `json:"common,omitempty"`
+
+	// Genesis block configuration
+	Genesis GenesisConfig `json:"genesis"`
+
+	// Component-specific configurations
+	Components OrdererComponents `json:"components"`
+
+	// Global enrollment configuration (inherited by components)
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Manage child CRDs automatically (default: true)
+	// When true, OrdererGroup will create/manage child OrdererBatcher, OrdererAssembler, OrdererConsenter, OrdererRouter CRDs
+	// When false, child CRDs must be created manually
+	ManageChildCRDs *bool `json:"manageChildCRDs,omitempty"`
+}
+
+// EnrollmentConfig defines enrollment configuration
+type EnrollmentConfig struct {
+	// Sign certificate configuration
+	Sign *CertificateConfig `json:"sign,omitempty"`
+
+	// TLS certificate configuration
+	TLS *CertificateConfig `json:"tls,omitempty"`
+
+	// Idemix credential configuration
+	Idemix *IdemixEnrollmentConfig `json:"idemix,omitempty"`
+}
+
+// BatcherInstance defines a single batcher instance configuration
+type BatcherInstance struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Shard ID for this batcher instance
+	ShardID int32 `json:"shardID"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+}
+
+// ConsenterInstance defines a single consenter instance configuration
+type ConsenterInstance struct {
+	// Inherit from common config
+	CommonComponentConfig `json:",inline"`
+
+	// Consenter ID for this consenter instance
+	ConsenterID int32 `json:"consenterID"`
+
+	// Component-specific ingress configuration
+	Ingress *IngressConfig `json:"ingress,omitempty"`
+
+	// Component-specific enrollment configuration
+	Enrollment *EnrollmentConfig `json:"enrollment,omitempty"`
+
+	// Component-specific SANS configuration (overrides enrollment SANS)
+	SANS *SANSConfig `json:"sans,omitempty"`
+
+	// Component-specific endpoints
+	Endpoints []string `json:"endpoints,omitempty"`
+
+	// Component-specific environment variables
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
+	// Component-specific command
+	Command []string `json:"command,omitempty"`
+
+	// Component-specific args
+	Args []string `json:"args,omitempty"`
+}
+
+// OrdererComponents defines configurations for each component
+type OrdererComponents struct {
+	// Consenter configuration - only one consenter instance
+	Consenter *ConsenterInstance `json:"consenter,omitempty"`
+
+	// Batcher configurations - can have multiple batcher instances
+	Batchers []BatcherInstance `json:"batchers,omitempty"`
+
+	// Assembler configuration
+	Assembler *ComponentConfig `json:"assembler,omitempty"`
+
+	// Router configuration
+	Router *ComponentConfig `json:"router,omitempty"`
 }
 
 // OrdererGroupStatus defines the observed state of OrdererGroup.
 type OrdererGroupStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Status of the OrdererGroup
+	Status DeploymentStatus `json:"status,omitempty"`
+
+	// Message describing the current state
+	Message string `json:"message,omitempty"`
+
+	// Conditions represent the latest available observations of an object's state
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// Component statuses
+	ComponentStatuses map[string]ComponentStatus `json:"componentStatuses,omitempty"`
+
+	// Overall phase
+	Phase string `json:"phase,omitempty"`
+
+	// Child CRD statuses
+	ChildCRDStatuses *ChildCRDStatuses `json:"childCRDStatuses,omitempty"`
 }
 
+// ChildCRDStatuses tracks the status of child CRDs
+type ChildCRDStatuses struct {
+	// Consenter status (single consenter instance)
+	Consenter *ChildCRDStatus `json:"consenter,omitempty"`
+
+	// Assembler status
+	Assembler *ChildCRDStatus `json:"assembler,omitempty"`
+
+	// Router status
+	Router *ChildCRDStatus `json:"router,omitempty"`
+
+	// Batcher statuses (multiple batcher instances)
+	Batchers []ChildCRDStatus `json:"batchers,omitempty"`
+}
+
+// ChildCRDStatus defines the status of a child CRD
+type ChildCRDStatus struct {
+	// Name of the child CRD
+	Name string `json:"name"`
+
+	// Status of the child CRD
+	Status DeploymentStatus `json:"status,omitempty"`
+
+	// Message describing the current state
+	Message string `json:"message,omitempty"`
+
+	// Last update time
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+}
+
+// ComponentStatus defines the status of a component
+type ComponentStatus struct {
+	// Ready status
+	Ready bool `json:"ready"`
+
+	// Replicas ready
+	ReplicasReady int32 `json:"replicasReady"`
+
+	// Total replicas
+	ReplicasTotal int32 `json:"replicasTotal"`
+
+	// Last update time
+	LastUpdateTime metav1.Time `json:"lastUpdateTime,omitempty"`
+}
+
+// CertificateProviderConfig defines configuration for certificate providers
+type CertificateProviderConfig struct {
+	// FabricCA contains Fabric CA specific configuration
+	FabricCA *FabricCAProviderConfig `json:"fabricCA,omitempty"`
+
+	// Manual contains manual certificate management configuration
+	Manual *ManualProviderConfig `json:"manual,omitempty"`
+
+	// Vault contains Hashicorp Vault specific configuration
+	Vault *VaultProviderConfig `json:"vault,omitempty"`
+}
+
+// FabricCAProviderConfig contains Fabric CA specific configuration
+type FabricCAProviderConfig struct {
+	// CA server hostname
+	CAHost string `json:"caHost"`
+
+	// CA server port
+	CAPort int32 `json:"caPort"`
+
+	// CA name (for multi-CA servers)
+	CAName string `json:"caName,omitempty"`
+
+	// Enrollment ID
+	EnrollID string `json:"enrollID"`
+
+	// Enrollment secret
+	EnrollSecret string `json:"enrollSecret"`
+
+	// CA TLS certificate configuration
+	CATLS *CATLSConfig `json:"caTLS,omitempty"`
+}
+
+// ManualProviderConfig contains configuration for manually provided certificates
+type ManualProviderConfig struct {
+	// Secret reference containing the certificate
+	SecretRef *SecretRef `json:"secretRef"`
+
+	// Key in the secret for the certificate (default: "cert.pem")
+	CertKey string `json:"certKey,omitempty"`
+
+	// Key in the secret for the private key (default: "key.pem")
+	KeyKey string `json:"keyKey,omitempty"`
+
+	// Key in the secret for the CA certificate (default: "ca.pem")
+	CAKey string `json:"caKey,omitempty"`
+}
+
+// VaultProviderConfig contains Hashicorp Vault specific configuration
+type VaultProviderConfig struct {
+	// Vault server address (e.g., "https://vault.example.com:8200")
+	Address string `json:"address"`
+
+	// PKI mount path (e.g., "pki" or "fabric-pki")
+	PKIPath string `json:"pkiPath"`
+
+	// Role name for certificate issuance
+	Role string `json:"role"`
+
+	// Authentication method: "kubernetes" or "token"
+	// - kubernetes: Uses Kubernetes service account token
+	// - token: Uses Vault token from a secret
+	AuthMethod string `json:"authMethod"`
+
+	// Kubernetes service account name (required if authMethod is "kubernetes")
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+
+	// Vault token secret reference (required if authMethod is "token")
+	TokenSecretRef *SecretRef `json:"tokenSecretRef,omitempty"`
+
+	// Vault namespace (for Vault Enterprise)
+	Namespace string `json:"namespace,omitempty"`
+
+	// Certificate TTL (e.g., "8760h" for 1 year)
+	// If not specified, uses Vault role default
+	TTL string `json:"ttl,omitempty"`
+}
+
+// +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced,shortName=orderergroup,singular=orderergroup
+// +kubebuilder:printcolumn:name="State",type="string",JSONPath=".status.status"
+// +kubebuilder:printcolumn:name="Message",type="string",JSONPath=".status.message"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // OrdererGroup is the Schema for the orderergroups API.
 type OrdererGroup struct {

@@ -1,0 +1,132 @@
+apiVersion: fabricx.kfsoft.tech/v1alpha1
+kind: CA
+metadata:
+  name: org1-ca
+  namespace: default
+spec:
+  ca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: ca
+      hosts:
+        - localhost
+        - ca.org1.localho.st
+        - ca.org1.example.com
+      names:
+        - C: US
+          L: Raleigh
+          O: Org1
+          OU: Fabric
+          ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: ca
+    registry:
+      identities:
+        - affiliation: ''
+          attrs:
+            hf.AffiliationMgr: true
+            hf.GenCRL: true
+            hf.IntermediateCA: true
+            hf.Registrar.Attributes: '*'
+            hf.Registrar.DelegateRoles: '*'
+            hf.Registrar.Roles: '*'
+            hf.Revoker: true
+          name: admin
+          pass: adminpw
+          type: client
+      maxenrollments: -1
+  cors: {}
+  credentialStore: kubernetes
+  db:
+    datasource: /var/hyperledger/fabric-ca/fabric-ca-server.db
+    type: sqlite3
+  image: hyperledger/fabric-ca
+  ingress:
+    istio:
+      hosts:
+        - ca.org1.localho.st
+        - ca.org1.example.com
+      ingressGateway: istio-ingressgateway
+      port: 443
+      tls:
+        enabled: true
+        secretName: org1-ca-tls-secret
+  metrics:
+    statsd: {}
+  resources: {}
+  service:
+    type: ClusterIP
+  storage:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  tls:
+    domains:
+      - ca.org1.localho.st
+      - ca.org1.example.com
+      - localhost
+      - org1-ca.default
+      - org1-ca
+    subject:
+      C: US
+      L: Raleigh
+      O: Org1
+      OU: Fabric
+      ST: North Carolina
+  tlsca:
+    bccsp:
+      default: SW
+      sw:
+        hash: SHA2
+        security: 256
+    cfg:
+      affiliations: {}
+      identities: {}
+    crl:
+      expiry: 24h
+    csr:
+      ca:
+        expiry: 131400h
+      cn: tlsca
+      hosts:
+        - localhost
+        - ca.org1.localho.st
+        - ca.org1.example.com
+      names:
+        - C: US
+          L: Raleigh
+          O: Org1
+          OU: Fabric
+          ST: North Carolina
+    intermediate:
+      parentserver: {}
+    name: tlsca
+    registry:
+      identities:
+        - affiliation: ''
+          attrs:
+            hf.AffiliationMgr: true
+            hf.GenCRL: true
+            hf.IntermediateCA: true
+            hf.Registrar.Attributes: '*'
+            hf.Registrar.DelegateRoles: '*'
+            hf.Registrar.Roles: '*'
+            hf.Revoker: true
+          name: admin
+          pass: adminpw
+          type: client
+      maxenrollments: -1
+  vault:
+    vault: {}
+  version: 1.5.15
