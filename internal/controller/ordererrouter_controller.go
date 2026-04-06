@@ -637,8 +637,9 @@ func (r *OrdererRouterReconciler) reconcileConfigMap(ctx context.Context, ordere
 		},
 	}
 
-	// Determine TLS enabled flag
-	tlsEnabled := false
+	// TLS is enabled by default. It can be explicitly disabled via spec.tls.enabled=false.
+	// fabric-x-orderer v0.0.24+ supports TLS on router via General.TLS.Enabled.
+	tlsEnabled := true
 	if ordererRouter.Spec.TLS != nil {
 		tlsEnabled = ordererRouter.Spec.TLS.Enabled
 	}

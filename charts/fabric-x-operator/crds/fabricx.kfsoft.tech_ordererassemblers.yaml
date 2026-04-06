@@ -1,0 +1,1499 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.18.0
+  name: ordererassemblers.fabricx.kfsoft.tech
+spec:
+  group: fabricx.kfsoft.tech
+  names:
+    kind: OrdererAssembler
+    listKind: OrdererAssemblerList
+    plural: ordererassemblers
+    shortNames:
+    - ordererassembler
+    singular: ordererassembler
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.status
+      name: State
+      type: string
+    - jsonPath: .status.message
+      name: Message
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: OrdererAssembler is the Schema for the ordererassemblers API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OrdererAssemblerSpec defines the desired state of OrdererAssembler.
+            properties:
+              affinity:
+                description: Affinity
+                properties:
+                  nodeAffinity:
+                    description: Node affinity
+                    properties:
+                      preferredDuringSchedulingIgnoredDuringExecution:
+                        description: Preferred during scheduling ignored during execution
+                        items:
+                          description: PreferredSchedulingTerm defines a preferred
+                            scheduling term
+                          properties:
+                            preference:
+                              description: Preference
+                              properties:
+                                matchExpressions:
+                                  description: Match expressions
+                                  items:
+                                    description: NodeSelectorRequirement defines a
+                                      node selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchFields:
+                                  description: Match fields
+                                  items:
+                                    description: NodeSelectorRequirement defines a
+                                      node selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                              type: object
+                            weight:
+                              description: Weight
+                              format: int32
+                              type: integer
+                          required:
+                          - preference
+                          - weight
+                          type: object
+                        type: array
+                      requiredDuringSchedulingIgnoredDuringExecution:
+                        description: Required during scheduling ignored during execution
+                        properties:
+                          nodeSelectorTerms:
+                            description: Node selector terms
+                            items:
+                              description: NodeSelectorTerm defines a node selector
+                                term
+                              properties:
+                                matchExpressions:
+                                  description: Match expressions
+                                  items:
+                                    description: NodeSelectorRequirement defines a
+                                      node selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchFields:
+                                  description: Match fields
+                                  items:
+                                    description: NodeSelectorRequirement defines a
+                                      node selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                              type: object
+                            type: array
+                        required:
+                        - nodeSelectorTerms
+                        type: object
+                    type: object
+                  podAffinity:
+                    description: Pod affinity
+                    properties:
+                      preferredDuringSchedulingIgnoredDuringExecution:
+                        description: Preferred during scheduling ignored during execution
+                        items:
+                          description: WeightedPodAffinityTerm defines a weighted
+                            pod affinity term
+                          properties:
+                            podAffinityTerm:
+                              description: Pod affinity term
+                              properties:
+                                labelSelector:
+                                  description: Label selector
+                                  properties:
+                                    matchExpressions:
+                                      description: Match expressions
+                                      items:
+                                        description: LabelSelectorRequirement defines
+                                          a label selector requirement
+                                        properties:
+                                          key:
+                                            description: Key
+                                            type: string
+                                          operator:
+                                            description: Operator
+                                            type: string
+                                          values:
+                                            description: Values
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                    matchLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: Match labels
+                                      type: object
+                                  type: object
+                                namespaces:
+                                  description: Namespaces
+                                  items:
+                                    type: string
+                                  type: array
+                                topologyKey:
+                                  description: Topology key
+                                  type: string
+                              required:
+                              - topologyKey
+                              type: object
+                            weight:
+                              description: Weight
+                              format: int32
+                              type: integer
+                          required:
+                          - podAffinityTerm
+                          - weight
+                          type: object
+                        type: array
+                      requiredDuringSchedulingIgnoredDuringExecution:
+                        description: Required during scheduling ignored during execution
+                        items:
+                          description: PodAffinityTerm defines a pod affinity term
+                          properties:
+                            labelSelector:
+                              description: Label selector
+                              properties:
+                                matchExpressions:
+                                  description: Match expressions
+                                  items:
+                                    description: LabelSelectorRequirement defines
+                                      a label selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: Match labels
+                                  type: object
+                              type: object
+                            namespaces:
+                              description: Namespaces
+                              items:
+                                type: string
+                              type: array
+                            topologyKey:
+                              description: Topology key
+                              type: string
+                          required:
+                          - topologyKey
+                          type: object
+                        type: array
+                    type: object
+                  podAntiAffinity:
+                    description: Pod anti-affinity
+                    properties:
+                      preferredDuringSchedulingIgnoredDuringExecution:
+                        description: Preferred during scheduling ignored during execution
+                        items:
+                          description: WeightedPodAffinityTerm defines a weighted
+                            pod affinity term
+                          properties:
+                            podAffinityTerm:
+                              description: Pod affinity term
+                              properties:
+                                labelSelector:
+                                  description: Label selector
+                                  properties:
+                                    matchExpressions:
+                                      description: Match expressions
+                                      items:
+                                        description: LabelSelectorRequirement defines
+                                          a label selector requirement
+                                        properties:
+                                          key:
+                                            description: Key
+                                            type: string
+                                          operator:
+                                            description: Operator
+                                            type: string
+                                          values:
+                                            description: Values
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - key
+                                        - operator
+                                        type: object
+                                      type: array
+                                    matchLabels:
+                                      additionalProperties:
+                                        type: string
+                                      description: Match labels
+                                      type: object
+                                  type: object
+                                namespaces:
+                                  description: Namespaces
+                                  items:
+                                    type: string
+                                  type: array
+                                topologyKey:
+                                  description: Topology key
+                                  type: string
+                              required:
+                              - topologyKey
+                              type: object
+                            weight:
+                              description: Weight
+                              format: int32
+                              type: integer
+                          required:
+                          - podAffinityTerm
+                          - weight
+                          type: object
+                        type: array
+                      requiredDuringSchedulingIgnoredDuringExecution:
+                        description: Required during scheduling ignored during execution
+                        items:
+                          description: PodAffinityTerm defines a pod affinity term
+                          properties:
+                            labelSelector:
+                              description: Label selector
+                              properties:
+                                matchExpressions:
+                                  description: Match expressions
+                                  items:
+                                    description: LabelSelectorRequirement defines
+                                      a label selector requirement
+                                    properties:
+                                      key:
+                                        description: Key
+                                        type: string
+                                      operator:
+                                        description: Operator
+                                        type: string
+                                      values:
+                                        description: Values
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: Match labels
+                                  type: object
+                              type: object
+                            namespaces:
+                              description: Namespaces
+                              items:
+                                type: string
+                              type: array
+                            topologyKey:
+                              description: Topology key
+                              type: string
+                          required:
+                          - topologyKey
+                          type: object
+                        type: array
+                    type: object
+                type: object
+              args:
+                description: Component-specific args
+                items:
+                  type: string
+                type: array
+              bootstrapMode:
+                description: |-
+                  Bootstrap mode: "configure" or "deploy"
+                  When set to "configure", only configuration resources are created
+                  When set to "deploy", full deployment resources are created
+                type: string
+              command:
+                description: Component-specific command
+                items:
+                  type: string
+                type: array
+              endpoints:
+                description: Component-specific endpoints
+                items:
+                  type: string
+                type: array
+              enrollment:
+                description: Component-specific enrollment configuration
+                properties:
+                  idemix:
+                    description: Idemix credential configuration
+                    properties:
+                      ca:
+                        description: CA configuration for Idemix enrollment
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
+                        type: object
+                    type: object
+                  sign:
+                    description: Sign certificate configuration
+                    properties:
+                      ca:
+                        description: |-
+                          CA configuration (for Fabric CA provider)
+                          Deprecated: Use Provider field with type "fabric-ca" for new deployments
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
+                        type: object
+                      provider:
+                        description: Provider configuration (new multi-provider support)
+                        properties:
+                          fabricCA:
+                            description: FabricCA contains Fabric CA specific configuration
+                            properties:
+                              caHost:
+                                description: CA server hostname
+                                type: string
+                              caName:
+                                description: CA name (for multi-CA servers)
+                                type: string
+                              caPort:
+                                description: CA server port
+                                format: int32
+                                type: integer
+                              caTLS:
+                                description: CA TLS certificate configuration
+                                properties:
+                                  cacert:
+                                    description: CA certificate (base64 encoded)
+                                    type: string
+                                  secretRef:
+                                    description: Secret reference for CA certificate
+                                    properties:
+                                      key:
+                                        description: Secret key
+                                        type: string
+                                      name:
+                                        description: Secret name
+                                        type: string
+                                      namespace:
+                                        description: Secret namespace
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                              enrollID:
+                                description: Enrollment ID
+                                type: string
+                              enrollSecret:
+                                description: Enrollment secret
+                                type: string
+                            required:
+                            - caHost
+                            - caPort
+                            - enrollID
+                            - enrollSecret
+                            type: object
+                          manual:
+                            description: Manual contains manual certificate management
+                              configuration
+                            properties:
+                              caKey:
+                                description: 'Key in the secret for the CA certificate
+                                  (default: "ca.pem")'
+                                type: string
+                              certKey:
+                                description: 'Key in the secret for the certificate
+                                  (default: "cert.pem")'
+                                type: string
+                              keyKey:
+                                description: 'Key in the secret for the private key
+                                  (default: "key.pem")'
+                                type: string
+                              secretRef:
+                                description: Secret reference containing the certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            required:
+                            - secretRef
+                            type: object
+                          vault:
+                            description: Vault contains Hashicorp Vault specific configuration
+                            properties:
+                              address:
+                                description: Vault server address (e.g., "https://vault.example.com:8200")
+                                type: string
+                              authMethod:
+                                description: |-
+                                  Authentication method: "kubernetes" or "token"
+                                  - kubernetes: Uses Kubernetes service account token
+                                  - token: Uses Vault token from a secret
+                                type: string
+                              namespace:
+                                description: Vault namespace (for Vault Enterprise)
+                                type: string
+                              pkiPath:
+                                description: PKI mount path (e.g., "pki" or "fabric-pki")
+                                type: string
+                              role:
+                                description: Role name for certificate issuance
+                                type: string
+                              serviceAccount:
+                                description: Kubernetes service account name (required
+                                  if authMethod is "kubernetes")
+                                type: string
+                              tokenSecretRef:
+                                description: Vault token secret reference (required
+                                  if authMethod is "token")
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                              ttl:
+                                description: |-
+                                  Certificate TTL (e.g., "8760h" for 1 year)
+                                  If not specified, uses Vault role default
+                                type: string
+                            required:
+                            - address
+                            - authMethod
+                            - pkiPath
+                            - role
+                            type: object
+                        type: object
+                      providerType:
+                        description: |-
+                          Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+                          If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+                          If not specified and CA is nil, defaults to "manual"
+                        type: string
+                      sans:
+                        description: |-
+                          Subject Alternative Names (SANS) for TLS certificates
+                          This includes hostnames and IP addresses to be included in the certificate
+                        properties:
+                          dnsNames:
+                            description: DNS names (hostnames) to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                          ipAddresses:
+                            description: IP addresses to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                  tls:
+                    description: TLS certificate configuration
+                    properties:
+                      ca:
+                        description: |-
+                          CA configuration (for Fabric CA provider)
+                          Deprecated: Use Provider field with type "fabric-ca" for new deployments
+                        properties:
+                          cahost:
+                            description: CA host
+                            type: string
+                          caname:
+                            description: CA name
+                            type: string
+                          caport:
+                            description: CA port
+                            format: int32
+                            type: integer
+                          catls:
+                            description: CA TLS configuration
+                            properties:
+                              cacert:
+                                description: CA certificate (base64 encoded)
+                                type: string
+                              secretRef:
+                                description: Secret reference for CA certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            type: object
+                          enrollid:
+                            description: Enrollment ID
+                            type: string
+                          enrollsecret:
+                            description: Enrollment secret
+                            type: string
+                          idemix:
+                            description: Use idemix enrollment instead of X.509
+                            type: boolean
+                        type: object
+                      provider:
+                        description: Provider configuration (new multi-provider support)
+                        properties:
+                          fabricCA:
+                            description: FabricCA contains Fabric CA specific configuration
+                            properties:
+                              caHost:
+                                description: CA server hostname
+                                type: string
+                              caName:
+                                description: CA name (for multi-CA servers)
+                                type: string
+                              caPort:
+                                description: CA server port
+                                format: int32
+                                type: integer
+                              caTLS:
+                                description: CA TLS certificate configuration
+                                properties:
+                                  cacert:
+                                    description: CA certificate (base64 encoded)
+                                    type: string
+                                  secretRef:
+                                    description: Secret reference for CA certificate
+                                    properties:
+                                      key:
+                                        description: Secret key
+                                        type: string
+                                      name:
+                                        description: Secret name
+                                        type: string
+                                      namespace:
+                                        description: Secret namespace
+                                        type: string
+                                    required:
+                                    - key
+                                    - name
+                                    type: object
+                                type: object
+                              enrollID:
+                                description: Enrollment ID
+                                type: string
+                              enrollSecret:
+                                description: Enrollment secret
+                                type: string
+                            required:
+                            - caHost
+                            - caPort
+                            - enrollID
+                            - enrollSecret
+                            type: object
+                          manual:
+                            description: Manual contains manual certificate management
+                              configuration
+                            properties:
+                              caKey:
+                                description: 'Key in the secret for the CA certificate
+                                  (default: "ca.pem")'
+                                type: string
+                              certKey:
+                                description: 'Key in the secret for the certificate
+                                  (default: "cert.pem")'
+                                type: string
+                              keyKey:
+                                description: 'Key in the secret for the private key
+                                  (default: "key.pem")'
+                                type: string
+                              secretRef:
+                                description: Secret reference containing the certificate
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                            required:
+                            - secretRef
+                            type: object
+                          vault:
+                            description: Vault contains Hashicorp Vault specific configuration
+                            properties:
+                              address:
+                                description: Vault server address (e.g., "https://vault.example.com:8200")
+                                type: string
+                              authMethod:
+                                description: |-
+                                  Authentication method: "kubernetes" or "token"
+                                  - kubernetes: Uses Kubernetes service account token
+                                  - token: Uses Vault token from a secret
+                                type: string
+                              namespace:
+                                description: Vault namespace (for Vault Enterprise)
+                                type: string
+                              pkiPath:
+                                description: PKI mount path (e.g., "pki" or "fabric-pki")
+                                type: string
+                              role:
+                                description: Role name for certificate issuance
+                                type: string
+                              serviceAccount:
+                                description: Kubernetes service account name (required
+                                  if authMethod is "kubernetes")
+                                type: string
+                              tokenSecretRef:
+                                description: Vault token secret reference (required
+                                  if authMethod is "token")
+                                properties:
+                                  key:
+                                    description: Secret key
+                                    type: string
+                                  name:
+                                    description: Secret name
+                                    type: string
+                                  namespace:
+                                    description: Secret namespace
+                                    type: string
+                                required:
+                                - key
+                                - name
+                                type: object
+                              ttl:
+                                description: |-
+                                  Certificate TTL (e.g., "8760h" for 1 year)
+                                  If not specified, uses Vault role default
+                                type: string
+                            required:
+                            - address
+                            - authMethod
+                            - pkiPath
+                            - role
+                            type: object
+                        type: object
+                      providerType:
+                        description: |-
+                          Provider type: "fabric-ca", "manual", "aws-kms", "vault"
+                          If not specified and CA is provided, defaults to "fabric-ca" for backward compatibility
+                          If not specified and CA is nil, defaults to "manual"
+                        type: string
+                      sans:
+                        description: |-
+                          Subject Alternative Names (SANS) for TLS certificates
+                          This includes hostnames and IP addresses to be included in the certificate
+                        properties:
+                          dnsNames:
+                            description: DNS names (hostnames) to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                          ipAddresses:
+                            description: IP addresses to include in the certificate
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                    type: object
+                type: object
+              env:
+                description: Component-specific environment variables
+                items:
+                  description: EnvVar represents an environment variable present in
+                    a Container.
+                  properties:
+                    name:
+                      description: Name of the environment variable. Must be a C_IDENTIFIER.
+                      type: string
+                    value:
+                      description: |-
+                        Variable references $(VAR_NAME) are expanded
+                        using the previously defined environment variables in the container and
+                        any service environment variables. If a variable cannot be resolved,
+                        the reference in the input string will be unchanged. Double $$ are reduced
+                        to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                        "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                        Escaped references will never be expanded, regardless of whether the variable
+                        exists or not.
+                        Defaults to "".
+                      type: string
+                    valueFrom:
+                      description: Source for the environment variable's value. Cannot
+                        be used if value is not empty.
+                      properties:
+                        configMapKeyRef:
+                          description: Selects a key of a ConfigMap.
+                          properties:
+                            key:
+                              description: The key to select.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the ConfigMap or its key
+                                must be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        fieldRef:
+                          description: |-
+                            Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                            spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                          properties:
+                            apiVersion:
+                              description: Version of the schema the FieldPath is
+                                written in terms of, defaults to "v1".
+                              type: string
+                            fieldPath:
+                              description: Path of the field to select in the specified
+                                API version.
+                              type: string
+                          required:
+                          - fieldPath
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        resourceFieldRef:
+                          description: |-
+                            Selects a resource of the container: only resources limits and requests
+                            (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                          properties:
+                            containerName:
+                              description: 'Container name: required for volumes,
+                                optional for env vars'
+                              type: string
+                            divisor:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Specifies the output format of the exposed
+                                resources, defaults to "1"
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            resource:
+                              description: 'Required: resource to select'
+                              type: string
+                          required:
+                          - resource
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        secretKeyRef:
+                          description: Selects a key of a secret in the pod's namespace
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must
+                                be a valid secret key.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must
+                                be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
+              genesis:
+                description: Genesis block configuration
+                properties:
+                  secretKey:
+                    description: Secret key containing genesis block
+                    type: string
+                  secretName:
+                    description: Secret name containing genesis block
+                    type: string
+                  secretNamespace:
+                    description: Secret namespace
+                    type: string
+                required:
+                - secretKey
+                - secretName
+                type: object
+              image:
+                default: hyperledger/fabric-x-orderer
+                description: Image for orderer component
+                type: string
+              imagePullSecrets:
+                description: Image pull secrets
+                items:
+                  description: ImagePullSecret defines an image pull secret
+                  properties:
+                    name:
+                      description: Secret name
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              imageTag:
+                default: 0.0.19
+                description: ImageTag for orderer component
+                type: string
+              ingress:
+                description: Component-specific ingress configuration
+                properties:
+                  gateway:
+                    description: Gateway-specific configuration (optional - for Istio
+                      or other gateway implementations)
+                    properties:
+                      hosts:
+                        description: Hosts for this component
+                        items:
+                          type: string
+                        type: array
+                      ingressGateway:
+                        description: Ingress gateway name
+                        type: string
+                      port:
+                        description: Port number
+                        format: int32
+                        type: integer
+                      tls:
+                        description: TLS configuration
+                        properties:
+                          enabled:
+                            description: TLS enabled
+                            type: boolean
+                          secretName:
+                            description: Secret name containing TLS certificate
+                            type: string
+                        type: object
+                    required:
+                    - hosts
+                    - ingressGateway
+                    - port
+                    type: object
+                  istio:
+                    description: Istio-specific configuration (optional - for native
+                      Istio VirtualService and DestinationRule)
+                    properties:
+                      enableHTTP2:
+                        default: true
+                        description: Enable HTTP/2 (h2c) for backend connections
+                        type: boolean
+                      gateway:
+                        description: Gateway name to attach VirtualService to (e.g.,
+                          "istio-system/istio-ingressgateway")
+                        type: string
+                      hosts:
+                        description: Hosts for this component (used in VirtualService)
+                        items:
+                          type: string
+                        type: array
+                    required:
+                    - gateway
+                    - hosts
+                    type: object
+                type: object
+              mspid:
+                description: MSP ID for this assembler
+                type: string
+              partyID:
+                description: Party ID for this assembler
+                format: int32
+                type: integer
+              podAnnotations:
+                additionalProperties:
+                  type: string
+                description: Pod annotations
+                type: object
+              podLabels:
+                additionalProperties:
+                  type: string
+                description: Pod labels
+                type: object
+              replicas:
+                description: Replicas for this assembler
+                format: int32
+                type: integer
+              resources:
+                description: Resources configuration
+                nullable: true
+                properties:
+                  claims:
+                    description: |-
+                      Claims lists the names of resources, defined in spec.resourceClaims,
+                      that are used by this container.
+
+                      This is an alpha field and requires enabling the
+                      DynamicResourceAllocation feature gate.
+
+                      This field is immutable. It can only be set for containers.
+                    items:
+                      description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                      properties:
+                        name:
+                          description: |-
+                            Name must match the name of one entry in pod.spec.resourceClaims of
+                            the Pod where this field is used. It makes that resource available
+                            inside a container.
+                          type: string
+                        request:
+                          description: |-
+                            Request is the name chosen for a request in the referenced claim.
+                            If empty, everything from the claim is made available, otherwise
+                            only the result of this request.
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Limits describes the maximum amount of compute resources allowed.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: |-
+                      Requests describes the minimum amount of compute resources required.
+                      If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                      otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                      More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                    type: object
+                type: object
+              sans:
+                description: Component-specific SANS configuration (overrides enrollment
+                  SANS)
+                properties:
+                  dnsNames:
+                    description: DNS names (hostnames) to include in the certificate
+                    items:
+                      type: string
+                    type: array
+                  ipAddresses:
+                    description: IP addresses to include in the certificate
+                    items:
+                      type: string
+                    type: array
+                type: object
+              securityContext:
+                description: Security context
+                properties:
+                  readOnlyRootFilesystem:
+                    description: Read-only root filesystem
+                    type: boolean
+                  runAsGroup:
+                    description: Run as group ID
+                    format: int64
+                    type: integer
+                  runAsUser:
+                    description: Run as user ID
+                    format: int64
+                    type: integer
+                type: object
+              storage:
+                description: Storage configuration
+                properties:
+                  accessMode:
+                    description: Access mode
+                    type: string
+                  pvcName:
+                    description: PVC name to use (if empty, will be auto-generated)
+                    type: string
+                  size:
+                    description: Storage size
+                    type: string
+                  storageClass:
+                    description: Storage class to use
+                    type: string
+                required:
+                - size
+                type: object
+              tls:
+                description: TLS configuration
+                properties:
+                  enabled:
+                    description: TLS enabled
+                    type: boolean
+                  secretName:
+                    description: Secret name containing TLS certificate
+                    type: string
+                type: object
+              tolerations:
+                description: Tolerations
+                items:
+                  description: Toleration defines a toleration
+                  properties:
+                    effect:
+                      description: Effect
+                      type: string
+                    key:
+                      description: Key
+                      type: string
+                    operator:
+                      description: Operator
+                      type: string
+                    tolerationSeconds:
+                      description: Toleration seconds
+                      format: int64
+                      type: integer
+                    value:
+                      description: Value
+                      type: string
+                  type: object
+                type: array
+              volumeMounts:
+                description: Volume mounts
+                items:
+                  description: VolumeMount defines a volume mount
+                  properties:
+                    mountPath:
+                      description: Mount path
+                      type: string
+                    name:
+                      description: Volume name
+                      type: string
+                    readOnly:
+                      description: Read only
+                      type: boolean
+                    subPath:
+                      description: Sub path
+                      type: string
+                  required:
+                  - mountPath
+                  - name
+                  type: object
+                type: array
+              volumes:
+                description: Volumes
+                items:
+                  description: Volume defines a Kubernetes volume
+                  properties:
+                    name:
+                      description: Volume name
+                      type: string
+                    volumeSource:
+                      description: Volume source
+                      properties:
+                        configMap:
+                          description: Config map
+                          properties:
+                            defaultMode:
+                              description: Default mode
+                              format: int32
+                              type: integer
+                            items:
+                              description: Items to include
+                              items:
+                                description: KeyToPath defines a key to path mapping
+                                properties:
+                                  key:
+                                    description: Key
+                                    type: string
+                                  mode:
+                                    description: Mode
+                                    format: int32
+                                    type: integer
+                                  path:
+                                    description: Path
+                                    type: string
+                                required:
+                                - key
+                                - path
+                                type: object
+                              type: array
+                            name:
+                              description: ConfigMap name
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        emptyDir:
+                          description: Empty directory
+                          properties:
+                            medium:
+                              description: Medium
+                              type: string
+                            sizeLimit:
+                              description: Size limit
+                              type: string
+                          type: object
+                        hostPath:
+                          description: Host path
+                          properties:
+                            path:
+                              description: Path
+                              type: string
+                            type:
+                              description: Type
+                              type: string
+                          required:
+                          - path
+                          type: object
+                        persistentVolumeClaim:
+                          description: Persistent volume claim
+                          properties:
+                            claimName:
+                              description: Claim name
+                              type: string
+                            readOnly:
+                              description: Read only
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
+                        secret:
+                          description: Secret
+                          properties:
+                            defaultMode:
+                              description: Default mode
+                              format: int32
+                              type: integer
+                            items:
+                              description: Items to include
+                              items:
+                                description: KeyToPath defines a key to path mapping
+                                properties:
+                                  key:
+                                    description: Key
+                                    type: string
+                                  mode:
+                                    description: Mode
+                                    format: int32
+                                    type: integer
+                                  path:
+                                    description: Path
+                                    type: string
+                                required:
+                                - key
+                                - path
+                                type: object
+                              type: array
+                            secretName:
+                              description: Secret name
+                              type: string
+                          required:
+                          - secretName
+                          type: object
+                      type: object
+                  required:
+                  - name
+                  - volumeSource
+                  type: object
+                type: array
+            required:
+            - genesis
+            type: object
+          status:
+            description: OrdererAssemblerStatus defines the observed state of OrdererAssembler.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of an object's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              message:
+                description: Message describing the current state
+                type: string
+              phase:
+                description: Overall phase
+                type: string
+              status:
+                description: Status of the OrdererAssembler
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

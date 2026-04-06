@@ -1,0 +1,108 @@
+# Default values for fabric-x-operator
+
+# -- Number of controller manager replicas
+replicaCount: 1
+
+image:
+  # -- Container image repository
+  repository: kfsoftware/fabric-x-operator
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+
+# -- Image pull secrets
+imagePullSecrets: []
+
+# -- Override chart name
+nameOverride: ""
+# -- Override full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a service account
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- Service account name (generated if not set)
+  name: ""
+
+# -- Install CRDs (set false to manage CRDs externally)
+installCRDs: true
+
+# -- Annotations for the manager pod
+podAnnotations: {}
+
+# -- Labels for the manager pod
+podLabels: {}
+
+# -- Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+
+# -- Resource requests and limits
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Pod tolerations
+tolerations: []
+
+# -- Pod affinity
+affinity: {}
+
+# -- Leader election for HA deployments
+leaderElection:
+  enabled: true
+
+# -- Controller manager arguments
+args:
+  - --metrics-bind-address=:8443
+  - --leader-elect
+  - --health-probe-bind-address=:8081
+
+metrics:
+  # -- Enable metrics endpoint
+  enabled: true
+  # -- Metrics service port
+  port: 8443
+  # -- Create a ServiceMonitor for Prometheus Operator
+  serviceMonitor:
+    enabled: false
+    # -- Namespace where the ServiceMonitor is installed
+    namespace: ""
+    # -- Labels to add to the ServiceMonitor
+    labels: {}
+    # -- Scrape interval
+    interval: 30s
+
+rbac:
+  # -- Create cluster role and binding
+  create: true
+
+# -- Environment variables for the controller
+env: []
+
+# -- Additional volumes
+volumes: []
+
+# -- Additional volume mounts
+volumeMounts: []

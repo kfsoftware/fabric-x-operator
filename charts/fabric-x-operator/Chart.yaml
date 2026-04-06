@@ -1,0 +1,18 @@
+apiVersion: v2
+name: fabric-x-operator
+description: A Helm chart for the Hyperledger Fabric X Kubernetes Operator
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - hyperledger
+  - fabric
+  - fabric-x
+  - blockchain
+  - operator
+home: https://github.com/kfsoftware/fabric-x-operator
+sources:
+  - https://github.com/kfsoftware/fabric-x-operator
+maintainers:
+  - name: kfsoftware
+    url: https://github.com/kfsoftware
