@@ -49,7 +49,9 @@ securityContext:
     drop:
       - ALL
   runAsNonRoot: true
-  readOnlyRootFilesystem: true
+  # fabric-ca client library writes to $HOME during enrollment, so the
+  # root filesystem must be writable (or a writable HOME volume provided).
+  readOnlyRootFilesystem: false
 
 # -- Resource requests and limits
 resources:

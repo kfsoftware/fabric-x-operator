@@ -909,9 +909,10 @@ func (r *OrdererAssemblerReconciler) getConfigMapTemplate(ctx context.Context, o
 func (r *OrdererAssemblerReconciler) generateAssemblerConfig(ctx context.Context, ordererAssembler *fabricxv1alpha1.OrdererAssembler) string {
 	log := logf.FromContext(ctx)
 
-	// TLS is enabled by default. It can be explicitly disabled via spec.tls.enabled=false.
-	// fabric-x-orderer v0.0.24+ supports TLS on assembler via General.TLS.Enabled.
-	tlsEnabled := true
+	// TLS is opt-in via spec.tls.enabled=true. fabric-x-orderer v0.0.24 supports
+	// TLS on assembler via General.TLS.Enabled, but enabling it by default would
+	// break clients (e.g. the committer sidecar) that currently connect plaintext.
+	tlsEnabled := false
 	if ordererAssembler.Spec.TLS != nil {
 		tlsEnabled = ordererAssembler.Spec.TLS.Enabled
 	}
