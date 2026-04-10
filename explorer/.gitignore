@@ -1,0 +1,4 @@
+bin/
+explorer
+frontend/dist/
+frontend/node_modules/

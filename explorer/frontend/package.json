@@ -1,0 +1,19 @@
+{
+  "name": "fabric-x-explorer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot serve.ts",
+    "build": "bun run build.ts"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.5.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.3"
+  }
+}

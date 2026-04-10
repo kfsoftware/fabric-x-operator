@@ -1,0 +1,123 @@
+logging:
+  spec: info
+  format: '%{color}%{time:15:04:05.000} [%{module}] %{shortfunc} %{level:.4s}%{color:reset} %{message}'
+
+fsc:
+  id: endorser1 # CORE_FSC_ID
+  identity:
+    cert:
+      file: ./keys/node.crt
+    key:
+      file: ./keys/node.key
+  p2p:
+    listenAddress: /ip4/0.0.0.0/tcp/9301 # CORE_P2P_LISTENADDRESS
+    type: websocket
+    opts:
+      routing:
+        path: ./routing-config.yaml
+      websocket:
+        tls:
+          clientAuthRequired: true
+          serverRootCAs:
+            files:
+              - ./keys/node-ca.crt
+          clientRootCAs:
+            files:
+              - ./keys/node-ca.crt
+  persistences:
+    default:
+      type: sqlite
+      opts:
+        dataSource: file:./data/fts.sqlite # CORE_FSC_PERSISTENCES_OPTS_DATASOURCE
+  endpoint:
+    resolvers:
+      - name: issuer
+        identity:
+          id: issuer
+          path: ./keys/nodes/issuer.crt
+        addresses:
+          P2P: localhost:9101
+      - name: auditor
+        identity:
+          id: auditor
+          path: ./keys/nodes/auditor.crt
+        addresses:
+          P2P: localhost:9201
+      - name: endorser1
+        identity:
+          id: endorser1
+          path: ./keys/nodes/endorser1.crt
+        addresses:
+          P2P: localhost:9301
+      - name: endorser2
+        identity:
+          id: endorser2
+          path: ./keys/nodes/endorser2.crt
+        addresses:
+          P2P: localhost:9401
+      - name: owner1
+        identity:
+          id: owner1
+          path: ./keys/nodes/owner1.crt
+        addresses:
+          P2P: localhost:9501
+      - name: owner2
+        identity:
+          id: owner2
+          path: ./keys/nodes/owner2.crt
+        addresses:
+          P2P: localhost:9601
+
+fabric:
+  enabled: true
+  default:
+    driver: fabricx
+    msps:
+      - id: endorser
+        mspType: bccsp
+        mspID: Org1MSP
+        path: ./keys/fabric/endorser
+    orderers:
+      - address: localhost:7050
+
+    tls:
+      enabled: false
+    peers:
+      - address: localhost:5400
+        usage: delivery
+      - address: localhost:5400
+        usage: finality
+    queryService:
+      endpoints:
+        - address: localhost:5500
+    notificationService:
+      endpoints:
+        - address: localhost:5400
+    channels:
+      - name: arma
+        default: true
+
+token:
+  enabled: true
+  tms:
+    mytms:
+      network: default
+      channel: arma
+      namespace: token_namespace
+      driver: zkatdlog
+      wallets:
+      services:
+        network:
+          fabric:
+            fsc_endorsement:
+              endorser: true
+              id: endorser
+              policy:
+                type: all
+              endorsers:
+                - endorser1
+                # - endorser2
+
+                # The endorser has the public parameters so it can commit them to the ledger.
+      publicParameters:
+        path: ../namespace/zkatdlognoghv1_pp.json

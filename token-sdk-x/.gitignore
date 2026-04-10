@@ -1,0 +1,8 @@
+bin/
+keys/
+data/
+**/namespace/*.json
+
+out/
+
+__debug_bin*

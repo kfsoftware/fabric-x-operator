@@ -1,0 +1,256 @@
+# In-cluster deployment for token-sdk-x against fabric-x-operator e2e network.
+# Each node = 1 Deployment + 1 Service. MSP comes from the operator's Identity
+# secret (admin-cert) via an init container that lays it out at /conf/keys/fabric/<role>.
+#
+# Apply with:
+#   kubectl apply -f scripts/k8s/manifests.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tokensdk-msp-init
+  namespace: default
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+    ROLE="$1"   # user | endorser
+    DEST="/conf/keys/fabric/${ROLE}"
+    SRC="/msp-src"
+    mkdir -p "$DEST/signcerts" "$DEST/keystore" "$DEST/cacerts" "$DEST/admincerts" "$DEST/tlscacerts"
+    cp "$SRC/cert.pem"   "$DEST/signcerts/cert.pem"
+    cp "$SRC/key.pem"    "$DEST/keystore/key.pem"
+    cp "$SRC/cacert.pem" "$DEST/cacerts/ca.pem"
+    cp "$SRC/cert.pem"   "$DEST/admincerts/cert.pem"
+    cp "$SRC/cacert.pem" "$DEST/tlscacerts/ca.pem"
+    cat > "$DEST/config.yaml" <<'YAML'
+    NodeOUs:
+      Enable: true
+      ClientOUIdentifier:
+        Certificate: cacerts/ca.pem
+        OrganizationalUnitIdentifier: client
+      PeerOUIdentifier:
+        Certificate: cacerts/ca.pem
+        OrganizationalUnitIdentifier: peer
+      AdminOUIdentifier:
+        Certificate: cacerts/ca.pem
+        OrganizationalUnitIdentifier: admin
+      OrdererOUIdentifier:
+        Certificate: cacerts/ca.pem
+        OrganizationalUnitIdentifier: orderer
+    YAML
+    echo "MSP for role=$ROLE written to $DEST"
+
+# ---------- shared template anchors via per-node duplication ----------
+# Issuer
+---
+apiVersion: v1
+kind: Service
+metadata: { name: tokensdk-issuer, namespace: default }
+spec:
+  selector: { app: tokensdk-issuer }
+  ports:
+    - { name: api, port: 9100, targetPort: 9100 }
+    - { name: p2p, port: 9101, targetPort: 9101 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tokensdk-issuer, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tokensdk-issuer } }
+  template:
+    metadata: { labels: { app: tokensdk-issuer } }
+    spec:
+      volumes:
+        - name: conf-rw
+          emptyDir: {}
+        - name: msp-src
+          secret:
+            secretName: admin-cert
+        - name: init-script
+          configMap: { name: tokensdk-msp-init, defaultMode: 0755 }
+      initContainers:
+        - name: seed-conf
+          image: tokensdk-issuer:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh","-c","cp -a /conf/. /conf-rw/"]
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf-rw }
+        - name: msp-init
+          image: busybox:1.36
+          command: ["/init/init.sh","user"]
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf }
+            - { name: msp-src, mountPath: /msp-src }
+            - { name: init-script, mountPath: /init }
+      containers:
+        - name: app
+          image: tokensdk-issuer:dev
+          imagePullPolicy: IfNotPresent
+          args: ["app","--conf","/conf","--port","9100"]
+          ports:
+            - { containerPort: 9100, name: api }
+            - { containerPort: 9101, name: p2p }
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9100 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Endorser1
+apiVersion: v1
+kind: Service
+metadata: { name: tokensdk-endorser1, namespace: default }
+spec:
+  selector: { app: tokensdk-endorser1 }
+  ports:
+    - { name: api, port: 9300, targetPort: 9300 }
+    - { name: p2p, port: 9301, targetPort: 9301 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tokensdk-endorser1, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tokensdk-endorser1 } }
+  template:
+    metadata: { labels: { app: tokensdk-endorser1 } }
+    spec:
+      volumes:
+        - { name: conf-rw, emptyDir: {} }
+        - name: msp-src
+          secret: { secretName: admin-cert }
+        - name: init-script
+          configMap: { name: tokensdk-msp-init, defaultMode: 0755 }
+      initContainers:
+        - name: seed-conf
+          image: tokensdk-endorser1:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh","-c","cp -a /conf/. /conf-rw/"]
+          volumeMounts: [{ name: conf-rw, mountPath: /conf-rw }]
+        - name: msp-init
+          image: busybox:1.36
+          command: ["/init/init.sh","endorser"]
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf }
+            - { name: msp-src, mountPath: /msp-src }
+            - { name: init-script, mountPath: /init }
+      containers:
+        - name: app
+          image: tokensdk-endorser1:dev
+          imagePullPolicy: IfNotPresent
+          args: ["app","--conf","/conf","--port","9300"]
+          ports:
+            - { containerPort: 9300, name: api }
+            - { containerPort: 9301, name: p2p }
+          volumeMounts: [{ name: conf-rw, mountPath: /conf }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9300 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Owner1
+apiVersion: v1
+kind: Service
+metadata: { name: tokensdk-owner1, namespace: default }
+spec:
+  selector: { app: tokensdk-owner1 }
+  ports:
+    - { name: api, port: 9500, targetPort: 9500 }
+    - { name: p2p, port: 9501, targetPort: 9501 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tokensdk-owner1, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tokensdk-owner1 } }
+  template:
+    metadata: { labels: { app: tokensdk-owner1 } }
+    spec:
+      volumes:
+        - { name: conf-rw, emptyDir: {} }
+        - name: msp-src
+          secret: { secretName: admin-cert }
+        - name: init-script
+          configMap: { name: tokensdk-msp-init, defaultMode: 0755 }
+      initContainers:
+        - name: seed-conf
+          image: tokensdk-owner1:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh","-c","cp -a /conf/. /conf-rw/"]
+          volumeMounts: [{ name: conf-rw, mountPath: /conf-rw }]
+        - name: msp-init
+          image: busybox:1.36
+          command: ["/init/init.sh","user"]
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf }
+            - { name: msp-src, mountPath: /msp-src }
+            - { name: init-script, mountPath: /init }
+      containers:
+        - name: app
+          image: tokensdk-owner1:dev
+          imagePullPolicy: IfNotPresent
+          args: ["app","--conf","/conf","--port","9500"]
+          ports:
+            - { containerPort: 9500, name: api }
+            - { containerPort: 9501, name: p2p }
+          volumeMounts: [{ name: conf-rw, mountPath: /conf }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9500 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+# Owner2
+apiVersion: v1
+kind: Service
+metadata: { name: tokensdk-owner2, namespace: default }
+spec:
+  selector: { app: tokensdk-owner2 }
+  ports:
+    - { name: api, port: 9600, targetPort: 9600 }
+    - { name: p2p, port: 9601, targetPort: 9601 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: tokensdk-owner2, namespace: default }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tokensdk-owner2 } }
+  template:
+    metadata: { labels: { app: tokensdk-owner2 } }
+    spec:
+      volumes:
+        - { name: conf-rw, emptyDir: {} }
+        - name: msp-src
+          secret: { secretName: admin-cert }
+        - name: init-script
+          configMap: { name: tokensdk-msp-init, defaultMode: 0755 }
+      initContainers:
+        - name: seed-conf
+          image: tokensdk-owner2:dev
+          imagePullPolicy: IfNotPresent
+          command: ["sh","-c","cp -a /conf/. /conf-rw/"]
+          volumeMounts: [{ name: conf-rw, mountPath: /conf-rw }]
+        - name: msp-init
+          image: busybox:1.36
+          command: ["/init/init.sh","user"]
+          volumeMounts:
+            - { name: conf-rw, mountPath: /conf }
+            - { name: msp-src, mountPath: /msp-src }
+            - { name: init-script, mountPath: /init }
+      containers:
+        - name: app
+          image: tokensdk-owner2:dev
+          imagePullPolicy: IfNotPresent
+          args: ["app","--conf","/conf","--port","9600"]
+          ports:
+            - { containerPort: 9600, name: api }
+            - { containerPort: 9601, name: p2p }
+          volumeMounts: [{ name: conf-rw, mountPath: /conf }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 9600 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
